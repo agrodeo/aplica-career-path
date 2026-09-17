@@ -45,8 +45,8 @@ export function HeroNetwork() {
         return (seed - 1) / 2147483646;
       };
       points = Array.from({ length: count }, (_, index) => ({
-        x: index < 4 ? [0.03, 0.97, 0.08, 0.92][index] * width : random() * width,
-        y: index < 4 ? [0.12, 0.2, 0.88, 0.82][index] * height : random() * height,
+        x: index === 0 ? 0.03 * width : index === 1 ? 0.97 * width : index === 2 ? 0.08 * width : index === 3 ? 0.92 * width : random() * width,
+        y: index === 0 ? 0.12 * height : index === 1 ? 0.2 * height : index === 2 ? 0.88 * height : index === 3 ? 0.82 * height : random() * height,
       }));
     };
 
