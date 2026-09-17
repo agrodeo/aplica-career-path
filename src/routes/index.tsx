@@ -1,8 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Check } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ChevronDown, Search } from "lucide-react";
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { SiteHeader } from "@/components/aplica";
-import { HeroNetwork } from "@/components/hero-network";
+import { Wordmark } from "@/components/aplica";
+import { OpportunityField } from "@/components/opportunity-field";
+import { useAplica } from "@/lib/aplica-store";
 
 // No head() here: the home route inherits title/description/og/twitter from
 // __root.tsx, and ships no og:image so serve-time hosting can inject the
@@ -14,21 +16,61 @@ export const Route = createFileRoute("/")({
 
 // IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
+  const navigate = useNavigate();
+  const { searchPreferences, setSearchPreferences } = useAplica();
+  const [role, setRole] = useState(searchPreferences.role);
+  const [location, setLocation] = useState(searchPreferences.location);
+  const [mode, setMode] = useState(searchPreferences.mode || "Remoto");
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearchPreferences({ role, location, mode });
+    void navigate({ to: "/onboarding" });
+  };
+
   return (
-    <div className="min-h-screen bg-background"><SiteHeader />
-      <main><section className="hero-network relative isolate min-h-[calc(100vh-64px)] overflow-hidden md:min-h-[680px]">
-        <HeroNetwork />
-        <div className="pointer-events-none relative z-10 mx-auto flex min-h-[calc(100vh-64px)] max-w-[900px] flex-col items-center justify-center px-5 pb-24 pt-20 text-center md:min-h-[680px]">
-          <p className="text-sm font-medium text-primary">Tu búsqueda laboral, automatizada.</p>
-          <h1 className="mt-6 max-w-[820px] text-[42px] font-medium leading-[1.08] tracking-normal md:text-[60px]">Encontrar trabajo no debería ser un trabajo.</h1>
-          <p className="mt-7 max-w-[680px] text-base leading-7 text-muted-foreground md:text-lg">Subí tu CV y Aplica encuentra los puestos que mejor encajan con vos, adapta tu perfil y te ayuda a postularte sin repetir el mismo formulario cien veces.</p>
-          <Button asChild size="lg" className="pointer-events-auto mt-9"><Link to="/onboarding">Encontrar trabajos<ArrowRight /></Link></Button>
-          <Link to="/login" className="pointer-events-auto mt-4 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">Ya tengo cuenta</Link>
-          <p className="mt-8 flex items-center gap-2 text-xs text-muted-foreground"><Check className="h-3.5 w-3.5 text-success" />Tu experiencia sigue siendo tuya. Nunca inventamos información en tu CV.</p>
+    <div className="home-page relative min-h-[100svh] overflow-hidden bg-background">
+      <header className="absolute inset-x-0 top-0 z-30">
+        <div className="mx-auto flex h-[76px] max-w-[1500px] items-center justify-between px-5 md:px-10">
+          <Wordmark compact />
+          <nav className="flex items-center gap-4 md:gap-7" aria-label="Principal">
+            <a className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="#buscar">Cómo funciona</a>
+            <Link className="text-sm text-muted-foreground transition-colors hover:text-foreground" to="/login">Ingresar</Link>
+            <Button asChild size="sm" className="home-primary"><Link to="/onboarding">Empezar</Link></Button>
+          </nav>
         </div>
-      </section>
-      <section id="como-funciona" className="border-t border-border bg-surface"><div className="mx-auto grid max-w-[1000px] gap-10 px-5 py-16 md:grid-cols-3 md:px-8 md:py-20">{[["01", "Contanos una vez", "Tu experiencia, preferencias y respuestas quedan listas para reutilizar."], ["02", "Elegí mejores trabajos", "Ordenamos oportunidades según lo que realmente buscás y podés hacer."], ["03", "Dejanos lo repetitivo", "Adaptamos tu CV y preparamos cada postulación para tu revisión."]].map(([n, title, text]) => <div key={n}><span className="text-xs font-medium text-primary">{n}</span><h2 className="mt-4 text-xl font-medium">{title}</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">{text}</p></div>)}</div></section></main>
-      <footer className="border-t border-border"><div className="mx-auto flex max-w-[1120px] items-center justify-between px-5 py-8 text-sm"><span className="font-semibold">aplica<span className="text-primary">.</span></span><span className="text-muted-foreground">aplica.lat</span></div></footer>
+      </header>
+
+      <main id="buscar" className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1100px] flex-col items-center px-4 pt-[20vh] text-center md:px-8 md:pt-[24vh]">
+        <h1 className="text-[36px] font-medium leading-[1.08] tracking-normal text-foreground sm:text-[42px] md:text-[50px]">Encontrá el trabajo correcto.</h1>
+
+        <form onSubmit={submitSearch} className="mt-8 w-full max-w-[960px]" aria-label="Buscar trabajos">
+          <div className="home-search grid overflow-hidden rounded-[16px] border border-border bg-background p-2 text-left md:h-[70px] md:grid-cols-[1.65fr_1fr_.8fr_154px] md:items-center md:p-1.5">
+            <label className="home-search-field px-4 py-3 md:py-1">
+              <span>Qué trabajo buscás</span>
+              <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="Growth Manager, Analista, Developer..." autoComplete="off" />
+            </label>
+            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:py-1">
+              <span>Dónde</span>
+              <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Buenos Aires" autoComplete="off" />
+            </label>
+            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:py-1">
+              <span>Modalidad</span>
+              <select value={mode} onChange={(event) => setMode(event.target.value)} aria-label="Modalidad de trabajo">
+                <option>Remoto</option><option>Híbrido</option><option>Presencial</option><option>Cualquiera</option>
+              </select>
+            </label>
+            <Button type="submit" className="home-primary mt-1 h-12 w-full rounded-[11px] md:mt-0 md:h-[56px]"><Search className="h-4 w-4" />Buscar trabajos</Button>
+          </div>
+
+          <div className="mx-auto mt-3 flex w-fit max-w-full divide-x divide-border overflow-hidden rounded-[10px] border border-border bg-background/90 shadow-sm">
+            {["Full-time", "Seniority", "Salario"].map((filter) => (
+              <button key={filter} type="button" className="flex h-9 items-center gap-1.5 px-3.5 text-xs text-muted-foreground transition-colors hover:bg-surface hover:text-foreground">{filter}<ChevronDown className="h-3 w-3" /></button>
+            ))}
+          </div>
+        </form>
+      </main>
+      <OpportunityField />
     </div>
   );
 }
