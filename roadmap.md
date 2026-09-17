@@ -7,3 +7,4 @@
 - [x] Upgrade y estado de suscripción demostrativo
 - [x] Aplicaciones, perfil y configuración
 - [x] Verificación en escritorio y móvil
+- [ ] Modernizar la portada con gradientes verdes y nodos interactivos
