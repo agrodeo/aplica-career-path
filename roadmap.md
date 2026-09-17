@@ -8,3 +8,4 @@
 - [x] Aplicaciones, perfil y configuración
 - [x] Verificación en escritorio y móvil
 - [x] Modernizar la portada con gradientes verdes y nodos interactivos
+- [x] Fijar y reforzar la red, con pulsos de luz activados por el cursor
