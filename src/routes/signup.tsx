@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AuthScreen } from "@/components/auth-screen";
+export const Route = createFileRoute("/signup")({ head: () => ({ meta: [{ title: "Crear cuenta — aplica" }, { name: "description", content: "Creá tu cuenta y empezá a encontrar mejores trabajos." }, { property: "og:title", content: "Crear cuenta — aplica" }, { property: "og:description", content: "Tu búsqueda laboral, automatizada." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }), component: () => <AuthScreen mode="signup" /> });
