@@ -242,7 +242,7 @@
 @keyframes opportunity-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 767px) {
-  .opportunity-field { inset: 58% 0 0; }
+  .opportunity-field { inset: 68% 0 0; }
   .opportunity-fragment { width: 170px; padding: 11px 12px 10px; }
   .opportunity-fragment:nth-of-type(n+8) { display: none; }
 }
