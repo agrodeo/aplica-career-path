@@ -107,17 +107,17 @@ export function HeroNetwork() {
         context.stroke();
         context.globalAlpha = 1;
 
-        if (active > 0.08) {
+        if (active > 0.32) {
           const phase = reduceMotion ? 0.5 : (time / 1200 + edgeIndex * 0.137) % 1;
           const pulseX = point.x + (other.x - point.x) * phase;
           const pulseY = point.y + (other.y - point.y) * phase;
-          const glow = context.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, 18);
+          const glow = context.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, 8);
           glow.addColorStop(0, glowColor);
           glow.addColorStop(1, "transparent");
-          context.globalAlpha = active;
+          context.globalAlpha = active * 0.8;
           context.fillStyle = glow;
           context.beginPath();
-          context.arc(pulseX, pulseY, 18, 0, Math.PI * 2);
+          context.arc(pulseX, pulseY, 8, 0, Math.PI * 2);
           context.fill();
           context.globalAlpha = 1;
         }
@@ -125,14 +125,14 @@ export function HeroNetwork() {
 
       points.forEach((point) => {
         const proximity = pointerActive ? Math.max(0, 1 - Math.hypot(point.x - mouse.x, point.y - mouse.y) / 175) : 0;
-        if (proximity > 0.08) {
-          const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, 25);
+        if (proximity > 0.22) {
+          const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, 12);
           glow.addColorStop(0, glowColor);
           glow.addColorStop(1, "transparent");
-          context.globalAlpha = proximity;
+          context.globalAlpha = proximity * 0.72;
           context.fillStyle = glow;
           context.beginPath();
-          context.arc(point.x, point.y, 25, 0, Math.PI * 2);
+          context.arc(point.x, point.y, 12, 0, Math.PI * 2);
           context.fill();
           context.globalAlpha = 1;
         }
