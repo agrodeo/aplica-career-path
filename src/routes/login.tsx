@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AuthScreen } from "@/components/auth-screen";
+export const Route = createFileRoute("/login")({ head: () => ({ meta: [{ title: "Ingresar — aplica" }, { name: "description", content: "Ingresá a tu cuenta de Aplica." }, { property: "og:title", content: "Ingresar — aplica" }, { property: "og:description", content: "Continuá tu búsqueda laboral con Aplica." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }), component: () => <AuthScreen mode="login" /> });
