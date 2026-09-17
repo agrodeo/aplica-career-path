@@ -9,4 +9,4 @@
 - [x] Verificación en escritorio y móvil
 - [x] Modernizar la portada con gradientes verdes y nodos interactivos
 - [x] Fijar y reforzar la red, con pulsos de luz activados por el cursor
-- [ ] Rediseñar únicamente la portada como buscador premium con campo de oportunidades
+- [x] Rediseñar únicamente la portada como buscador premium con campo de oportunidades
