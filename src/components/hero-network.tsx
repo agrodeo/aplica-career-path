@@ -44,6 +44,7 @@ export function HeroNetwork() {
       context.clearRect(0, 0, width, height);
       for (let i = 0; i < points.length; i += 1) {
         const point = points[i];
+        if (!point) continue;
         if (!reduceMotion) {
           point.x += point.vx;
           point.y += point.vy;
@@ -53,6 +54,7 @@ export function HeroNetwork() {
 
         for (let j = i + 1; j < points.length; j += 1) {
           const other = points[j];
+          if (!other) continue;
           const distance = Math.hypot(point.x - other.x, point.y - other.y);
           if (distance < 150) {
             const mouseDistance = Math.min(
