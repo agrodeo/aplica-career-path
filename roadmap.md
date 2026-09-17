@@ -10,3 +10,4 @@
 - [x] Modernizar la portada con gradientes verdes y nodos interactivos
 - [x] Fijar y reforzar la red, con pulsos de luz activados por el cursor
 - [x] Rediseñar únicamente la portada como buscador premium con campo de oportunidades
+- [x] Refinar la portada con una atmósfera abstracta continua sin tarjetas

@@ -31,41 +31,41 @@ function Index() {
   return (
     <div className="home-page relative min-h-[100svh] overflow-hidden bg-background">
       <header className="absolute inset-x-0 top-0 z-30">
-        <div className="mx-auto flex h-[76px] max-w-[1500px] items-center justify-between px-5 md:px-10">
+        <div className="mx-auto flex h-[88px] max-w-[1600px] items-center justify-between px-5 md:px-12">
           <Wordmark compact />
-          <nav className="flex items-center gap-4 md:gap-7" aria-label="Principal">
+          <nav className="flex items-center gap-4 md:gap-8" aria-label="Principal">
             <a className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:block" href="#buscar">Cómo funciona</a>
             <Link className="text-sm text-muted-foreground transition-colors hover:text-foreground" to="/login">Ingresar</Link>
-            <Button asChild size="sm" className="home-primary"><Link to="/onboarding">Empezar</Link></Button>
+            <Button asChild size="sm" className="home-primary h-9 rounded-[10px] px-4 text-sm"><Link to="/onboarding">Empezar</Link></Button>
           </nav>
         </div>
       </header>
 
-      <main id="buscar" className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1100px] flex-col items-center px-4 pt-[20vh] text-center md:px-8 md:pt-[24vh]">
-        <h1 className="text-[36px] font-medium leading-[1.08] tracking-normal text-foreground sm:text-[42px] md:text-[50px]">Encontrá el trabajo correcto.</h1>
+      <main id="buscar" className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1100px] flex-col items-center px-4 pt-[19vh] text-center sm:pt-[22vh] md:px-8 md:pt-[24.5vh]">
+        <h1 className="home-headline text-[36px] font-medium leading-[1.05] tracking-normal text-foreground sm:text-[44px] md:text-[52px]">Encontrá el trabajo correcto.</h1>
 
-        <form onSubmit={submitSearch} className="mt-8 w-full max-w-[960px]" aria-label="Buscar trabajos">
-          <div className="home-search grid overflow-hidden rounded-[16px] border border-border bg-background p-2 text-left md:h-[70px] md:grid-cols-[1.65fr_1fr_.8fr_154px] md:items-center md:p-1.5">
-            <label className="home-search-field px-4 py-3 md:py-1">
+        <form onSubmit={submitSearch} className="home-search-group mt-7 w-full max-w-[960px]" aria-label="Buscar trabajos">
+          <div className="home-search grid overflow-hidden rounded-[18px] border border-border bg-background p-2 text-left md:h-[70px] md:grid-cols-[38fr_24fr_18fr_20fr] md:items-center md:p-1.5">
+            <label className="home-search-field px-4 py-3 md:px-5 md:py-1">
               <span>Qué trabajo buscás</span>
               <input value={role} onChange={(event) => setRole(event.target.value)} placeholder="Growth Manager, Analista, Developer..." autoComplete="off" />
             </label>
-            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:py-1">
+            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:px-5 md:py-1">
               <span>Dónde</span>
               <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Buenos Aires" autoComplete="off" />
             </label>
-            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:py-1">
+            <label className="home-search-field border-t border-border px-4 py-3 md:border-l md:border-t-0 md:px-5 md:py-1">
               <span>Modalidad</span>
               <select value={mode} onChange={(event) => setMode(event.target.value)} aria-label="Modalidad de trabajo">
                 <option>Remoto</option><option>Híbrido</option><option>Presencial</option><option>Cualquiera</option>
               </select>
             </label>
-            <Button type="submit" className="home-primary mt-1 h-12 w-full rounded-[11px] md:mt-0 md:h-[56px]"><Search className="h-4 w-4" />Buscar trabajos</Button>
+            <Button type="submit" className="home-primary mt-1 h-[54px] w-full rounded-[13px] px-5 text-sm font-semibold md:mt-0"><Search className="h-4 w-4" />Buscar trabajos</Button>
           </div>
 
-          <div className="mx-auto mt-3 flex w-fit max-w-full divide-x divide-border overflow-hidden rounded-[10px] border border-border bg-background/90 shadow-sm">
+          <div className="home-filters mx-auto mt-3 flex h-[38px] w-fit max-w-full divide-x divide-border overflow-hidden rounded-full border border-border bg-background/90">
             {["Full-time", "Seniority", "Salario"].map((filter) => (
-              <button key={filter} type="button" className="flex h-9 items-center gap-1.5 px-3.5 text-xs text-muted-foreground transition-colors hover:bg-surface hover:text-foreground">{filter}<ChevronDown className="h-3 w-3" /></button>
+              <Button key={filter} type="button" variant="ghost" className="h-full rounded-none px-4 text-xs font-normal text-muted-foreground hover:text-foreground sm:px-5">{filter}<ChevronDown className="h-3 w-3" /></Button>
             ))}
           </div>
         </form>
