@@ -18,7 +18,6 @@ function Index() {
     <div className="min-h-screen bg-background"><SiteHeader />
       <main><section className="hero-network relative isolate min-h-[calc(100vh-64px)] overflow-hidden md:min-h-[680px]">
         <HeroNetwork />
-        <div className="hero-network-glow" aria-hidden="true" />
         <div className="pointer-events-none relative z-10 mx-auto flex min-h-[calc(100vh-64px)] max-w-[900px] flex-col items-center justify-center px-5 pb-24 pt-20 text-center md:min-h-[680px]">
           <p className="text-sm font-medium text-primary">Tu búsqueda laboral, automatizada.</p>
           <h1 className="mt-6 max-w-[820px] text-[42px] font-medium leading-[1.08] tracking-normal md:text-[60px]">Encontrar trabajo no debería ser un trabajo.</h1>

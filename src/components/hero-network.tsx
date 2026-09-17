@@ -5,7 +5,12 @@ type Point = {
   y: number;
 };
 
-function distanceToSegment(mouse: { x: number; y: number }, start: Point, end: Point) {
+type Edge = {
+  start: number;
+  end: number;
+};
+
+function distanceToSegment(mouse: Point, start: Point, end: Point) {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const lengthSquared = dx * dx + dy * dy;
@@ -27,7 +32,9 @@ export function HeroNetwork() {
     let width = 0;
     let height = 0;
     let points: Point[] = [];
+    let edges: Edge[] = [];
     let mouse = { x: -1000, y: -1000 };
+    let pointerActive = false;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const resize = () => {
@@ -38,94 +45,127 @@ export function HeroNetwork() {
       canvas.width = Math.round(width * ratio);
       canvas.height = Math.round(height * ratio);
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      const count = Math.max(36, Math.min(76, Math.round((width * height) / 15000)));
+
+      const spacing = width < 640 ? 108 : 132;
+      const columns = Math.ceil(width / spacing) + 1;
+      const rows = Math.ceil(height / spacing) + 1;
       let seed = 9473;
       const random = () => {
         seed = (seed * 16807) % 2147483647;
         return (seed - 1) / 2147483646;
       };
-      points = Array.from({ length: count }, (_, index) => ({
-        x: index === 0 ? 0.03 * width : index === 1 ? 0.97 * width : index === 2 ? 0.08 * width : index === 3 ? 0.92 * width : random() * width,
-        y: index === 0 ? 0.12 * height : index === 1 ? 0.2 * height : index === 2 ? 0.88 * height : index === 3 ? 0.82 * height : random() * height,
-      }));
+      points = [];
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          points.push({
+            x: column * spacing + (row % 2) * spacing * 0.46 - spacing * 0.35 + (random() - 0.5) * 42,
+            y: row * spacing - spacing * 0.25 + (random() - 0.5) * 42,
+          });
+        }
+      }
+
+      edges = [];
+      points.forEach((point, index) => {
+        const nearest = points
+          .map((candidate, candidateIndex) => ({
+            index: candidateIndex,
+            distance: Math.hypot(point.x - candidate.x, point.y - candidate.y),
+          }))
+          .filter((candidate) => candidate.index !== index && candidate.distance < spacing * 1.35)
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 3);
+
+        nearest.forEach(({ index: otherIndex }) => {
+          const start = Math.min(index, otherIndex);
+          const end = Math.max(index, otherIndex);
+          if (!edges.some((edge) => edge.start === start && edge.end === end)) edges.push({ start, end });
+        });
+      });
     };
 
     const draw = (time = 0) => {
       context.clearRect(0, 0, width, height);
-      for (let i = 0; i < points.length; i += 1) {
-        const point = points[i];
-        if (!point) continue;
+      const styles = getComputedStyle(canvas);
+      const lineColor = styles.getPropertyValue("--network-line").trim();
+      const activeLineColor = styles.getPropertyValue("--network-line-active").trim();
+      const nodeColor = styles.getPropertyValue("--network-node").trim();
+      const activeNodeColor = styles.getPropertyValue("--network-node-active").trim();
+      const glowColor = styles.getPropertyValue("--network-glow").trim();
 
-        for (let j = i + 1; j < points.length; j += 1) {
-          const other = points[j];
-          if (!other) continue;
-          const distance = Math.hypot(point.x - other.x, point.y - other.y);
-          if (distance < 185) {
-            const cursorDistance = distanceToSegment(mouse, point, other);
-            const active = Math.max(0, 1 - cursorDistance / 105);
-            context.beginPath();
-            context.moveTo(point.x, point.y);
-            context.lineTo(other.x, other.y);
-            context.strokeStyle = `oklch(0.52 0.17 154 / ${0.16 + active * 0.24})`;
-            context.lineWidth = 0.8 + active * 0.5;
-            context.stroke();
+      edges.forEach((edge, edgeIndex) => {
+        const point = points[edge.start];
+        const other = points[edge.end];
+        if (!point || !other) return;
+        const active = pointerActive ? Math.max(0, 1 - distanceToSegment(mouse, point, other) / 145) : 0;
 
-            if (active > 0.04) {
-              const phase = reduceMotion ? 0.5 : ((time / 1050 + i * 0.17 + j * 0.11) % 1);
-              const pulseX = point.x + (other.x - point.x) * phase;
-              const pulseY = point.y + (other.y - point.y) * phase;
-              const pulse = context.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, 15 + active * 12);
-              pulse.addColorStop(0, `oklch(0.78 0.22 147 / ${0.9 * active})`);
-              pulse.addColorStop(0.22, `oklch(0.68 0.2 151 / ${0.6 * active})`);
-              pulse.addColorStop(1, "oklch(0.68 0.2 151 / 0)");
-              context.fillStyle = pulse;
-              context.beginPath();
-              context.arc(pulseX, pulseY, 15 + active * 12, 0, Math.PI * 2);
-              context.fill();
-              context.fillStyle = `oklch(0.78 0.22 147 / ${active})`;
-              context.beginPath();
-              context.arc(pulseX, pulseY, 2.1, 0, Math.PI * 2);
-              context.fill();
-            }
-          }
-        }
+        context.beginPath();
+        context.moveTo(point.x, point.y);
+        context.lineTo(other.x, other.y);
+        context.strokeStyle = active > 0.04 ? activeLineColor : lineColor;
+        context.globalAlpha = active > 0.04 ? 0.55 + active * 0.45 : 1;
+        context.lineWidth = active > 0.04 ? 1.1 + active * 0.65 : 0.9;
+        context.stroke();
+        context.globalAlpha = 1;
 
-        const proximity = Math.max(0, 1 - Math.hypot(point.x - mouse.x, point.y - mouse.y) / 150);
-        if (proximity > 0) {
-          const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, 22 + proximity * 16);
-          glow.addColorStop(0, `oklch(0.72 0.2 150 / ${proximity * 0.45})`);
-          glow.addColorStop(1, "oklch(0.72 0.2 150 / 0)");
+        if (active > 0.08) {
+          const phase = reduceMotion ? 0.5 : (time / 1200 + edgeIndex * 0.137) % 1;
+          const pulseX = point.x + (other.x - point.x) * phase;
+          const pulseY = point.y + (other.y - point.y) * phase;
+          const glow = context.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, 18);
+          glow.addColorStop(0, glowColor);
+          glow.addColorStop(1, "transparent");
+          context.globalAlpha = active;
           context.fillStyle = glow;
           context.beginPath();
-          context.arc(point.x, point.y, 22 + proximity * 16, 0, Math.PI * 2);
+          context.arc(pulseX, pulseY, 18, 0, Math.PI * 2);
           context.fill();
+          context.globalAlpha = 1;
         }
-        context.fillStyle = `oklch(0.5 0.18 154 / ${0.5 + proximity * 0.5})`;
+      });
+
+      points.forEach((point) => {
+        const proximity = pointerActive ? Math.max(0, 1 - Math.hypot(point.x - mouse.x, point.y - mouse.y) / 175) : 0;
+        if (proximity > 0.08) {
+          const glow = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, 25);
+          glow.addColorStop(0, glowColor);
+          glow.addColorStop(1, "transparent");
+          context.globalAlpha = proximity;
+          context.fillStyle = glow;
+          context.beginPath();
+          context.arc(point.x, point.y, 25, 0, Math.PI * 2);
+          context.fill();
+          context.globalAlpha = 1;
+        }
+        context.fillStyle = proximity > 0.08 ? activeNodeColor : nodeColor;
         context.beginPath();
-        context.arc(point.x, point.y, 2 + proximity * 2.2, 0, Math.PI * 2);
+        context.arc(point.x, point.y, proximity > 0.08 ? 2.7 : 2.1, 0, Math.PI * 2);
         context.fill();
-      }
+      });
       frame = window.requestAnimationFrame(draw);
     };
 
     const onPointerMove = (event: PointerEvent) => {
       const bounds = canvas.getBoundingClientRect();
       mouse = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+      pointerActive = mouse.x >= 0 && mouse.x <= width && mouse.y >= 0 && mouse.y <= height;
     };
-    const onPointerLeave = () => { mouse = { x: -1000, y: -1000 }; };
+    const onPointerLeave = () => {
+      pointerActive = false;
+      mouse = { x: -1000, y: -1000 };
+    };
 
     resize();
     draw();
     window.addEventListener("resize", resize);
-    canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerleave", onPointerLeave);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerleave", onPointerLeave);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerleave", onPointerLeave);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerleave", onPointerLeave);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true" />;
 }
