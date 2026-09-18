@@ -276,6 +276,8 @@
   margin-inline: auto;
   padding: 0 clamp(40px, 6vw, 96px) 54px;
 }
+.onboarding-grid-flow { display: block; max-width: 700px; padding-top: 6px; }
+.onboarding-grid-flow .onboarding-sheet { width: 100%; }
 .onboarding-promise { max-width: 740px; padding-bottom: 6px; }
 .onboarding-promise h1 { max-width: 700px; font-size: clamp(58px, 4.2vw, 68px); font-weight: 700; line-height: 1; letter-spacing: -2.5px; text-shadow: 0 1px 2px oklch(0.55 0.14 252 / 0.07); }
 .onboarding-promise h1 span { color: var(--home-accent); }
