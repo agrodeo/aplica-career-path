@@ -141,6 +141,9 @@ export async function createUpload(applicationAttemptId: string, type: "resume" 
 }
 
 export async function uploadToGrant(grant: UploadGrant, bytes: Buffer): Promise<string> {
+  const uploadBody = new Blob([Uint8Array.from(bytes)], {
+    type: grant.content_type,
+  });
   const response = await fetch(grant.upload_url, {
     method: "PUT",
     headers: {
@@ -148,7 +151,7 @@ export async function uploadToGrant(grant: UploadGrant, bytes: Buffer): Promise<
       "cache-control": "max-age=3600",
       "x-upsert": "true",
     },
-    body: bytes,
+    body: uploadBody,
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
