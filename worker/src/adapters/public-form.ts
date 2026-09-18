@@ -106,8 +106,18 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       // Unknown required field → the job is unsupported. Never invent an answer.
       const unanswerable: string[] = [...schema.unknownRequiredFields];
       for (const field of schema.fields) {
-        if (!field.required || !field.canonicalKey) continue;
-        if (!canAnswer(field.canonicalKey, profile)) unanswerable.push(field.label);
+        if (!field.required) continue;
+
+        // MVP only generates/uploads the resume. A required cover-letter or
+        // other file cannot silently pass eligibility.
+        if (field.type === "file") {
+          if (field.canonicalKey !== "resume") unanswerable.push(field.label);
+          continue;
+        }
+
+        if (!field.canonicalKey || !canAnswer(field.canonicalKey, profile)) {
+          unanswerable.push(field.label);
+        }
       }
       if (unanswerable.length || reasons.length) {
         return {
@@ -136,10 +146,26 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
               break;
             case "checkbox":
               if (answer.value === true) await locator.check();
+              else if (await locator.isChecked().catch(() => false)) await locator.uncheck();
               break;
-            case "radio":
-              await page.locator(`${answer.field.selector}[value="${String(answer.value)}"]`).first().check();
+            case "radio": {
+              const value = String(answer.value);
+              const radios = page.locator(answer.field.selector);
+              const count = await radios.count();
+              let selected = false;
+              for (let i = 0; i < count; i += 1) {
+                const radio = radios.nth(i);
+                if ((await radio.getAttribute("value")) === value) {
+                  await radio.check();
+                  selected = true;
+                  break;
+                }
+              }
+              if (!selected) {
+                throw new ApplicationError("FORM_CHANGED", `Radio option disappeared: ${answer.field.label}`);
+              }
               break;
+            }
             default:
               await locator.fill(String(answer.value));
           }
@@ -220,8 +246,9 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     case "years_experience":
       return profile.experience.length > 0;
     case "resume":
-    case "cover_letter":
       return true;
+    case "cover_letter":
+      return Boolean(profile.identity.professionalSummary || profile.experience.length);
     default:
       return Boolean(stored);
   }
@@ -267,7 +294,11 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
                 })
               : undefined;
 
-        const selector = id ? `#${CSS.escape(id)}` : name ? `${selector0(tag, inputType)}[name="${name}"]` : "";
+        const selector = id
+          ? `#${CSS.escape(id)}`
+          : name
+            ? `${selector0(tag, inputType)}[name="${CSS.escape(name)}"]`
+            : "";
         return { selector, label: label.replace(/\s+/g, " ").trim(), type: inputType, required, options };
 
         function selector0(tagName: string, type: string) {
