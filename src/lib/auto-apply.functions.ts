@@ -130,6 +130,9 @@ async function applicationReadiness(
   ]);
 
   const confirmed = new Set((answers ?? []).map((answer) => answer.canonical_key));
+  const answerByKey = new Map(
+    (answers ?? []).map((answer) => [answer.canonical_key, answer]),
+  );
   const currentExperience = experiences?.[0] ?? null;
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -216,8 +219,19 @@ async function applicationReadiness(
 
       const canonicalKey = field.canonicalKey ?? null;
       const answerKey = (field.answerKey ?? canonicalKey ?? "").trim();
-      if (canonicalKey && coveredCanonical(canonicalKey)) continue;
-      if (!canonicalKey && answerKey && confirmed.has(answerKey)) continue;
+
+      if (field.type === "checkbox") {
+        const storedCheckbox = answerKey ? answerByKey.get(answerKey) : null;
+        if (
+          storedCheckbox?.answer_type === "boolean" &&
+          storedCheckbox.boolean_value === true
+        ) {
+          continue;
+        }
+      } else {
+        if (canonicalKey && coveredCanonical(canonicalKey)) continue;
+        if (!canonicalKey && answerKey && confirmed.has(answerKey)) continue;
+      }
 
       // Required extra files and unknown controls are structural blockers and
       // should already have prevented auto_apply_eligible=true.
