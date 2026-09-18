@@ -316,7 +316,30 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     case "resume":
       return true;
     case "cover_letter":
-      return Boolean(profile.identity.professionalSummary || profile.experience.length);
+      return Boolean(
+        profile.identity.professionalSummary ||
+          profile.experience.length ||
+          profile.facts.length,
+      );
+    case "motivation":
+      return Boolean(
+        profile.careerContext.careerGoal ||
+          profile.careerContext.preferredTasks.length ||
+          profile.facts.length,
+      );
+    case "about_you":
+      return Boolean(
+        profile.identity.currentTitle ||
+          profile.experience.length ||
+          profile.facts.length,
+      );
+    case "challenge_story":
+      return Boolean(profile.careerContext.challengeStory);
+    case "proud_achievement":
+      return Boolean(
+        profile.careerContext.proudProject ||
+          profile.careerContext.results.length,
+      );
     default:
       return Boolean(stored);
   }
