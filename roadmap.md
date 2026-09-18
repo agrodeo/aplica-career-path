@@ -13,3 +13,4 @@
 - [x] Refinar la portada con una atmósfera abstracta continua sin tarjetas
 - [x] Refinar composición, buscador y profundidad atmosférica de la portada
 - [x] Reemplazar la atmósfera tenue por un mapa de oportunidades visible
+- [x] Rediseñar portada y onboarding como experiencia continua de dos columnas
