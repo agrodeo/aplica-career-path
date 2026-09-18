@@ -21,7 +21,7 @@ export function OnboardingShell({ children, trust = false, className }: { childr
 
       <main id="experiencia" className="onboarding-grid">
         <section className="onboarding-promise">
-          <h1>La forma más rápida<br />de conseguir <span>trabajo</span>.</h1>
+          <h1>La forma más rápida<br />de conseguir <span>trabajo.</span></h1>
           <p>Subí tu CV y aplicá más rápido a trabajos que encajan con vos.</p>
           <Button asChild size="lg" className="home-primary mt-8 h-[66px] w-[330px] rounded-[12px] text-[19px] font-semibold">
             <Link to="/onboarding">Empezar ahora <ArrowRight /></Link>
