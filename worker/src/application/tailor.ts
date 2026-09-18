@@ -472,7 +472,7 @@ async function verifySemanticEntailment(
 }
 
 function numericTokens(value: string) {
-  return value.match(/\b\d+(?:[.,]\d+)?%?\b/g) ?? [];
+  return value.match(/\d+(?:[.,]\d+)?%?/g) ?? [];
 }
 
 function quotedOrCapitalizedPhrases(value: string) {
