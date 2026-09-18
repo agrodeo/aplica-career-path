@@ -1454,7 +1454,7 @@ export type Database = {
           mapped_fields: Json
           mode: string
           reason: string | null
-          requested_by: string
+          requested_by: string | null
           required_fields: Json
           status: string
           unknown_fields: Json
