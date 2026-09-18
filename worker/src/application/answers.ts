@@ -39,7 +39,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
           !field.canonicalKey ||
           (field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey))
             ? "verified_answer"
-            : value === generatedInterest(profile, job)
+            : isGeneratedKey(field.canonicalKey)
               ? "generated"
               : "profile",
       });
@@ -125,7 +125,20 @@ function resolveValue(
       value = String(yearsOfExperience(profile));
       break;
     case "cover_letter":
+    case "motivation":
       value = generatedInterest(profile, job);
+      break;
+    case "about_you":
+      value = generatedAboutYou(profile);
+      break;
+    case "challenge_story":
+      value = profile.careerContext.challengeStory || null;
+      break;
+    case "proud_achievement":
+      value =
+        profile.careerContext.proudProject ||
+        profile.careerContext.results[0] ||
+        null;
       break;
     default:
       value = storedAnswer(profile, key);
@@ -196,16 +209,68 @@ export function yearsOfExperience(profile: MasterProfile): number {
  * Open questions (interest / cover letter) are composed ONLY from the job title,
  * the company name and verified profile facts. No new claim is introduced.
  */
-export function generatedInterest(profile: MasterProfile, job: JobRecord): string {
-  const current = profile.experience.find((e) => e.isCurrent) ?? profile.experience[0];
-  const skills = profile.skills.slice(0, 4).map((s) => s.name);
+export function generatedInterest(
+  profile: MasterProfile,
+  job: JobRecord,
+): string {
+  const current =
+    profile.experience.find((experience) => experience.isCurrent) ??
+    profile.experience[0];
+  const skills = profile.skills.slice(0, 4).map((skill) => skill.name);
+  const relevantPreference =
+    profile.careerContext.preferredTasks[0] ||
+    profile.careerContext.careerGoal ||
+    null;
+  const result =
+    profile.careerContext.results[0] ||
+    current?.achievements[0] ||
+    null;
+
   const parts = [
     `Me interesa el puesto de ${job.title}${job.company ? ` en ${job.company}` : ""}.`,
-    current ? `Actualmente trabajo como ${current.title} en ${current.company}.` : null,
+    current
+      ? `Actualmente trabajo como ${current.title} en ${current.company}.`
+      : null,
     skills.length ? `Mi experiencia incluye ${skills.join(", ")}.` : null,
-    profile.identity.professionalSummary ? profile.identity.professionalSummary.trim() : null,
+    relevantPreference
+      ? `Busco un próximo rol donde pueda seguir desarrollando ${relevantPreference.replace(/[.]+$/, "")}.`
+      : null,
+    result ? `Entre los resultados que confirmé está: ${result}` : null,
+  ].filter(Boolean);
+
+  return parts.join(" ");
+}
+
+export function generatedAboutYou(profile: MasterProfile): string {
+  const current =
+    profile.experience.find((experience) => experience.isCurrent) ??
+    profile.experience[0];
+  const strengths = profile.careerContext.strengths.slice(0, 3);
+  const differentiators = profile.careerContext.differentiators.slice(0, 2);
+  const parts = [
+    current
+      ? `Soy ${current.title} y actualmente trabajo en ${current.company}.`
+      : profile.identity.currentTitle
+        ? `Mi perfil profesional está enfocado en ${profile.identity.currentTitle}.`
+        : null,
+    strengths.length
+      ? `Entre las fortalezas que confirmé están ${strengths.join(", ")}.`
+      : null,
+    differentiators.length
+      ? `También me caracterizo por ${differentiators.join(", ")}.`
+      : null,
   ].filter(Boolean);
   return parts.join(" ");
+}
+
+function isGeneratedKey(key: string | null) {
+  return [
+    "cover_letter",
+    "motivation",
+    "about_you",
+    "challenge_story",
+    "proud_achievement",
+  ].includes(key ?? "");
 }
 
 export interface AnswerValidation {
@@ -232,6 +297,20 @@ export function validateGeneratedAnswer(answer: string, profile: MasterProfile, 
     ...profile.education.flatMap((e) => [e.institution, e.degree, e.field]),
     ...profile.skills.map((s) => s.name),
     ...profile.languages.map((l) => `${l.language} ${l.level}`),
+    ...profile.careerContext.preferredTasks,
+    ...profile.careerContext.avoidTasks,
+    ...profile.careerContext.strengths,
+    ...profile.careerContext.differentiators,
+    ...profile.careerContext.tools,
+    ...profile.careerContext.responsibilities,
+    ...profile.careerContext.results,
+    profile.careerContext.proudProject,
+    profile.careerContext.challengeStory,
+    profile.careerContext.careerGoal,
+    profile.careerContext.targetEnvironment,
+    ...profile.facts
+      .filter((fact) => fact.userConfirmed)
+      .map((fact) => fact.claim),
   ]
     .join(" ")
     .toLowerCase();
