@@ -46,8 +46,38 @@ export const Route = createFileRoute("/api/public/worker/claim-application")({
         }
 
         if (!payload.job.is_active || !payload.job.auto_apply_eligible || !payload.job.application_url) {
-          await db.rpc("fail_application", { _queue_id: queue.id, _error_code: "JOB_EXPIRED", _error_message: "La vacante dejó de estar disponible para envío automático.", _status: "expired" });
+          await db.rpc("fail_application", {
+            _queue_id: queue.id,
+            _error_code: "JOB_EXPIRED",
+            _error_message: "La vacante dejó de estar disponible para envío automático.",
+            _status: "expired",
+          });
           return jsonResponse({ claimed: null, skipped: "job_not_eligible" });
+        }
+
+        const { data: verifiedDuplicate } = await db
+          .from("application_attempts")
+          .select("id")
+          .eq("user_id", queue.user_id)
+          .eq("job_id", queue.job_id)
+          .eq("status", "verified")
+          .neq("id", queue.attempt_id)
+          .limit(1)
+          .maybeSingle();
+
+        if (verifiedDuplicate) {
+          await db.rpc("fail_application", {
+            _queue_id: queue.id,
+            _error_code: "DUPLICATE_APPLICATION",
+            _error_message: "Ya existe una postulación verificada para esta vacante.",
+            _status: "duplicate",
+          });
+          workerLog("claim_rejected", {
+            worker_id: workerId,
+            queue_id: queue.id,
+            reason: "duplicate_application",
+          });
+          return jsonResponse({ claimed: null, skipped: "duplicate_application" });
         }
         if (!payload.consent?.authorized || payload.consent.revoked_at) {
           await db.rpc("fail_application", { _queue_id: queue.id, _error_code: "UNSUPPORTED_FIELD", _error_message: "Falta la autorización del usuario para postular por él.", _status: "failed_permanent" });

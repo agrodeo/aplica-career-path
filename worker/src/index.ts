@@ -13,10 +13,13 @@ async function main() {
   while (running) {
     try {
       const inspected = await drainInspections();
-      const items = await claimApplications(config.MAX_CONCURRENCY);
-      for (const item of items) {
-        if (!running) break;
-        await processApplication(item);
+      const items = running
+        ? await claimApplications(config.MAX_CONCURRENCY)
+        : [];
+      if (items.length) {
+        // Claimed rows already hold locks. Process them concurrently so a later
+        // item never sits idle long enough for its lock to be considered stale.
+        await Promise.all(items.map((item) => processApplication(item)));
       }
       if (!items.length && !inspected) await sleep(config.POLL_INTERVAL_MS);
     } catch (error) {

@@ -1,92 +1,104 @@
 # Aplica Auto Apply — external worker contract
 
-Aplica is Auto Apply only. A job reaches users **only** when a supported adapter
-can submit **and** verify the application end to end (`auto_apply_eligible = true`).
+Aplica is Auto Apply only. The external browser worker is intentionally isolated
+from the database.
 
 ```
-Frontend → Backend (Postgres + queue) → External Auto Apply Worker → ATS adapter
-        → employer form / authorized API → verification → Backend
+Frontend
+   ↓
+Aplica backend / Supabase
+   ↓ narrow token API
+External worker
+   ↓
+supported ATS public form / authorized API
+   ↓
+verification
+   ↓ narrow token API
+Aplica backend
 ```
 
-The worker runs outside the app (Railway, Fly.io, Render). It is the only place
-that performs HTTP requests to an ATS, file uploads, Playwright automation where
-permitted, and submission verification.
+## Security boundary
 
-## Authentication
+The external worker receives **no Supabase service-role key** and has no generic
+database endpoints. It receives PII only for the one application it has claimed.
 
-All endpoints require the service credential:
+Backend endpoints authenticate:
 
+```http
+Authorization: Bearer $AUTO_APPLY_WORKER_TOKEN
 ```
-Authorization: Bearer $WORKER_SERVICE_TOKEN
-```
 
-The token is stored as a server-side secret and is never exposed to the browser.
+The server may accept a current/previous token during rotation. Tokens live only
+in server/worker secrets.
 
-## Endpoints
+## Worker endpoints
 
-Base URL (preview): `https://project--bd0e59ea-eb97-4ba2-b7c3-f9878bca813a-dev.lovable.app`
-Base URL (production): `https://project--bd0e59ea-eb97-4ba2-b7c3-f9878bca813a.lovable.app`
+### `POST /api/public/worker/claim-application`
 
-### `POST /api/public/worker/jobs/claim`
-Atomically claims queued work (`FOR UPDATE SKIP LOCKED`), so two workers never
-process the same application.
+Claims exactly one queued application atomically and returns a scoped processing
+payload:
 
 ```json
-{ "workerId": "worker-1", "limit": 5 }
+{ "worker_id": "worker-01" }
 ```
 
-Returns `{ "claimed": [ { "id": "<queue id>", "user_id": "...", "job_id": "...", "attempt_id": "..." } ] }`.
+Response contains the queue/attempt IDs, one job, one MasterProfile, verified
+application answers, preferences, consent and subscription metadata. There is no
+bulk profile endpoint.
 
-### `POST /api/public/worker/jobs/:id/status`
-`:id` is the queue row id. Allowed values: `preparing`, `resume_generating`,
-`ready`, `submitting`, `submitted_unverified`.
+### `POST /api/public/worker/heartbeat`
 
-### `POST /api/public/worker/jobs/:id/submission`
-Reports the outcome. A credit is consumed **only** here, and only with a real
-verification signal:
+Extends the processing lock for an attempt owned by that worker.
 
-```json
-{
-  "verified": true,
-  "verificationSignal": "api_response",
-  "submissionReference": "gh_application_123",
-  "evidencePath": "evidence/attempt-id.png",
-  "answers": {},
-  "profileSnapshot": {},
-  "jobSnapshot": {},
-  "resumeVariantId": "..."
-}
-```
+### `POST /api/public/worker/create-upload`
 
-Without `verified: true` plus a signal and reference, the attempt stays
-`submitted_unverified` and the user never sees "Enviada".
+Returns a short-lived signed upload URL for either the generated resume PDF or a
+post-submission evidence PNG. Bucket/path are derived server-side from the owned
+attempt; the worker cannot select an arbitrary path.
 
-### `POST /api/public/worker/jobs/:id/failure`
+### `POST /api/public/worker/resume-variant`
 
-```json
-{ "errorCode": "form_changed", "errorMessage": "...", "retryable": true, "delaySeconds": 600 }
-```
+Persists a validated resume variant for the owned attempt. User ID and job ID are
+derived server-side. A stale MasterProfile version is rejected.
 
-Non-retryable failures accept `status`: `failed_permanent`, `expired`, `unsupported`.
+### `POST /api/public/worker/jobs/:queueId/status`
 
-## Hard rules for the worker
+Allowed progress states: `preparing`, `resume_generating`, `ready`,
+`submitting`, `submitted_unverified`. The caller must provide its
+`worker_id`, and the queue row must currently belong to it.
 
-- Never bypass CAPTCHA, MFA, fingerprinting or anti-bot protection; never rotate
-  proxies to evade restrictions and never store employer credentials.
-- If a job requires CAPTCHA, MFA, unsupported login, human verification or a
-  third-party account, set `auto_apply_eligible = false` and report `unsupported`.
-- Never report a submission as verified without a documented success signal.
-- Every CV and answer must come from `MasterProfile`; fact validation runs before
-  any PDF is produced (`resume_variants.validation_status`).
+### `POST /api/public/worker/jobs/:queueId/submission`
 
-## Adapter capabilities
+A submission becomes verified only when the worker supplies a real verification
+signal and submission reference. The backend stores the exact answers/profile/job
+snapshot, completes the attempt transactionally, and only then consumes one
+application credit.
 
-`adapter_registry` tracks each adapter separately:
-`discovery`, `schema_discovery`, `submission`, `verification`,
-`public_discovery_supported`, `authorized_submission_supported`,
-`public_form_submission_supported`, plus `connection_status` and `health`.
+### `POST /api/public/worker/jobs/:queueId/failure`
 
-Greenhouse, Lever, Ashby and Workable currently ship with public discovery and
-schema discovery declared, and `submission = false` / `verification = false`
-until a real authorized integration exists. Until then no job becomes Auto Apply
-inventory — by design, not as a placeholder success state.
+The backend validates ownership and classifies retries. Transient failures use
+backoff; permanent adapter blockers can remove the job from Auto Apply inventory.
+
+Crucially, `PROFILE_INCOMPLETE` does **not** remove a job globally.
+
+### Inspection endpoints
+
+- `POST /api/public/worker/inspections/claim`
+- `POST /api/public/worker/inspections/:id/result`
+
+These power the admin adapter inspector. The current URL-only inspection checks
+form structure/capabilities; a full profile-aware DRY RUN must use a queued test
+application so the worker has a real MasterProfile and CV context.
+
+## Greenhouse milestone
+
+Only the Greenhouse public-form adapter is enabled. A job is eligible only if:
+
+- the form loads without CAPTCHA/login blockers,
+- required fields are understood,
+- the current user has all required explicit answers,
+- the resume can be uploaded,
+- the submit control is supported,
+- a post-submit verification signal can be recognized.
+
+No anti-bot or access-control bypass is implemented.

@@ -15,7 +15,7 @@ export const EVIDENCE_BUCKET = "application-evidence";
 /** A processing lock older than this is considered abandoned. */
 export const LOCK_TIMEOUT_MINUTES = 10;
 export const MAX_ATTEMPTS = 4;
-export const UPLOAD_URL_TTL_SECONDS = 300;
+export const UPLOAD_URL_TTL_SECONDS = 7200;
 
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -80,6 +80,44 @@ export interface OwnedAttempt {
   attemptStatus: string;
 }
 
+export interface OwnedQueue {
+  queueId: string;
+  attemptId: string;
+  userId: string;
+  jobId: string;
+  batchId: string | null;
+  attempts: number;
+  workerId: string | null;
+  status: string;
+}
+
+/** Resolves a queue row only when it is currently owned by the caller. */
+export async function loadOwnedQueue(
+  db: WorkerDb,
+  queueId: string,
+  workerId: string,
+): Promise<OwnedQueue | null> {
+  if (!queueId || !workerId) return null;
+  const { data: queue } = await db
+    .from("application_queue")
+    .select("id, user_id, job_id, batch_id, attempts, worker_id, status, attempt_id")
+    .eq("id", queueId)
+    .eq("worker_id", workerId)
+    .maybeSingle();
+
+  if (!queue?.attempt_id) return null;
+  return {
+    queueId: queue.id,
+    attemptId: queue.attempt_id,
+    userId: queue.user_id,
+    jobId: queue.job_id,
+    batchId: queue.batch_id ?? null,
+    attempts: queue.attempts ?? 0,
+    workerId: queue.worker_id ?? null,
+    status: queue.status,
+  };
+}
+
 /**
  * Resolves the queue row a worker currently owns from the attempt id. Any
  * operation outside the worker's own claimed attempt is rejected here.
@@ -119,7 +157,16 @@ export async function audit(db: WorkerDb, owned: { userId: string; jobId: string
 }
 
 /** Errors the worker must never retry: the blocker will not disappear. */
-export const PERMANENT_ERRORS = ["CAPTCHA_PRESENT", "LOGIN_REQUIRED", "AUTOMATION_BLOCKED", "UNSUPPORTED_FIELD", "JOB_EXPIRED", "DUPLICATE_APPLICATION"];
+export const PERMANENT_ERRORS = [
+  "CAPTCHA_PRESENT",
+  "LOGIN_REQUIRED",
+  "AUTOMATION_BLOCKED",
+  "UNSUPPORTED_FIELD",
+  "PROFILE_INCOMPLETE",
+  "DRY_RUN_COMPLETE",
+  "JOB_EXPIRED",
+  "DUPLICATE_APPLICATION",
+];
 
 /** Errors that may be transient and are worth a backed-off retry. */
 export const TRANSIENT_ERRORS = ["NETWORK_ERROR", "ATS_TEMPORARY_ERROR", "TIMEOUT", "RATE_LIMITED", "FORM_CHANGED", "FILE_UPLOAD_FAILED"];

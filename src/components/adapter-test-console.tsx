@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 type Field = { label?: string; canonicalKey?: string | null; type?: string; required?: boolean };
 
-/** Admin-only console: inspect a public application URL, or run a dry run. */
+/** Admin-only console for structural inspection of public application URLs. */
 export function AdapterTestConsole() {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export function AdapterTestConsole() {
   });
 
   const mutation = useMutation({
-    mutationFn: (mode: "inspect" | "dry_run") => enqueue({ data: { url, mode } }),
+    mutationFn: () => enqueue({ data: { url, mode: "inspect" } }),
     onSuccess: () => {
       setError(null);
       void refetch();
@@ -34,16 +34,13 @@ export function AdapterTestConsole() {
     <section className="mt-12">
       <h2 className="text-xl font-medium">Consola de adaptadores</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Pegá la URL pública de una postulación. La revisión la ejecuta el servicio de envío con un navegador real, así que el resultado aparece cuando ese servicio está corriendo.
+        Pegá la URL pública de una postulación. Esta revisión valida la estructura del formulario con un navegador real. La prueba completa con perfil + CV se hace desde una postulación de prueba encolada con DRY_RUN=true.
       </p>
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://job-boards.greenhouse.io/empresa/jobs/123456" className="flex-1" />
-        <Button onClick={() => mutation.mutate("inspect")} disabled={!url || mutation.isPending}>
-          Revisar
-        </Button>
-        <Button variant="outline" onClick={() => mutation.mutate("dry_run")} disabled={!url || mutation.isPending}>
-          Prueba sin enviar
+        <Button onClick={() => mutation.mutate()} disabled={!url || mutation.isPending}>
+          Revisar estructura
         </Button>
       </div>
       {error && <p className="mt-3 text-sm text-caution">{error}</p>}

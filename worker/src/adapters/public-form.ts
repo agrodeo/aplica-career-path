@@ -74,7 +74,14 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
-      const unknownRequiredFields = fields.filter((f) => f.required && !f.canonicalKey).map((f) => f.label);
+      const unknownRequiredFields = fields
+        .filter(
+          (f) =>
+            f.required &&
+            !f.canonicalKey &&
+            !(f.demographic && f.options && findDeclineOption(f.options)),
+        )
+        .map((f) => f.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
@@ -103,20 +110,61 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
       if (!schema.supportsFileUpload) reasons.push("El formulario no acepta subir un CV.");
 
-      // Unknown required field → the job is unsupported. Never invent an answer.
-      const unanswerable: string[] = [...schema.unknownRequiredFields];
+      // Keep global schema blockers separate from user-specific missing data.
+      // A user missing sponsorship/phone/etc. must never remove the job from
+      // everybody else's inventory.
+      const unsupportedFields: string[] = [...schema.unknownRequiredFields];
+      const missingProfileAnswers: string[] = [];
+
       for (const field of schema.fields) {
-        if (!field.required || !field.canonicalKey) continue;
-        if (!canAnswer(field.canonicalKey, profile)) unanswerable.push(field.label);
+        if (!field.required) continue;
+
+        if (field.demographic && field.options && findDeclineOption(field.options)) {
+          continue;
+        }
+
+        // MVP only generates/uploads the resume. Required extra documents are
+        // a capability gap of the adapter, not a profile gap.
+        if (field.type === "file") {
+          if (field.canonicalKey !== "resume") unsupportedFields.push(field.label);
+          continue;
+        }
+
+        if (!field.canonicalKey) {
+          unsupportedFields.push(field.label);
+          continue;
+        }
+
+        if (!canAnswer(field.canonicalKey, profile)) {
+          missingProfileAnswers.push(field.label);
+        }
       }
-      if (unanswerable.length || reasons.length) {
+
+      if (unsupportedFields.length || reasons.length) {
         return {
           eligible: false,
           failureCode: "UNSUPPORTED_FIELD",
-          reasons: [...reasons, ...(unanswerable.length ? [`Preguntas obligatorias sin respuesta verificada: ${unanswerable.join(", ")}`] : [])],
-          unknownRequiredFields: unanswerable,
+          reasons: [
+            ...reasons,
+            ...(unsupportedFields.length
+              ? [`Campos obligatorios no soportados: ${unsupportedFields.join(", ")}`]
+              : []),
+          ],
+          unknownRequiredFields: unsupportedFields,
         };
       }
+
+      if (missingProfileAnswers.length) {
+        return {
+          eligible: false,
+          failureCode: "PROFILE_INCOMPLETE",
+          reasons: [
+            `Faltan respuestas verificadas del usuario: ${missingProfileAnswers.join(", ")}`,
+          ],
+          unknownRequiredFields: missingProfileAnswers,
+        };
+      }
+
       return { eligible: true, reasons: [], unknownRequiredFields: [] };
     },
 
@@ -136,10 +184,26 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
               break;
             case "checkbox":
               if (answer.value === true) await locator.check();
+              else if (await locator.isChecked().catch(() => false)) await locator.uncheck();
               break;
-            case "radio":
-              await page.locator(`${answer.field.selector}[value="${String(answer.value)}"]`).first().check();
+            case "radio": {
+              const value = String(answer.value);
+              const radios = page.locator(answer.field.selector);
+              const count = await radios.count();
+              let selected = false;
+              for (let i = 0; i < count; i += 1) {
+                const radio = radios.nth(i);
+                if ((await radio.getAttribute("value")) === value) {
+                  await radio.check();
+                  selected = true;
+                  break;
+                }
+              }
+              if (!selected) {
+                throw new ApplicationError("FORM_CHANGED", `Radio option disappeared: ${answer.field.label}`);
+              }
               break;
+            }
             default:
               await locator.fill(String(answer.value));
           }
@@ -220,8 +284,9 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     case "years_experience":
       return profile.experience.length > 0;
     case "resume":
-    case "cover_letter":
       return true;
+    case "cover_letter":
+      return Boolean(profile.identity.professionalSummary || profile.experience.length);
     default:
       return Boolean(stored);
   }
@@ -248,10 +313,44 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
         }
 
         let label = "";
-        if (id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
+
+        // Radio inputs often have per-option labels ("Yes"/"No"). The
+        // canonical question lives on the group legend/aria label, so resolve
+        // that first or we'd lose questions such as sponsorship.
+        if (inputType === "radio") {
+          const fieldset = el.closest("fieldset");
+          label = fieldset?.querySelector(":scope > legend")?.textContent?.trim() ?? "";
+          if (!label) {
+            const group = el.closest('[role="radiogroup"]');
+            const labelledBy = group?.getAttribute("aria-labelledby");
+            if (labelledBy) {
+              label =
+                document.getElementById(labelledBy)?.textContent?.trim() ?? "";
+            }
+            if (!label) label = group?.getAttribute("aria-label") ?? "";
+          }
+        }
+
+        if (!label && id) {
+          label =
+            document
+              .querySelector(`label[for="${CSS.escape(id)}"]`)
+              ?.textContent?.trim() ?? "";
+        }
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
-        if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
-        if (!label) label = el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? name;
+        if (!label) {
+          label =
+            el
+              .closest("div,fieldset")
+              ?.querySelector("label,legend")
+              ?.textContent?.trim() ?? "";
+        }
+        if (!label) {
+          label =
+            el.getAttribute("aria-label") ??
+            el.getAttribute("placeholder") ??
+            name;
+        }
 
         const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /\*/.test(label);
 
@@ -267,7 +366,11 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
                 })
               : undefined;
 
-        const selector = id ? `#${CSS.escape(id)}` : name ? `${selector0(tag, inputType)}[name="${name}"]` : "";
+        const selector = id
+          ? `#${CSS.escape(id)}`
+          : name
+            ? `${selector0(tag, inputType)}[name="${CSS.escape(name)}"]`
+            : "";
         return { selector, label: label.replace(/\s+/g, " ").trim(), type: inputType, required, options };
 
         function selector0(tagName: string, type: string) {
