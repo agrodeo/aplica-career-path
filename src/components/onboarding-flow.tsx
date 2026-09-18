@@ -350,7 +350,7 @@ export function OnboardingFlow() {
       const result = await persistOnboarding({
         data: {
           identity: {
-            firstName: (name || profile.firstName).trim(),
+            firstName: profile.firstName.trim(),
             lastName: profile.lastName.trim(),
             email: profile.email.trim(),
             phone: profile.phone.trim(),
@@ -755,6 +755,7 @@ export function OnboardingFlow() {
             <div className="sheet-step-body">
               {renderStep(step, {
                 selected,
+                setSelected,
                 toggle,
                 searchPreferences,
                 setSearchPreferences,
@@ -833,6 +834,7 @@ export function OnboardingFlow() {
 
 type StepProps = {
   selected: Answers;
+  setSelected: React.Dispatch<React.SetStateAction<Answers>>;
   toggle: (group: string, value: string) => void;
   searchPreferences: { role: string; location: string; mode: string };
   setSearchPreferences: (value: {
@@ -1320,12 +1322,12 @@ function renderStep(step: number, p: StepProps): ReactNode {
             label="Otras habilidades"
             placeholder="Una por línea"
             values={p.selected.skills ?? []}
-            onChange={(values) => {
-              const next = [...new Set(values)];
-              p.selected.skills = next;
-              // force through existing toggle-compatible state
-              for (const current of p.selected.skills ?? []) void current;
-            }}
+            onChange={(values) =>
+              p.setSelected((current) => ({
+                ...current,
+                skills: [...new Set(values)],
+              }))
+            }
             readOnlyHint="También podés elegir los chips de arriba."
           />
         </>
