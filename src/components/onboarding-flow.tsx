@@ -201,7 +201,7 @@ export function OnboardingFlow() {
         setCvError(error instanceof Error ? `Leímos tu CV, pero no pudimos guardarlo: ${error.message}` : "No pudimos guardar tu CV.");
       }
 
-      const merged: Profile = { ...emptyProfile, ...fields };
+      const merged: Profile = { ...profile, ...fields };
       setReading(false);
       setProfile(merged);
       setCvParsed(Object.values(fields).some((value) => typeof value === "string" && value.trim().length > 0));
@@ -212,7 +212,6 @@ export function OnboardingFlow() {
     })();
   };
   const skipCv = () => {
-    setProfile(emptyProfile);
     setCvParsed(false);
     setUploadedName("");
     setOnboardingStep(3);
