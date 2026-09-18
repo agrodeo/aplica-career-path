@@ -109,9 +109,9 @@
   --home-field-deep: oklch(0.94 0.041 245);
   --home-atmosphere: oklch(0.72 0.105 248);
   --home-atmosphere-soft: oklch(0.82 0.06 245);
-  --home-backdrop: oklch(0.973 0.018 275);
-  --home-backdrop-cool: oklch(0.962 0.025 258);
-  --home-backdrop-lilac: oklch(0.968 0.025 292);
+  --home-backdrop: oklch(0.976 0.018 252);
+  --home-backdrop-cool: oklch(0.958 0.032 248);
+  --home-backdrop-lilac: oklch(0.968 0.024 258);
   --home-card-shadow: 0 24px 70px oklch(0.3 0.065 268 / 0.16);
   --home-map-line-far: oklch(0.546 0.245 262.881 / 0.24);
   --home-map-line-mid: oklch(0.546 0.245 262.881 / 0.42);
@@ -203,10 +203,24 @@
 .home-primary { transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
 .home-primary:hover { background: var(--home-accent-hover); transform: translateY(-1px); box-shadow: 0 10px 24px -12px var(--home-accent); }
 .home-continuum {
+  position: relative;
+  isolation: isolate;
   background:
     radial-gradient(ellipse 58% 42% at 84% 3%, color-mix(in oklab, var(--home-backdrop-lilac) 76%, transparent), transparent 74%),
     radial-gradient(ellipse 62% 48% at 8% 72%, color-mix(in oklab, var(--home-backdrop-cool) 72%, transparent), transparent 78%),
     var(--home-backdrop);
+}
+.home-continuum::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  opacity: .16;
+  background-color: var(--home-accent);
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E");
+  mask-size: 180px 180px;
+  mix-blend-mode: multiply;
 }
 .home-headline { animation: home-reveal 400ms ease-out both; }
 .home-search-group { animation: home-search-reveal 500ms 80ms ease-out both; }
@@ -232,10 +246,12 @@
   content: "";
   position: absolute;
   inset: 0;
-  opacity: .08;
+  opacity: .07;
   pointer-events: none;
-  background-image: radial-gradient(circle, color-mix(in oklab, var(--foreground) 24%, transparent) .45px, transparent .55px);
-  background-size: 4px 4px;
+  background-color: var(--home-accent);
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.62'/%3E%3C/svg%3E");
+  mask-size: 180px 180px;
+  mix-blend-mode: multiply;
   mask-image: linear-gradient(to bottom, black, transparent 86%);
 }
 .onboarding-nav {
