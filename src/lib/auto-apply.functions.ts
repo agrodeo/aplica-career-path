@@ -316,7 +316,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, source_updated_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
         )
         .eq("auto_apply_eligible", true)
         .eq("is_active", true)
@@ -364,6 +364,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           salaryMax: job.salary_max,
           salaryCurrency: job.salary_currency,
           publishedAt: job.published_at,
+          sourceUpdatedAt: job.source_updated_at,
           adapter: job.auto_apply_adapter,
           applicationSchemaId: job.application_schema_id,
           matchScore: match ? Number(match.match_score) : null,
@@ -429,7 +430,7 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,source_updated_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
         )
         .eq("id", data.jobId)
         .eq("auto_apply_eligible", true)
@@ -480,6 +481,7 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       salaryMax: job.salary_max,
       salaryCurrency: job.salary_currency,
       publishedAt: job.published_at,
+      sourceUpdatedAt: job.source_updated_at,
       adapter: job.auto_apply_adapter,
       matchScore: match ? Number(match.match_score) : null,
       hardRequirementsMet: match?.hard_requirements_met ?? false,
