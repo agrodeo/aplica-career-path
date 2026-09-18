@@ -269,30 +269,49 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [{ data: jobs }, { data: matches }, { data: preferences }] =
-      await Promise.all([
-        supabase
-          .from("jobs")
-          .select(
-            "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
-          )
-          .eq("auto_apply_eligible", true)
-          .eq("is_active", true)
-          .limit(500),
-        supabase.from("job_matches").select("*").eq("user_id", userId),
-        supabase
-          .from("job_preferences")
-          .select("minimum_match_score")
-          .eq("user_id", userId)
-          .maybeSingle(),
-      ]);
+    const [
+      { data: jobs },
+      { data: matches },
+      { data: preferences },
+      { data: verifiedAttempts },
+      { data: queuedApplications },
+    ] = await Promise.all([
+      supabase
+        .from("jobs")
+        .select(
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
+        )
+        .eq("auto_apply_eligible", true)
+        .eq("is_active", true)
+        .limit(500),
+      supabase.from("job_matches").select("*").eq("user_id", userId),
+      supabase
+        .from("job_preferences")
+        .select("minimum_match_score")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("application_attempts")
+        .select("job_id")
+        .eq("user_id", userId)
+        .eq("status", "verified"),
+      supabase
+        .from("application_queue")
+        .select("job_id")
+        .eq("user_id", userId),
+    ]);
 
     const minimum = Number(preferences?.minimum_match_score ?? 70);
     const matchByJob = new Map(
       (matches ?? []).map((match) => [match.job_id, match]),
     );
+    const unavailableJobIds = new Set([
+      ...(verifiedAttempts ?? []).map((attempt) => attempt.job_id),
+      ...(queuedApplications ?? []).map((item) => item.job_id),
+    ]);
 
     const matched = (jobs ?? [])
+      .filter((job) => !unavailableJobIds.has(job.id))
       .map((job) => {
         const match = matchByJob.get(job.id);
         return {
@@ -662,7 +681,7 @@ export const startAutoApplyBatch = createServerFn({ method: "POST" })
           .select("consumed")
           .eq("user_id", userId)
           .gte("period_start", periodStart.slice(0, 10))
-          .lte("period_start", periodEnd.slice(0, 10)),
+          .lt("period_start", periodEnd.slice(0, 10)),
         supabase
           .from("application_attempts")
           .select("id", { count: "exact", head: true })
@@ -727,6 +746,37 @@ export const startAutoApplyBatch = createServerFn({ method: "POST" })
       );
       const key = (outcome as string) ?? "error";
       results[key] = (results[key] ?? 0) + 1;
+    }
+
+    const queuedCount = results["queued"] ?? 0;
+    if (queuedCount === 0) {
+      await supabaseAdmin
+        .from("application_batches")
+        .delete()
+        .eq("id", batch.id)
+        .eq("user_id", userId);
+
+      if ((results["limit_reached"] ?? 0) > 0) {
+        return {
+          status: "limit_exceeded" as const,
+          batchId: null,
+          results,
+        };
+      }
+
+      return {
+        status: "jobs_unavailable" as const,
+        batchId: null,
+        results,
+      };
+    }
+
+    if (queuedCount !== data.jobIds.length) {
+      await supabaseAdmin
+        .from("application_batches")
+        .update({ total_selected: queuedCount })
+        .eq("id", batch.id)
+        .eq("user_id", userId);
     }
 
     return {
