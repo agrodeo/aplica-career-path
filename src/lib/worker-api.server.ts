@@ -78,6 +78,7 @@ export interface OwnedAttempt {
   workerId: string | null;
   status: string;
   attemptStatus: string;
+  testMode: boolean;
 }
 
 export interface OwnedQueue {
