@@ -1,13 +1,16 @@
 import { Check, FileText, Search } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import meliLogo from "@/assets/mercado-libre.png.asset.json";
+import rampLogo from "@/assets/ramp.png.asset.json";
+import canvaLogo from "@/assets/canva.png.asset.json";
 
 const phaseDurations = [1800, 1800, 2200, 2400, 2100, 2400, 2000];
 const exitDuration = 420;
 const profileSignals = ["Growth", "Marketing", "Buenos Aires", "Inglés", "Español", "Remoto"];
 const demoJobs = [
-  ["Growth Manager", "94% match"],
-  ["Growth Associate", "91% match"],
-  ["Marketing Manager", "88% match"],
+  { role: "Growth Manager", company: "Mercado Libre", logo: meliLogo.url, match: "94% match" },
+  { role: "Growth Associate", company: "Ramp", logo: rampLogo.url, match: "91% match" },
+  { role: "Marketing Manager", company: "Canva", logo: canvaLogo.url, match: "88% match" },
 ];
 
 function SearchCounter({ duration }: { duration: number }) {
