@@ -40,7 +40,9 @@ jobs:
           cache: npm
           cache-dependency-path: worker/package-lock.json
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: npm run typecheck
+      - run: npm test
 
   app-build:
     runs-on: ubuntu-latest
