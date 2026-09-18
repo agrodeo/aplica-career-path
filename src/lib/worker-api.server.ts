@@ -157,7 +157,16 @@ export async function audit(db: WorkerDb, owned: { userId: string; jobId: string
 }
 
 /** Errors the worker must never retry: the blocker will not disappear. */
-export const PERMANENT_ERRORS = ["CAPTCHA_PRESENT", "LOGIN_REQUIRED", "AUTOMATION_BLOCKED", "UNSUPPORTED_FIELD", "JOB_EXPIRED", "DUPLICATE_APPLICATION"];
+export const PERMANENT_ERRORS = [
+  "CAPTCHA_PRESENT",
+  "LOGIN_REQUIRED",
+  "AUTOMATION_BLOCKED",
+  "UNSUPPORTED_FIELD",
+  "PROFILE_INCOMPLETE",
+  "DRY_RUN_COMPLETE",
+  "JOB_EXPIRED",
+  "DUPLICATE_APPLICATION",
+];
 
 /** Errors that may be transient and are worth a backed-off retry. */
 export const TRANSIENT_ERRORS = ["NETWORK_ERROR", "ATS_TEMPORARY_ERROR", "TIMEOUT", "RATE_LIMITED", "FORM_CHANGED", "FILE_UPLOAD_FAILED"];
