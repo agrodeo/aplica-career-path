@@ -1,5 +1,5 @@
 import { Check, FileText, Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 const phaseDurations = [1500, 1500, 1800, 2000, 1700, 2000, 1500];
 const profileSignals = ["Growth", "Marketing", "Buenos Aires", "Inglés", "Español", "Remoto"];
@@ -29,7 +29,7 @@ function DemoProgress({ phase }: { phase: number }) {
   );
 }
 
-function DemoFrame({ phase, children }: { phase: number; children: React.ReactNode }) {
+function DemoFrame({ phase, children }: { phase: number; children: ReactNode }) {
   return (
     <div className="product-demo-frame" key={phase}>
       <DemoProgress phase={phase} />
@@ -61,7 +61,7 @@ export function ProductDemo() {
       {phase === 1 && <DemoFrame phase={phase}>
         <div className="demo-heading"><span className="demo-eyebrow">Tu experiencia</span><h2>Analizando tu perfil...</h2></div>
         <div className="demo-signals">
-          {profileSignals.map((signal, index) => <span style={{ "--demo-order": index } as React.CSSProperties} key={signal}>{signal}</span>)}
+          {profileSignals.map((signal, index) => <span style={{ "--demo-order": index } as CSSProperties} key={signal}>{signal}</span>)}
         </div>
         <p className="demo-confirm demo-delay-late"><Check /> Perfil listo</p>
       </DemoFrame>}
@@ -78,7 +78,7 @@ export function ProductDemo() {
       {phase === 3 && <DemoFrame phase={phase}>
         <div className="demo-heading"><span className="demo-eyebrow">Mejores resultados</span><h2>Trabajos que encajan con vos</h2></div>
         <div className="demo-jobs">
-          {demoJobs.map(([role, match], index) => <div className="demo-job" style={{ "--demo-order": index } as React.CSSProperties} key={role}><span><strong>{role}</strong><small>Buenos Aires · Remoto</small></span><b>{match}</b></div>)}
+          {demoJobs.map(([role, match], index) => <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={role}><span><strong>{role}</strong><small>Buenos Aires · Remoto</small></span><b>{match}</b></div>)}
         </div>
       </DemoFrame>}
 
@@ -86,7 +86,7 @@ export function ProductDemo() {
         <div className="demo-heading"><span className="demo-eyebrow">Growth Manager · 94% match</span><h2>Adaptando tu CV...</h2></div>
         <div className="demo-resume-lines" aria-hidden="true"><span /><span /><span /></div>
         <div className="demo-checklist">
-          {["Experiencia relevante priorizada", "Skills alineadas", "CV listo"].map((label, index) => <p style={{ "--demo-order": index } as React.CSSProperties} key={label}><Check />{label}</p>)}
+          {["Experiencia relevante priorizada", "Skills alineadas", "CV listo"].map((label, index) => <p style={{ "--demo-order": index } as CSSProperties} key={label}><Check />{label}</p>)}
         </div>
       </DemoFrame>}
 
