@@ -12,7 +12,7 @@ import { OnboardingShell } from "./onboarding-shell";
 import { industries, skills } from "@/lib/aplica-data";
 import { useAplica } from "@/lib/aplica-store";
 import { refreshJobMatches } from "@/lib/auto-apply.functions";
-import { saveOnboardingProfile } from "@/lib/onboarding.functions";
+import { getOnboardingSeed, saveOnboardingProfile } from "@/lib/onboarding.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -71,7 +71,9 @@ export function OnboardingFlow() {
   const [count, setCount] = useState(0);
   const [matchedCount, setMatchedCount] = useState(0);
   const persistOnboarding = useServerFn(saveOnboardingProfile);
+  const fetchOnboardingSeed = useServerFn(getOnboardingSeed);
   const calculateMatches = useServerFn(refreshJobMatches);
+  const [seedLoaded, setSeedLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const toggle = (group: string, value: string) => setSelected((current) => ({
@@ -215,6 +217,128 @@ export function OnboardingFlow() {
     event.preventDefault();
     acceptFile(event.dataTransfer.files[0]);
   };
+
+  useEffect(() => {
+    if (seedLoaded) return;
+    let active = true;
+
+    void fetchOnboardingSeed()
+      .then((seed) => {
+        if (!active) return;
+
+        setName(seed.identity.firstName || name);
+        setProfile((current) => ({
+          ...current,
+          firstName: seed.identity.firstName,
+          lastName: seed.identity.lastName,
+          email: seed.identity.email,
+          phone: seed.identity.phone,
+          country: seed.identity.country,
+          city: seed.identity.city,
+          company: seed.experience?.company ?? current.company,
+          role: seed.experience?.title ?? seed.identity.currentTitle ?? current.role,
+          start: seed.experience?.start ?? current.start,
+          end: seed.experience?.end ?? current.end,
+          description: seed.experience?.description ?? current.description,
+          achievements: seed.experience?.achievements ?? current.achievements,
+          institution: seed.education?.institution ?? current.institution,
+          degree: seed.education?.degree ?? current.degree,
+          area: seed.education?.field ?? current.area,
+          studyDates: seed.education?.studyDates ?? current.studyDates,
+          language: seed.languages[0]?.language ?? current.language,
+          level: seed.languages[0]?.level ?? current.level,
+        }));
+
+        if (seed.skills.length) {
+          setSelected((current) => ({
+            ...current,
+            skills: seed.skills,
+            roles: seed.preferences?.targetRoles?.length
+              ? seed.preferences.targetRoles
+              : current.roles,
+            mode: seed.preferences?.modes?.length
+              ? seed.preferences.modes
+              : current.mode,
+            employment: seed.preferences?.employmentTypes?.length
+              ? seed.preferences.employmentTypes
+              : current.employment,
+            seniority: seed.preferences?.seniorityLevels?.length
+              ? seed.preferences.seniorityLevels
+              : current.seniority,
+            industry: seed.preferences?.preferredIndustries?.length
+              ? seed.preferences.preferredIndustries
+              : current.industry,
+            relocate: seed.preferences
+              ? [seed.preferences.willingToRelocate ? "Sí" : "No"]
+              : current.relocate,
+          }));
+        } else if (seed.preferences) {
+          setSelected((current) => ({
+            ...current,
+            roles: seed.preferences?.targetRoles?.length
+              ? seed.preferences.targetRoles
+              : current.roles,
+            mode: seed.preferences?.modes?.length
+              ? seed.preferences.modes
+              : current.mode,
+            employment: seed.preferences?.employmentTypes?.length
+              ? seed.preferences.employmentTypes
+              : current.employment,
+            seniority: seed.preferences?.seniorityLevels?.length
+              ? seed.preferences.seniorityLevels
+              : current.seniority,
+            industry: seed.preferences?.preferredIndustries?.length
+              ? seed.preferences.preferredIndustries
+              : current.industry,
+            relocate: [seed.preferences.willingToRelocate ? "Sí" : "No"],
+          }));
+        }
+
+        if (seed.preferences) {
+          setSearchPreferences({
+            role:
+              seed.preferences.targetRoles[0] ??
+              searchPreferences.role,
+            location:
+              seed.preferences.targetLocations[0] ??
+              seed.identity.city ??
+              searchPreferences.location,
+            mode:
+              seed.preferences.modes[0] ??
+              searchPreferences.mode,
+          });
+          setInternationalRemote(seed.preferences.internationalRemote);
+          setMinimumSalary(
+            seed.preferences.minimumSalary == null
+              ? ""
+              : String(seed.preferences.minimumSalary),
+          );
+          setSalaryCurrency(seed.preferences.salaryCurrency ?? "USD");
+          setSalaryPeriod(seed.preferences.salaryPeriod ?? "Mensual");
+          setSkipSalary(seed.preferences.minimumSalary == null);
+        }
+
+        setSensitiveAnswers(seed.sensitiveAnswers);
+        setBaseResumePath(seed.baseResumePath);
+        if (seed.authorizeAutoApply) {
+          setConsents((current) => [
+            current[0] ?? false,
+            current[1] ?? false,
+            true,
+          ]);
+        }
+      })
+      .catch(() => {
+        // A brand-new profile legitimately has nothing to prefill.
+      })
+      .finally(() => {
+        if (active) setSeedLoaded(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [fetchOnboardingSeed, seedLoaded]);
 
   useEffect(() => {
     if (!matching) return;
