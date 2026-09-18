@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { Json } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type OnboardingPayload = {
+export type CareerVoice = "direct" | "ambitious" | "technical" | "balanced";
+
+export type RichOnboardingPayload = {
   identity: {
     firstName: string;
     lastName: string;
@@ -27,6 +30,27 @@ type OnboardingPayload = {
   } | null;
   skills: string[];
   languages: { language: string; level: string }[];
+  careerContext: {
+    responsibilities: string[];
+    tools: string[];
+    results: string[];
+    preferredTasks: string[];
+    avoidTasks: string[];
+    strengths: string[];
+    differentiators: string[];
+    proudProject: string;
+    challengeStory: string;
+    careerGoal: string;
+    targetEnvironment: string;
+    availability: string;
+    travelPreference: string;
+  };
+  writingPreferences: {
+    voice: CareerVoice;
+    emphasis: string[];
+    deEmphasis: string[];
+    summaryStyle: string;
+  };
   preferences: {
     targetRoles: string[];
     targetLocations: string[];
@@ -46,11 +70,20 @@ type OnboardingPayload = {
     workAuthorization: boolean | null;
     sponsorship: boolean | null;
   };
+  links: {
+    linkedin: string;
+    portfolio: string;
+  };
   baseResumePath: string | null;
   authorizeAutoApply: boolean;
 };
 
 const clean = (value: string, max = 500) => value.trim().slice(0, max);
+const cleanList = (values: string[], maxItems = 30, maxLength = 240) =>
+  [...new Set(values.map((value) => clean(value, maxLength)).filter(Boolean))].slice(
+    0,
+    maxItems,
+  );
 
 function parseMonthDate(value: string): string | null {
   const raw = value.trim();
@@ -87,6 +120,7 @@ function parseMonthDate(value: string): string | null {
     dec: 12,
     dic: 12,
   };
+
   const named = raw
     .toLowerCase()
     .normalize("NFD")
@@ -94,18 +128,16 @@ function parseMonthDate(value: string): string | null {
     .match(/^([a-z]{3,9})\.?\s+(\d{4})$/);
   if (named) {
     const key = named[1].slice(0, 4);
-    const month =
-      months[key] ??
-      months[key.slice(0, 3)] ??
-      null;
+    const month = months[key] ?? months[key.slice(0, 3)] ?? null;
     if (month) return `${named[2]}-${String(month).padStart(2, "0")}-01`;
   }
-
   return null;
 }
 
 function parseStudyRange(value: string) {
-  const parts = value.split(/\s*(?:—|–|-| a | to | hasta )\s*/i).filter(Boolean);
+  const parts = value
+    .split(/\s*(?:—|–|-| a | to | hasta )\s*/i)
+    .filter(Boolean);
   return {
     startDate: parseMonthDate(parts[0] ?? ""),
     endDate: parseMonthDate(parts[1] ?? ""),
@@ -122,30 +154,106 @@ function modeFlags(modes: string[]) {
   };
 }
 
+export const saveOnboardingDraft = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { step: number; state: Record<string, unknown> }) => {
+    const serialized = JSON.stringify(data.state);
+    if (serialized.length > 120_000) {
+      throw new Error("El borrador es demasiado grande.");
+    }
+    return {
+      step: Math.max(1, Math.min(40, Math.floor(data.step))),
+      state: data.state as Json,
+    };
+  })
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("onboarding_drafts").upsert(
+      {
+        user_id: context.userId,
+        last_step: data.step,
+        state: data.state,
+      },
+      { onConflict: "user_id" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const getOnboardingSeed = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [authUser, profile, experience, education, skills, languages, preferences, answers, consent] =
-      await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
-        supabase.from("experiences").select("*").eq("user_id", userId).order("sort_order").limit(1).maybeSingle(),
-        supabase.from("educations").select("*").eq("user_id", userId).limit(1).maybeSingle(),
-        supabase.from("skills").select("name").eq("user_id", userId),
-        supabase.from("languages").select("language, level").eq("user_id", userId),
-        supabase.from("job_preferences").select("*").eq("user_id", userId).maybeSingle(),
-        supabase
-          .from("application_answers")
-          .select("canonical_key, boolean_value, user_confirmed")
-          .eq("user_id", userId)
-          .in("canonical_key", ["work_authorization", "sponsorship"]),
-        supabase.from("auto_apply_consents").select("authorized, revoked_at").eq("user_id", userId).maybeSingle(),
-      ]);
+    const [
+      authUser,
+      profile,
+      experience,
+      education,
+      skills,
+      languages,
+      preferences,
+      answers,
+      consent,
+      careerContext,
+      writingPreferences,
+      draft,
+    ] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("experiences")
+        .select("*")
+        .eq("user_id", userId)
+        .order("sort_order")
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("educations")
+        .select("*")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("skills").select("name").eq("user_id", userId),
+      supabase.from("languages").select("language, level").eq("user_id", userId),
+      supabase
+        .from("job_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("application_answers")
+        .select("canonical_key, boolean_value, user_confirmed")
+        .eq("user_id", userId)
+        .in("canonical_key", ["work_authorization", "sponsorship"]),
+      supabase
+        .from("auto_apply_consents")
+        .select("authorized, revoked_at")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("career_contexts")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("writing_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("onboarding_drafts")
+        .select("last_step,state")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
 
-    const workAuthorization = answers.data?.find((answer) => answer.canonical_key === "work_authorization");
-    const sponsorship = answers.data?.find((answer) => answer.canonical_key === "sponsorship");
+    const workAuthorization = answers.data?.find(
+      (answer) => answer.canonical_key === "work_authorization",
+    );
+    const sponsorship = answers.data?.find(
+      (answer) => answer.canonical_key === "sponsorship",
+    );
     const pref = preferences.data;
+    const contextRow = careerContext.data;
 
     return {
       identity: {
@@ -159,12 +267,18 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
         city: profile.data?.city ?? "",
         currentTitle: profile.data?.current_title ?? "",
       },
+      links: {
+        linkedin: profile.data?.linkedin_url ?? "",
+        portfolio: profile.data?.portfolio_url ?? "",
+      },
       experience: experience.data
         ? {
             company: experience.data.company,
             title: experience.data.title,
             start: experience.data.start_date ?? "",
-            end: experience.data.is_current ? "Actualidad" : experience.data.end_date ?? "",
+            end: experience.data.is_current
+              ? "Actualidad"
+              : experience.data.end_date ?? "",
             description: experience.data.description ?? "",
             achievements: Array.isArray(experience.data.achievements)
               ? (experience.data.achievements as string[]).join("\n")
@@ -176,13 +290,39 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
             institution: education.data.institution,
             degree: education.data.degree ?? "",
             field: education.data.field ?? "",
-            studyDates: [education.data.start_date?.slice(0, 4), education.data.is_current ? "Actualidad" : education.data.end_date?.slice(0, 4)]
+            studyDates: [
+              education.data.start_date?.slice(0, 4),
+              education.data.is_current
+                ? "Actualidad"
+                : education.data.end_date?.slice(0, 4),
+            ]
               .filter(Boolean)
               .join(" — "),
           }
         : null,
       skills: (skills.data ?? []).map((skill) => skill.name),
       languages: languages.data ?? [],
+      careerContext: {
+        responsibilities: contextRow?.responsibilities ?? [],
+        tools: contextRow?.tools ?? [],
+        results: contextRow?.results ?? [],
+        preferredTasks: contextRow?.preferred_tasks ?? [],
+        avoidTasks: contextRow?.avoid_tasks ?? [],
+        strengths: contextRow?.strengths ?? [],
+        differentiators: contextRow?.differentiators ?? [],
+        proudProject: contextRow?.proud_project ?? "",
+        challengeStory: contextRow?.challenge_story ?? "",
+        careerGoal: contextRow?.career_goal ?? "",
+        targetEnvironment: contextRow?.target_environment ?? "",
+        availability: contextRow?.availability ?? "",
+        travelPreference: contextRow?.travel_preference ?? "",
+      },
+      writingPreferences: {
+        voice: (writingPreferences.data?.voice ?? "balanced") as CareerVoice,
+        emphasis: writingPreferences.data?.emphasis ?? [],
+        deEmphasis: writingPreferences.data?.de_emphasis ?? [],
+        summaryStyle: writingPreferences.data?.summary_style ?? "concise",
+      },
       preferences: pref
         ? {
             targetRoles: pref.target_roles,
@@ -204,24 +344,114 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
           }
         : null,
       sensitiveAnswers: {
-        workAuthorization:
-          workAuthorization?.user_confirmed ? workAuthorization.boolean_value : null,
-        sponsorship: sponsorship?.user_confirmed ? sponsorship.boolean_value : null,
+        workAuthorization: workAuthorization?.user_confirmed
+          ? workAuthorization.boolean_value
+          : null,
+        sponsorship: sponsorship?.user_confirmed
+          ? sponsorship.boolean_value
+          : null,
       },
       baseResumePath: profile.data?.base_resume_path ?? null,
       authorizeAutoApply:
         consent.data?.authorized === true && !consent.data?.revoked_at,
+      draft: draft.data
+        ? {
+            step: draft.data.last_step,
+            state: draft.data.state,
+          }
+        : null,
     };
   });
 
+function factRows(
+  userId: string,
+  data: RichOnboardingPayload,
+  primaryExperienceId: string | null,
+) {
+  const rows: Array<{
+    user_id: string;
+    fact_type: string;
+    claim: string;
+    source_type: string;
+    source_ref: string | null;
+    user_confirmed: boolean;
+    allowed_for_resume: boolean;
+    confidence: number;
+    metadata: Json;
+  }> = [];
+
+  const add = (
+    factType: string,
+    claim: string,
+    section: string,
+    allowedForResume = true,
+  ) => {
+    const cleaned = clean(claim, 2000);
+    if (!cleaned) return;
+    rows.push({
+      user_id: userId,
+      fact_type: factType,
+      claim: cleaned,
+      source_type: "onboarding",
+      source_ref: primaryExperienceId,
+      user_confirmed: true,
+      allowed_for_resume: allowedForResume,
+      confidence: 1,
+      metadata: { section } as Json,
+    });
+  };
+
+  for (const responsibility of data.careerContext.responsibilities) {
+    add("responsibility", responsibility, "experience");
+  }
+  for (const result of data.careerContext.results) {
+    add("achievement", result, "results");
+  }
+  for (const tool of data.careerContext.tools) {
+    add("tool", tool, "tools");
+  }
+  for (const skill of data.skills) {
+    add("skill", skill, "skills");
+  }
+  for (const strength of data.careerContext.strengths) {
+    add("strength", strength, "strengths");
+  }
+  for (const differentiator of data.careerContext.differentiators) {
+    add("differentiator", differentiator, "positioning");
+  }
+
+  if (data.experience) {
+    add("experience_description", data.experience.description, "experience");
+    for (const achievement of data.experience.achievements.split(/\n|;/)) {
+      add("achievement", achievement, "experience");
+    }
+  }
+
+  add("project", data.careerContext.proudProject, "story");
+  add("career_goal", data.careerContext.careerGoal, "career_goal", false);
+  add("challenge_story", data.careerContext.challengeStory, "story", false);
+  return rows.slice(0, 120);
+}
+
 export const saveOnboardingProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: OnboardingPayload) => {
+  .inputValidator((data: RichOnboardingPayload) => {
     if (!data.identity.email.trim()) throw new Error("Ingresá tu email.");
     if (!data.identity.firstName.trim()) throw new Error("Ingresá tu nombre.");
-    if (!data.preferences.targetRoles.length) throw new Error("Elegí al menos un puesto objetivo.");
+    if (!data.preferences.targetRoles.length) {
+      throw new Error("Elegí al menos un puesto objetivo.");
+    }
     if (!data.authorizeAutoApply) {
-      throw new Error("Necesitamos tu autorización explícita para enviar postulaciones seleccionadas por vos.");
+      throw new Error(
+        "Necesitamos tu autorización explícita para enviar postulaciones seleccionadas por vos.",
+      );
+    }
+    if (
+      !["direct", "ambitious", "technical", "balanced"].includes(
+        data.writingPreferences.voice,
+      )
+    ) {
+      throw new Error("Elegí cómo querés que Aplica te presente.");
     }
     return data;
   })
@@ -257,9 +487,10 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         .select("id, language")
         .eq("user_id", userId),
     ]);
-    const nextVersion = (existingProfile?.master_profile_version ?? 0) + 1;
 
+    const nextVersion = (existingProfile?.master_profile_version ?? 0) + 1;
     const identity = data.identity;
+
     const { error: profileError } = await supabase.from("profiles").upsert(
       {
         user_id: userId,
@@ -271,6 +502,8 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         country: clean(identity.country, 120) || null,
         city: clean(identity.city, 160) || null,
         current_title: clean(identity.currentTitle, 180) || null,
+        linkedin_url: clean(data.links.linkedin, 500) || null,
+        portfolio_url: clean(data.links.portfolio, 500) || null,
         base_resume_path: data.baseResumePath,
         master_profile_version: nextVersion,
       },
@@ -278,6 +511,7 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     );
     if (profileError) throw new Error(profileError.message);
 
+    let primaryExperienceId = existingExperience?.id ?? null;
     if (data.experience?.company.trim() && data.experience.title.trim()) {
       const endText = data.experience.end.trim();
       const experiencePayload = {
@@ -297,16 +531,22 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         sort_order: 0,
       };
 
-      const { error } = existingExperience
-        ? await supabase
-            .from("experiences")
-            .update(experiencePayload)
-            .eq("id", existingExperience.id)
-            .eq("user_id", userId)
-        : await supabase
-            .from("experiences")
-            .insert({ user_id: userId, ...experiencePayload });
-      if (error) throw new Error(error.message);
+      if (existingExperience) {
+        const { error } = await supabase
+          .from("experiences")
+          .update(experiencePayload)
+          .eq("id", existingExperience.id)
+          .eq("user_id", userId);
+        if (error) throw new Error(error.message);
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("experiences")
+          .insert({ user_id: userId, ...experiencePayload })
+          .select("id")
+          .single();
+        if (error || !inserted) throw new Error(error?.message ?? "No pudimos guardar la experiencia.");
+        primaryExperienceId = inserted.id;
+      }
     }
 
     if (data.education?.institution.trim()) {
@@ -333,8 +573,11 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
-    const uniqueSkills = [...new Set(data.skills.map((skill) => clean(skill, 120)).filter(Boolean))].slice(0, 50);
-    const { error: deleteSkillsError } = await supabase.from("skills").delete().eq("user_id", userId);
+    const uniqueSkills = cleanList(data.skills, 50, 120);
+    const { error: deleteSkillsError } = await supabase
+      .from("skills")
+      .delete()
+      .eq("user_id", userId);
     if (deleteSkillsError) throw new Error(deleteSkillsError.message);
     if (uniqueSkills.length) {
       const { error } = await supabase.from("skills").insert(
@@ -382,29 +625,100 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     }
 
     const modes = modeFlags(data.preferences.modes);
-    const { error: preferencesError } = await supabase.from("job_preferences").upsert(
-      {
-        user_id: userId,
-        target_roles: data.preferences.targetRoles.map((value) => clean(value, 180)).filter(Boolean).slice(0, 12),
-        target_locations: data.preferences.targetLocations.map((value) => clean(value, 180)).filter(Boolean).slice(0, 12),
-        remote_allowed: modes.remote,
-        hybrid_allowed: modes.hybrid,
-        onsite_allowed: modes.onsite,
-        employment_types: data.preferences.employmentTypes.map((value) => clean(value, 80)).filter(Boolean).slice(0, 12),
-        minimum_salary: data.preferences.minimumSalary,
-        salary_currency: data.preferences.salaryCurrency ? clean(data.preferences.salaryCurrency, 12) : null,
-        salary_period: data.preferences.salaryPeriod ? clean(data.preferences.salaryPeriod, 40) : null,
-        seniority_levels: data.preferences.seniorityLevels.map((value) => clean(value, 80)).filter(Boolean).slice(0, 12),
-        willing_to_relocate: data.preferences.willingToRelocate,
-        international_remote: data.preferences.internationalRemote,
-        preferred_industries: data.preferences.preferredIndustries.map((value) => clean(value, 120)).filter(Boolean).slice(0, 30),
-        excluded_companies: [],
-        excluded_industries: [],
-        minimum_match_score: Math.max(0, Math.min(100, data.preferences.minimumMatchScore)),
-      },
-      { onConflict: "user_id" },
-    );
+    const { error: preferencesError } = await supabase
+      .from("job_preferences")
+      .upsert(
+        {
+          user_id: userId,
+          target_roles: cleanList(data.preferences.targetRoles, 12, 180),
+          target_locations: cleanList(
+            data.preferences.targetLocations,
+            12,
+            180,
+          ),
+          remote_allowed: modes.remote,
+          hybrid_allowed: modes.hybrid,
+          onsite_allowed: modes.onsite,
+          employment_types: cleanList(
+            data.preferences.employmentTypes,
+            12,
+            80,
+          ),
+          minimum_salary: data.preferences.minimumSalary,
+          salary_currency: data.preferences.salaryCurrency
+            ? clean(data.preferences.salaryCurrency, 12)
+            : null,
+          salary_period: data.preferences.salaryPeriod
+            ? clean(data.preferences.salaryPeriod, 40)
+            : null,
+          seniority_levels: cleanList(
+            data.preferences.seniorityLevels,
+            12,
+            80,
+          ),
+          willing_to_relocate: data.preferences.willingToRelocate,
+          international_remote: data.preferences.internationalRemote,
+          preferred_industries: cleanList(
+            data.preferences.preferredIndustries,
+            30,
+            120,
+          ),
+          excluded_companies: [],
+          excluded_industries: [],
+          minimum_match_score: Math.max(
+            0,
+            Math.min(100, data.preferences.minimumMatchScore),
+          ),
+        },
+        { onConflict: "user_id" },
+      );
     if (preferencesError) throw new Error(preferencesError.message);
+
+    const contextPayload = {
+      user_id: userId,
+      preferred_tasks: cleanList(data.careerContext.preferredTasks),
+      avoid_tasks: cleanList(data.careerContext.avoidTasks),
+      strengths: cleanList(data.careerContext.strengths),
+      differentiators: cleanList(data.careerContext.differentiators),
+      tools: cleanList(data.careerContext.tools, 50, 120),
+      responsibilities: cleanList(
+        data.careerContext.responsibilities,
+        50,
+        500,
+      ),
+      results: cleanList(data.careerContext.results, 40, 1000),
+      proud_project: clean(data.careerContext.proudProject, 4000) || null,
+      challenge_story: clean(data.careerContext.challengeStory, 4000) || null,
+      career_goal: clean(data.careerContext.careerGoal, 2000) || null,
+      target_environment:
+        clean(data.careerContext.targetEnvironment, 1000) || null,
+      availability: clean(data.careerContext.availability, 300) || null,
+      travel_preference:
+        clean(data.careerContext.travelPreference, 300) || null,
+    };
+    const { error: contextError } = await supabase
+      .from("career_contexts")
+      .upsert(contextPayload, { onConflict: "user_id" });
+    if (contextError) throw new Error(contextError.message);
+
+    const { error: writingError } = await supabase
+      .from("writing_preferences")
+      .upsert(
+        {
+          user_id: userId,
+          voice: data.writingPreferences.voice,
+          emphasis: cleanList(data.writingPreferences.emphasis, 20, 120),
+          de_emphasis: cleanList(
+            data.writingPreferences.deEmphasis,
+            20,
+            120,
+          ),
+          summary_style:
+            clean(data.writingPreferences.summaryStyle, 80) || "concise",
+        },
+        { onConflict: "user_id" },
+      );
+    if (writingError) throw new Error(writingError.message);
 
     const answerKeys = ["work_authorization", "sponsorship"];
     const { error: deleteAnswersError } = await supabase
@@ -419,7 +733,9 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
       ["sponsorship", data.sensitiveAnswers.sponsorship],
     ] as const;
     const answerRows = answers
-      .filter((answer): answer is readonly [string, boolean] => answer[1] !== null)
+      .filter(
+        (answer): answer is readonly [string, boolean] => answer[1] !== null,
+      )
       .map(([canonicalKey, value]) => ({
         user_id: userId,
         canonical_key: canonicalKey,
@@ -436,22 +752,43 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
 
+    const { error: deleteFactsError } = await supabase
+      .from("fact_ledger")
+      .delete()
+      .eq("user_id", userId)
+      .eq("source_type", "onboarding");
+    if (deleteFactsError) throw new Error(deleteFactsError.message);
+
+    const facts = factRows(userId, data, primaryExperienceId);
+    if (facts.length) {
+      const { error } = await supabase.from("fact_ledger").insert(facts);
+      if (error) throw new Error(error.message);
+    }
+
     const now = new Date().toISOString();
-    const { error: consentError } = await supabase.from("auto_apply_consents").upsert(
-      {
-        user_id: userId,
-        authorized: data.authorizeAutoApply,
-        authorized_at: data.authorizeAutoApply ? now : null,
-        revoked_at: data.authorizeAutoApply ? null : now,
-        terms_version: "v1",
-      },
-      { onConflict: "user_id" },
-    );
+    const { error: consentError } = await supabase
+      .from("auto_apply_consents")
+      .upsert(
+        {
+          user_id: userId,
+          authorized: data.authorizeAutoApply,
+          authorized_at: data.authorizeAutoApply ? now : null,
+          revoked_at: data.authorizeAutoApply ? null : now,
+          terms_version: "v1",
+        },
+        { onConflict: "user_id" },
+      );
     if (consentError) throw new Error(consentError.message);
+
+    await supabase
+      .from("onboarding_drafts")
+      .delete()
+      .eq("user_id", userId);
 
     return {
       ok: true,
       masterProfileVersion: nextVersion,
+      factCount: facts.length,
       dealbreakers: data.preferences.dealbreakers,
     };
   });
