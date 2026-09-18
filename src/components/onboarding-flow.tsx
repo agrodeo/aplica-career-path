@@ -72,7 +72,7 @@ export function OnboardingFlow() {
   }, [matching]);
 
   return (
-    <OnboardingShell className="onboarding-sheet-flow">
+    <OnboardingShell flow className="onboarding-sheet-flow">
       {matching ? <Matching count={count} stage={matchStage} done={matchStage === 4} onDone={() => void navigate({ to: "/jobs" })} /> : <>
         <div className="sheet-progress">
           <span>Paso {step} de {TOTAL}</span>
