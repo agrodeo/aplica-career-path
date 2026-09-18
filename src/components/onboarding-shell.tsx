@@ -23,7 +23,7 @@ export function OnboardingShell({ children, trust = false, className }: { childr
         <section className="onboarding-promise">
           <h1>La forma más rápida<br /><span>de conseguir trabajo.</span></h1>
           <p>Subí tu CV y aplicá más rápido a trabajos que encajan con vos.</p>
-          <Button asChild size="lg" className="home-primary mt-8 h-[58px] w-[240px] rounded-[11px] text-base font-semibold">
+          <Button asChild size="lg" className="home-primary mt-8 h-[66px] w-[330px] rounded-[12px] text-[19px] font-semibold">
             <Link to="/onboarding">Empezar ahora <ArrowRight /></Link>
           </Button>
           <small>Tu perfil usa información real.</small>
