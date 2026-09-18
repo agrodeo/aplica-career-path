@@ -82,7 +82,7 @@ export function OnboardingFlow() {
       const merged: Profile = { ...emptyProfile, ...fields };
       setReading(false);
       setProfile(merged);
-      setCvParsed(true);
+      setCvParsed(Object.values(fields).some((value) => typeof value === "string" && value.trim().length > 0));
       if (merged.firstName) setName(merged.firstName);
       if (merged.city) setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || merged.city });
       if (foundSkills.length) setSelected((current) => ({ ...current, skills: foundSkills }));
