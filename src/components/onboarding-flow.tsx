@@ -178,7 +178,9 @@ function renderStep(step: number, p: StepProps): ReactNode {
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="sheet-field"><span>{label}</span>{children}</label>; }
 function SectionLabel({ children }: { children: ReactNode }) { return <h3 className="mb-3 mt-6 text-sm font-medium first:mt-0">{children}</h3>; }
 function AddButton({ children }: { children: ReactNode }) { return <Button type="button" variant="outline" size="sm" className="mt-4"><Plus />{children}</Button>; }
-function SelectLike({ options }: { options: string[] }) { return <select className="sheet-select">{options.map((option) => <option key={option}>{option}</option>)}</select>; }
+function SelectLike({ options, value, onChange }: { options: string[]; value?: string; onChange?: (value: string) => void }) {
+  return <select className="sheet-select" value={value ?? ""} onChange={(event) => onChange?.(event.target.value)}>{value === "" && <option value="">Seleccioná una opción</option>}{options.map((option) => <option key={option}>{option}</option>)}</select>;
+}
 function ToggleRow({ label }: { label: string }) { return <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-border pt-5"><span className="min-w-0 text-sm">{label}</span><Switch className="shrink-0" defaultChecked /></div>; }
 function Question({ title }: { title: string }) { return <div className="mb-5"><p className="mb-3 text-sm font-medium">{title}</p><div className="grid grid-cols-2 gap-2"><Choice selected onClick={() => undefined}>Sí</Choice><Choice selected={false} onClick={() => undefined}>No</Choice></div></div>; }
 
