@@ -12,3 +12,4 @@
 - [x] Rediseñar únicamente la portada como buscador premium con campo de oportunidades
 - [x] Refinar la portada con una atmósfera abstracta continua sin tarjetas
 - [x] Refinar composición, buscador y profundidad atmosférica de la portada
+- [x] Reemplazar la atmósfera tenue por un mapa de oportunidades visible
