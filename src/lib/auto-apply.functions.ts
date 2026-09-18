@@ -536,10 +536,10 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
     const userSkills = (skills.data ?? [])
       .map((skill) => skill.name)
       .filter(Boolean);
-    const context = careerContext.data;
-    const preferredTasks = context?.preferred_tasks ?? [];
-    const avoidTasks = context?.avoid_tasks ?? [];
-    const confirmedTools = context?.tools ?? [];
+    const careerData = careerContext.data;
+    const preferredTasks = careerData?.preferred_tasks ?? [];
+    const avoidTasks = careerData?.avoid_tasks ?? [];
+    const confirmedTools = careerData?.tools ?? [];
     const experienceTitles = [
       profile.data?.current_title ?? "",
       ...(experiences.data ?? []).map((experience) => experience.title),
@@ -659,7 +659,7 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
           matchedTools,
           avoidedSignals: matchedAvoidTasks,
           targetRole: targetRoles[0] ?? profile.data?.current_title ?? null,
-          careerGoal: context?.career_goal ?? null,
+          careerGoal: careerData?.career_goal ?? null,
           mode: job.remote_type,
           location: job.location,
           note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
