@@ -88,7 +88,13 @@ function phaseContent(phase: number): ReactNode {
       <>
         <div className="demo-heading"><span className="demo-eyebrow">Mejores resultados</span><h2>Trabajos que encajan con vos</h2></div>
         <div className="demo-jobs">
-          {demoJobs.map(([role, match], index) => <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={role}><span><strong>{role}</strong><small>Buenos Aires · Remoto</small></span><b>{match}</b></div>)}
+          {demoJobs.map((job, index) => (
+            <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={job.role}>
+              <img className="demo-job-logo" src={job.logo} alt={job.company} />
+              <span><strong>{job.role}</strong><small>{job.company} · Remoto</small></span>
+              <b>{job.match}</b>
+            </div>
+          ))}
         </div>
       </>
     );
