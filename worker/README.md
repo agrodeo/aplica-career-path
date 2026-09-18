@@ -137,3 +137,37 @@ copy when it:
 
 Rejected AI output never blocks the application: the worker falls back to the
 truthful deterministic resume.
+
+
+## Fact-grounded narrative application answers
+
+Open-ended ATS questions can also be polished from the verified Career Profile.
+
+Optional configuration:
+
+```env
+# Falls back to RESUME_LLM_MODEL when omitted.
+APPLICATION_LLM_MODEL=...
+
+# Falls back to RESUME_LLM_VERIFIER_MODEL, then the writer model.
+APPLICATION_LLM_VERIFIER_MODEL=...
+```
+
+Supported narrative families currently include motivation, about-you,
+challenge, proud-achievement and cover-letter style questions.
+
+The flow is conservative:
+
+```text
+deterministic truthful draft
+  -> optional writer
+  -> explicit source IDs
+  -> numeric/source validation
+  -> semantic entailment verifier
+  -> final answer
+```
+
+If the writer, verifier or validation fails, Aplica keeps the deterministic
+answer. Job-description requirements may be referenced as facts about the job,
+but they may never be converted into candidate qualifications without a
+confirmed candidate source. Requests use `store: false`.
