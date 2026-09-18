@@ -24,7 +24,6 @@ function Index() {
       <section className="coverage-section" aria-labelledby="coverage-title">
         <div className="coverage-heading">
           <p className="coverage-kicker">Vacantes en más de 10.000 empresas</p>
-          <h2 id="coverage-title">Más lugares para encontrar tu próximo trabajo.</h2>
         </div>
         <div className="coverage-wall" aria-label={`Cobertura de oportunidades públicas en ${coveredCompanies.join(", ")}`}>
           <div className="coverage-marquee">
