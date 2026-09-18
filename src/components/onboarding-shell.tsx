@@ -21,12 +21,12 @@ export function OnboardingShell({ children, trust = false, className }: { childr
 
       <main id="experiencia" className="onboarding-grid">
         <section className="onboarding-promise">
-          <h1>Conseguí más entrevistas.<br /><span>Sin aplicar trabajo por trabajo.</span></h1>
-          <p>Contanos qué buscás una sola vez. Aplica encuentra oportunidades compatibles, adapta tu CV y te ayuda a postularte.</p>
+          <h1>La forma más rápida<br /><span>de conseguir trabajo.</span></h1>
+          <p>Subí tu CV y aplicá más rápido a trabajos que encajan con vos.</p>
           <Button asChild size="lg" className="home-primary mt-8 h-[58px] w-[240px] rounded-[11px] text-base font-semibold">
-            <Link to="/onboarding">Empezar gratis <ArrowRight /></Link>
+            <Link to="/onboarding">Empezar ahora <ArrowRight /></Link>
           </Button>
-          <small>Tu perfil siempre usa información real.</small>
+          <small>Tu perfil usa información real.</small>
         </section>
 
         <section className={cn("onboarding-sheet", className)}>{children}</section>

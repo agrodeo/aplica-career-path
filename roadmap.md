@@ -15,3 +15,4 @@
 - [x] Reemplazar la atmósfera tenue por un mapa de oportunidades visible
 - [x] Rediseñar portada y onboarding como experiencia continua de dos columnas
 - [x] Incorporar cobertura verificable de oportunidades bajo la portada
+- [x] Simplificar la portada alrededor de la promesa de velocidad
