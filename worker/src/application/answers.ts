@@ -49,55 +49,118 @@ function storedAnswer(profile: MasterProfile, key: string): string | boolean | n
   return stored.textValue ?? null;
 }
 
-function resolveValue(field: InspectedField, profile: MasterProfile, job: JobRecord): string | boolean | null {
+function resolveValue(
+  field: InspectedField,
+  profile: MasterProfile,
+  job: JobRecord,
+): string | boolean | null {
   const key = field.canonicalKey;
   if (!key) return null;
 
   // Sensitive: explicit stored answers only.
   if (SENSITIVE_KEYS.includes(key)) {
     const stored = storedAnswer(profile, key);
-    if (stored === null) return null;
-    if (field.options && typeof stored === "boolean") {
-      const option = field.options.find((o) => (stored ? /^yes|s[ií]$/i : /^no$/i).test(o.label.trim()));
-      return option ? option.value : null;
-    }
-    return stored;
+    return normalizeForField(field, stored, profile);
   }
 
   const identity = profile.identity;
-  const current = profile.experience.find((e) => e.isCurrent) ?? profile.experience[0];
+  const current =
+    profile.experience.find((e) => e.isCurrent) ?? profile.experience[0];
 
+  let value: string | boolean | null;
   switch (key) {
     case "first_name":
-      return identity.firstName || null;
+      value = identity.firstName || null;
+      break;
     case "last_name":
-      return identity.lastName || null;
+      value = identity.lastName || null;
+      break;
     case "full_name":
-      return [identity.firstName, identity.lastName].filter(Boolean).join(" ") || null;
+      value =
+        [identity.firstName, identity.lastName].filter(Boolean).join(" ") || null;
+      break;
     case "email":
-      return identity.email || null;
+      value = identity.email || null;
+      break;
     case "phone":
-      return identity.phone || null;
+      value = identity.phone || null;
+      break;
     case "location":
-      return [identity.city, identity.country].filter(Boolean).join(", ") || null;
+      value =
+        [identity.city, identity.country].filter(Boolean).join(", ") || null;
+      break;
     case "linkedin":
-      return profile.links.linkedin || null;
+      value = profile.links.linkedin || null;
+      break;
     case "portfolio":
     case "website":
-      return profile.links.portfolio || null;
+      value = profile.links.portfolio || null;
+      break;
     case "current_company":
-      return current?.company ?? null;
+      value = current?.company ?? null;
+      break;
     case "current_title":
-      return identity.currentTitle || current?.title || null;
+      value = identity.currentTitle || current?.title || null;
+      break;
     case "years_experience":
-      return String(yearsOfExperience(profile));
+      value = String(yearsOfExperience(profile));
+      break;
     case "cover_letter":
-      return generatedInterest(profile, job);
-    default: {
-      const stored = storedAnswer(profile, key);
-      return stored;
-    }
+      value = generatedInterest(profile, job);
+      break;
+    default:
+      value = storedAnswer(profile, key);
+      break;
   }
+
+  return normalizeForField(field, value, profile);
+}
+
+/**
+ * Select/radio controls require the ATS option value, not arbitrary profile
+ * text. We only choose an option on an exact, explainable match; otherwise the
+ * field is considered unanswered instead of guessing.
+ */
+function normalizeForField(
+  field: InspectedField,
+  value: string | boolean | null,
+  profile: MasterProfile,
+): string | boolean | null {
+  if (value === null || !field.options?.length) return value;
+
+  const options = field.options;
+  if (typeof value === "boolean") {
+    const expected = value ? /^(yes|sí|si|true)$/i : /^(no|false)$/i;
+    const match = options.find(
+      (option) =>
+        expected.test(option.label.trim()) || expected.test(option.value.trim()),
+    );
+    return match?.value ?? null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  const exact = options.find(
+    (option) =>
+      option.value.trim().toLowerCase() === normalized ||
+      option.label.trim().toLowerCase() === normalized,
+  );
+  if (exact) return exact.value;
+
+  // Location dropdowns commonly ask for country or city rather than the full
+  // "City, Country" string. Exact component matches are safe; fuzzy guessing is not.
+  if (field.canonicalKey === "location") {
+    const components = [profile.identity.city, profile.identity.country]
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean);
+    const match = options.find((option) => {
+      const label = option.label.trim().toLowerCase();
+      const optionValue = option.value.trim().toLowerCase();
+      return components.includes(label) || components.includes(optionValue);
+    });
+    return match?.value ?? null;
+  }
+
+  return null;
 }
 
 export function yearsOfExperience(profile: MasterProfile): number {
