@@ -494,6 +494,20 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
     };
   });
 
+export const listAvailablePlans = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("plans")
+      .select(
+        "code,name,weekly_application_limit,price_amount,price_currency,billing_period,sort_order",
+      )
+      .eq("active", true)
+      .order("sort_order", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
 export const getAutoApplyOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
