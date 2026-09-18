@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { OnboardingShell } from "@/components/onboarding-shell";
 import { Input } from "@/components/ui/input";
 import { useAplica } from "@/lib/aplica-store";
+import { cn } from "@/lib/utils";
 
 // No head() here: the home route inherits title/description/og/twitter from
 // __root.tsx, and ships no og:image so serve-time hosting can inject the
@@ -48,7 +49,7 @@ function Index() {
         <fieldset className="sheet-field">
           <legend>Modalidad</legend>
           <div className="sheet-segments">
-            {["Remoto", "Híbrido", "Presencial"].map((value) => <Button key={value} type="button" variant={mode === value ? "default" : "outline"} onClick={() => setMode(value)}>{value}</Button>)}
+            {["Remoto", "Híbrido", "Presencial"].map((value) => <Button key={value} type="button" variant={mode === value ? "default" : "outline"} className={cn(mode === value && "home-primary")} onClick={() => setMode(value)}>{value}</Button>)}
           </div>
         </fieldset>
         <Button type="submit" className="home-primary mt-2 h-12 w-full rounded-[10px] font-semibold">Continuar <ArrowRight /></Button>
