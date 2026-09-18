@@ -32,6 +32,7 @@ export const Route = createFileRoute("/api/public/worker/claim-application")({
           attempt_id: queue.attempt_id,
           batch_id: queue.batch_id,
           attempts: queue.attempts,
+          test_mode: queue.test_mode === true,
         });
 
         if ("error" in payload) {
@@ -65,7 +66,7 @@ export const Route = createFileRoute("/api/public/worker/claim-application")({
           .limit(1)
           .maybeSingle();
 
-        if (verifiedDuplicate) {
+        if (verifiedDuplicate && queue.test_mode !== true) {
           await db.rpc("fail_application", {
             _queue_id: queue.id,
             _error_code: "DUPLICATE_APPLICATION",
