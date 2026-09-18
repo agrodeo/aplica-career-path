@@ -2,8 +2,27 @@ import { createFileRoute } from "@tanstack/react-router";
 import { OnboardingShell } from "@/components/onboarding-shell";
 import { ProductDemo } from "@/components/product-demo";
 import { applications, jobs } from "@/lib/aplica-data";
+import accentureAsset from "@/assets/accenture.png.asset.json";
+import amazonAsset from "@/assets/amazon.png.asset.json";
+import canvaAsset from "@/assets/canva.png.asset.json";
+import kavakAsset from "@/assets/kavak.png.asset.json";
+import mercadoLibreAsset from "@/assets/mercado-libre.png.asset.json";
+import rappiAsset from "@/assets/rappi.png.asset.json";
+import santanderAsset from "@/assets/santander.png.asset.json";
+
+const coverageLogos: { name: string; src: string }[] = [
+  { name: "Mercado Libre", src: mercadoLibreAsset.url },
+  { name: "Amazon", src: amazonAsset.url },
+  { name: "Santander", src: santanderAsset.url },
+  { name: "Accenture", src: accentureAsset.url },
+  { name: "Kavak", src: kavakAsset.url },
+  { name: "Rappi", src: rappiAsset.url },
+  { name: "Canva", src: canvaAsset.url },
+];
 
 const coveredCompanies = Array.from(new Set([...jobs, ...applications].map((item) => item.company)));
+const logoCompanies = new Set(coverageLogos.map((logo) => logo.name.toLowerCase()));
+const otherCompanies = coveredCompanies.filter((company) => !logoCompanies.has(company.toLowerCase()));
 
 // No head() here: the home route inherits title/description/og/twitter from
 // __root.tsx, and ships no og:image so serve-time hosting can inject the
