@@ -534,12 +534,98 @@ export function OnboardingFlow() {
     void (async () => {
       let fields: Partial<Profile> = {};
       let foundSkills: string[] = [];
+      let parsedExperiences: ExperienceDraft[] = [];
 
       try {
-        const { parseCvFile } = await import("@/lib/cv-parse");
-        const result = await parseCvFile(file);
-        fields = result.fields as Partial<Profile>;
-        foundSkills = result.skills;
+        const { extractCvText, parseCvText } = await import("@/lib/cv-parse");
+        const text = await extractCvText(file);
+        const fallback = parseCvText(text);
+        fields = fallback.fields as Partial<Profile>;
+        foundSkills = fallback.skills;
+
+        const structured = await structuredCvExtract({
+          data: { text },
+        }).catch(() => null);
+
+        if (structured?.available && structured.extraction) {
+          const extraction = structured.extraction;
+          const identity = extraction.identity;
+
+          fields = {
+            ...fields,
+            firstName: identity.firstName || fields.firstName,
+            lastName: identity.lastName || fields.lastName,
+            email: identity.email || fields.email,
+            phone: identity.phone || fields.phone,
+            city: identity.city || fields.city,
+            country: identity.country || fields.country,
+          };
+
+          parsedExperiences = extraction.experiences.map((experience) => ({
+            company: experience.company,
+            title: experience.title,
+            start: experience.startDate,
+            end: experience.isCurrent
+              ? "Actualidad"
+              : experience.endDate,
+            description: experience.description,
+            achievements: experience.achievements.join("\n"),
+            location: experience.location,
+            confidence: experience.confidence,
+          }));
+
+          const primary = parsedExperiences[0];
+          if (primary) {
+            fields = {
+              ...fields,
+              company: primary.company,
+              role: primary.title,
+              start: primary.start,
+              end: primary.end,
+              description: primary.description,
+              achievements: primary.achievements,
+            };
+          }
+
+          const primaryEducation = extraction.education[0];
+          if (primaryEducation) {
+            fields = {
+              ...fields,
+              institution: primaryEducation.institution,
+              degree: primaryEducation.degree,
+              area: primaryEducation.field,
+              studyDates: primaryEducation.dateRange,
+            };
+          }
+
+          const firstLanguage = extraction.languages[0];
+          if (firstLanguage) {
+            fields = {
+              ...fields,
+              language: firstLanguage.language,
+              level: firstLanguage.level || "Intermedio",
+            };
+          }
+
+          const structuredSkills = extraction.skills
+            .filter((skill) => skill.confidence >= 0.65)
+            .map((skill) => skill.name)
+            .filter(Boolean);
+          if (structuredSkills.length) foundSkills = structuredSkills;
+        } else if (fields.company && fields.role) {
+          parsedExperiences = [
+            {
+              company: fields.company,
+              title: fields.role,
+              start: fields.start ?? "",
+              end: fields.end ?? "",
+              description: fields.description ?? "",
+              achievements: fields.achievements ?? "",
+              location: "",
+              confidence: null,
+            },
+          ];
+        }
       } catch (error) {
         setCvError(
           error instanceof Error ? error.message : "No pudimos leer el CV.",
@@ -573,10 +659,6 @@ export function OnboardingFlow() {
         );
       }
 
-      // A CV is useful for career history, but it should never overwrite
-      // higher-confidence identity we already got from the authenticated
-      // account or a previously confirmed profile. This prevents PDF layout
-      // headings such as "Work Experience" from replacing the user's name.
       const merged: Profile = {
         ...profile,
         ...fields,
@@ -587,12 +669,18 @@ export function OnboardingFlow() {
         country: profile.country || fields.country || "",
         city: profile.city || fields.city || "",
       };
+
+      if (parsedExperiences.length) {
+        setExperiences(parsedExperiences);
+      }
       setReading(false);
       setProfile(merged);
       setCvParsed(
-        Object.values(fields).some(
-          (value) => typeof value === "string" && value.trim().length > 0,
-        ),
+        parsedExperiences.length > 0 ||
+          Object.values(fields).some(
+            (value) =>
+              typeof value === "string" && value.trim().length > 0,
+          ),
       );
       if (merged.firstName) setName(merged.firstName);
       if (merged.city) {
@@ -602,7 +690,10 @@ export function OnboardingFlow() {
         }));
       }
       if (foundSkills.length) {
-        setSelected((current) => ({ ...current, skills: foundSkills }));
+        setSelected((current) => ({
+          ...current,
+          skills: [...new Set(foundSkills)],
+        }));
       }
       setStep(3);
     })();
