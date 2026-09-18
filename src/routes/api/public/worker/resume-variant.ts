@@ -29,6 +29,7 @@ export const Route = createFileRoute("/api/public/worker/resume-variant")({
           selected_skill_ids?: string[];
           generated_bullets?: unknown[];
           html?: string;
+          generation_model?: string | null;
           validation_status?: string;
           validation_issues?: unknown[];
           master_profile_version?: number;
@@ -72,6 +73,7 @@ export const Route = createFileRoute("/api/public/worker/resume-variant")({
               selected_skill_ids: body.selected_skill_ids ?? [],
               generated_bullets: (body.generated_bullets ?? []) as never,
               html: body.html ?? null,
+              generation_model: body.generation_model?.slice(0, 120) ?? null,
               pdf_path: body.pdf_path,
               validation_status: "passed",
               validation_issues: (body.validation_issues ?? []) as never,
