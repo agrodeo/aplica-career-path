@@ -340,7 +340,7 @@ export const extractStructuredCv = createServerFn({ method: "POST" })
       };
     }
 
-    const extraction = validateAgainstSource(parsed, data.text);
+    const extraction = validateStructuredCvAgainstSource(parsed, data.text);
     return {
       available: true as const,
       extraction,
@@ -348,7 +348,7 @@ export const extractStructuredCv = createServerFn({ method: "POST" })
     };
   });
 
-function validateAgainstSource(
+export function validateStructuredCvAgainstSource(
   extraction: StructuredCvExtraction,
   rawText: string,
 ): StructuredCvExtraction {
