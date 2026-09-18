@@ -145,7 +145,13 @@ type StepProps = {
   searchPreferences: { role: string; location: string; mode: string }; setSearchPreferences: (value: { role: string; location: string; mode: string }) => void;
   reading: boolean; uploadedName: string; inputRef: React.RefObject<HTMLInputElement | null>; acceptFile: (file?: File) => void;
   dropFile: (event: DragEvent<HTMLDivElement>) => void; consents: boolean[]; setConsents: (value: boolean[]) => void;
+  profile: Profile; updateProfile: (key: keyof Profile, value: string) => void; cvParsed: boolean; skipCv: () => void;
 };
+
+function CvNote({ show }: { show: boolean }) {
+  if (!show) return null;
+  return <p className="sheet-help mb-4 flex items-center gap-2 text-primary"><Check className="size-4" /> Completado automáticamente desde tu CV. Revisalo y editá lo que haga falta.</p>;
+}
 
 function renderStep(step: number, p: StepProps): ReactNode {
   const chips = (group: string, values: string[]) => <div className="sheet-chips">{values.map((value) => <Button type="button" variant="outline" key={value} onClick={() => p.toggle(group, value)} className={cn("sheet-chip", p.selected[group]?.includes(value) && "sheet-chip-selected")}>{value}</Button>)}</div>;
