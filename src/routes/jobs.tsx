@@ -2,7 +2,6 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
-  ArrowUpDown,
   BriefcaseBusiness,
   Check,
   ChevronDown,
@@ -227,10 +226,6 @@ function JobsPage() {
           >
             <SlidersHorizontal />
             Match mínimo: {min}%
-          </Button>
-          <Button variant="outline" disabled>
-            <ArrowUpDown />
-            Mejor match
           </Button>
         </div>
 
