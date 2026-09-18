@@ -226,7 +226,8 @@
     radial-gradient(ellipse 54% 56% at 5% 90%, color-mix(in oklab, var(--home-backdrop-cool) 72%, transparent), transparent 76%),
     var(--home-backdrop);
 }
-.home-continuum > .onboarding-scene { background: transparent; }
+.home-continuum > .onboarding-scene { min-height: 820px; background: transparent; }
+.home-continuum > .onboarding-scene .onboarding-grid { min-height: 680px; padding-bottom: 58px; }
 .onboarding-scene::before {
   content: "";
   position: absolute;
@@ -323,29 +324,27 @@
 .coverage-section {
   position: relative;
   z-index: 2;
-  min-height: 390px;
+  min-height: 260px;
   overflow: hidden;
-  padding: 70px 0 36px;
+  padding: 32px 0 28px;
   text-align: center;
 }
 .coverage-heading { margin-inline: auto; padding-inline: 24px; }
-.coverage-kicker { color: var(--home-accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.coverage-heading h2 { max-width: 720px; margin: 12px auto 0; font-size: clamp(30px, 2.7vw, 42px); font-weight: 680; line-height: 1.08; letter-spacing: -1px; }
-.coverage-heading > p:last-child { margin-top: 14px; color: var(--muted-foreground); font-size: 15px; }
+.coverage-kicker { color: var(--home-accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.coverage-heading h2 { max-width: 620px; margin: 8px auto 0; font-size: clamp(23px, 2vw, 30px); font-weight: 680; line-height: 1.1; letter-spacing: -.5px; }
+.coverage-heading > p:last-child { margin-top: 9px; color: var(--muted-foreground); font-size: 13px; }
 .coverage-wall {
   width: 100%;
-  margin-top: 42px;
+  margin-top: 27px;
   mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
-.coverage-marquee { overflow: hidden; padding-block: 13px; }
+.coverage-marquee { overflow: hidden; padding-block: 11px; }
 .coverage-track { display: flex; width: max-content; will-change: transform; animation: coverage-left 46s linear infinite; }
-.coverage-marquee[data-direction="right"] .coverage-track { animation-name: coverage-right; }
 .coverage-wall:hover .coverage-track { animation-play-state: paused; }
 .coverage-group { display: flex; align-items: center; gap: clamp(42px, 4.8vw, 76px); padding-right: clamp(42px, 4.8vw, 76px); }
 .coverage-logo { color: color-mix(in oklab, var(--foreground) 52%, transparent); font-size: clamp(21px, 1.75vw, 28px); font-weight: 680; line-height: 1; white-space: nowrap; filter: grayscale(1); }
-.coverage-disclaimer { max-width: 760px; margin: 27px auto 0; padding-inline: 24px; color: color-mix(in oklab, var(--foreground) 38%, transparent); font-size: 10px; line-height: 1.5; }
+.coverage-disclaimer { max-width: 760px; margin: 19px auto 0; padding-inline: 24px; color: color-mix(in oklab, var(--foreground) 38%, transparent); font-size: 9px; line-height: 1.5; }
 @keyframes coverage-left { to { transform: translateX(-25%); } }
-@keyframes coverage-right { from { transform: translateX(-25%); } to { transform: translateX(0); } }
 @keyframes sheet-change { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
 .opportunity-map {
@@ -411,6 +410,8 @@
 @keyframes map-label-in { from { opacity: 0; } to { opacity: 1; } }
 
 @media (max-width: 767px) {
+  .home-continuum > .onboarding-scene { min-height: 100svh; }
+  .home-continuum > .onboarding-scene .onboarding-grid { min-height: auto; padding-bottom: 40px; }
   .home-page { min-height: 100svh; }
   .home-page { background: linear-gradient(180deg, var(--background) 0%, var(--background) 58%, var(--home-field) 72%, var(--home-field-deep) 108%); }
   .opportunity-map { inset: 60% -42% -8%; }
@@ -439,10 +440,10 @@
   .sheet-step-body { max-height: none; overflow: visible; }
   .sheet-actions { position: sticky; bottom: 0; margin: 18px -22px -26px; padding: 14px 22px 18px; border-top: 1px solid var(--border); background: var(--background); }
   .onboarding-trust { position: relative; bottom: auto; left: auto; flex-direction: column; transform: none; gap: 6px; padding: 0 20px 28px; text-align: center; }
-  .coverage-section { min-height: 350px; padding: 54px 0 30px; }
-  .coverage-heading h2 { max-width: 350px; font-size: 30px; }
-  .coverage-heading > p:last-child { font-size: 14px; }
-  .coverage-wall { margin-top: 34px; mask-image: linear-gradient(to right, transparent, black 13%, black 87%, transparent); }
+  .coverage-section { min-height: 280px; padding: 40px 0 26px; }
+  .coverage-heading h2 { max-width: 340px; font-size: 25px; }
+  .coverage-heading > p:last-child { font-size: 13px; }
+  .coverage-wall { margin-top: 25px; mask-image: linear-gradient(to right, transparent, black 13%, black 87%, transparent); }
   .coverage-marquee { padding-block: 11px; }
   .coverage-group { gap: 38px; padding-right: 38px; }
   .coverage-logo { font-size: 20px; }

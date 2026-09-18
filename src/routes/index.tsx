@@ -9,7 +9,6 @@ import { useAplica } from "@/lib/aplica-store";
 import { cn } from "@/lib/utils";
 
 const coveredCompanies = Array.from(new Set([...jobs, ...applications].map((item) => item.company)));
-const coverageRows = [coveredCompanies, [...coveredCompanies.slice(5), ...coveredCompanies.slice(0, 5)]];
 
 // No head() here: the home route inherits title/description/og/twitter from
 // __root.tsx, and ships no og:image so serve-time hosting can inject the
@@ -68,17 +67,15 @@ function Index() {
           <p>Desde startups hasta compañías con alcance global.</p>
         </div>
         <div className="coverage-wall" aria-label={`Cobertura de oportunidades públicas en ${coveredCompanies.join(", ")}`}>
-          {coverageRows.map((companies, rowIndex) => (
-            <div className="coverage-marquee" data-direction={rowIndex === 0 ? "left" : "right"} key={rowIndex}>
-              <div className="coverage-track">
-                {[0, 1, 2, 3].map((copy) => (
-                  <div className="coverage-group" aria-hidden={copy !== 0} key={copy}>
-                    {companies.map((company) => <span className="coverage-logo" key={`${copy}-${company}`}>{company}</span>)}
-                  </div>
-                ))}
+          <div className="coverage-marquee">
+            <div className="coverage-track">
+              {[0, 1, 2, 3].map((copy) => (
+                <div className="coverage-group" aria-hidden={copy !== 0} key={copy}>
+                  {coveredCompanies.map((company) => <span className="coverage-logo" key={`${copy}-${company}`}>{company}</span>)}
+                </div>
+              ))}
               </div>
-            </div>
-          ))}
+          </div>
         </div>
         <p className="coverage-disclaimer">Las marcas pertenecen a sus respectivos propietarios. La inclusión indica disponibilidad de oportunidades públicas y no implica afiliación con Aplica.</p>
       </section>
