@@ -16,7 +16,6 @@ export type Database = {
     Tables: {
       adapter_inspections: {
         Row: {
-          test_mode: boolean
           adapter: string | null
           ats_type: string | null
           auto_apply_eligible: boolean | null
@@ -39,7 +38,6 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
-          test_mode?: boolean
           adapter?: string | null
           ats_type?: string | null
           auto_apply_eligible?: boolean | null
@@ -62,7 +60,6 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
-          test_mode?: boolean
           adapter?: string | null
           ats_type?: string | null
           auto_apply_eligible?: boolean | null
@@ -175,6 +172,7 @@ export type Database = {
       }
       application_attempts: {
         Row: {
+          test_mode: boolean
           adapter: string | null
           adapter_version: string | null
           attempt_number: number
@@ -197,6 +195,7 @@ export type Database = {
           verified_at: string | null
         }
         Insert: {
+          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -219,6 +218,7 @@ export type Database = {
           verified_at?: string | null
         }
         Update: {
+          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -1401,6 +1401,7 @@ export type Database = {
       claim_application: {
         Args: { _limit?: number; _worker_id: string }
         Returns: {
+          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
