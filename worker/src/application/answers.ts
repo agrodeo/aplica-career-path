@@ -322,8 +322,21 @@ export function validateGeneratedAnswer(answer: string, profile: MasterProfile, 
   }
   for (const match of answer.matchAll(/\b[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]{2,})*/g)) {
     const candidate = match[0];
-    if (answer.indexOf(candidate) === 0) continue; // sentence start
-    if (!allowed.includes(candidate.toLowerCase())) unsupportedClaims.push(candidate);
+    const index = match.index ?? 0;
+    const prefix = answer.slice(0, index);
+    const atSentenceStart =
+      index === 0 || /(?:^|[.!?]\s+)$/.test(prefix.slice(-4));
+
+    // A single capitalized word at a sentence boundary is not evidence of a
+    // new employer/product/entity. Multi-word proper phrases still require a
+    // match in the verified profile/job corpus.
+    if (atSentenceStart && !candidate.includes(" ")) continue;
+    if (
+      candidate.includes(" ") &&
+      !allowed.includes(candidate.toLowerCase())
+    ) {
+      unsupportedClaims.push(candidate);
+    }
   }
 
   return { valid: unsupportedClaims.length === 0, unsupportedClaims };
