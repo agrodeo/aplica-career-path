@@ -52,6 +52,28 @@ const baseProfile: MasterProfile = {
   languages: [{ language: "Español", level: "Nativo" }],
   verifiedApplicationAnswers: [],
   links: { linkedin: "https://linkedin.com/in/example", portfolio: "" },
+  careerContext: {
+    preferredTasks: [],
+    avoidTasks: [],
+    strengths: [],
+    differentiators: [],
+    tools: [],
+    responsibilities: [],
+    results: [],
+    proudProject: "",
+    challengeStory: "",
+    careerGoal: "",
+    targetEnvironment: "",
+    availability: "",
+    travelPreference: "",
+  },
+  writingPreferences: {
+    voice: "balanced",
+    emphasis: [],
+    deEmphasis: [],
+    summaryStyle: "concise",
+  },
+  facts: [],
 };
 
 function html(extra = "") {
