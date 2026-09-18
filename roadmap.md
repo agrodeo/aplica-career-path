@@ -16,3 +16,5 @@
 - [x] Rediseñar portada y onboarding como experiencia continua de dos columnas
 - [x] Incorporar cobertura verificable de oportunidades bajo la portada
 - [x] Simplificar la portada alrededor de la promesa de velocidad
+
+- [ ] Reemplazar el formulario de portada por una demostración automática del producto
