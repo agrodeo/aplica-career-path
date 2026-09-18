@@ -183,6 +183,22 @@ function validateAgainstProfile(
 ): { passed: boolean; issues: string[] } {
   const issues: string[] = [];
 
+  if (resume.generationModel) {
+    const summaryFacts = resume.professionalSummarySourceFactIds
+      .map((id) => profile.facts.find((fact) => fact.id === id))
+      .filter((fact): fact is ResumeFact => Boolean(fact));
+    if (
+      !summaryFacts.length ||
+      summaryFacts.length !== resume.professionalSummarySourceFactIds.length ||
+      summaryFacts.some(
+        (fact) => !fact.userConfirmed || !fact.allowedForResume,
+      ) ||
+      !factBackedSentenceIsSafe(resume.professionalSummary, summaryFacts)
+    ) {
+      issues.push("generated professional summary is not fully fact-backed");
+    }
+  }
+
   for (const exp of resume.experience) {
     const source = profile.experience.find((e) => e.id === exp.experienceId);
     if (!source) {
