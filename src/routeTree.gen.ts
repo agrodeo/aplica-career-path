@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as JobsRouteImport } from './routes/jobs'
 import { Route as LoginRouteImport } from './routes/login'
@@ -18,11 +19,21 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as UpgradeRouteImport } from './routes/upgrade'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedApplyingRouteImport } from './routes/_authenticated/applying'
 import { Route as JobsIdRouteImport } from './routes/jobs.$id'
+import { Route as ApiPublicWorkerJobsClaimRouteImport } from './routes/api/public/worker/jobs.claim'
+import { Route as ApiPublicWorkerJobsIdFailureRouteImport } from './routes/api/public/worker/jobs.$id.failure'
+import { Route as ApiPublicWorkerJobsIdStatusRouteImport } from './routes/api/public/worker/jobs.$id.status'
+import { Route as ApiPublicWorkerJobsIdSubmissionRouteImport } from './routes/api/public/worker/jobs.$id.submission'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApplicationsRoute = ApplicationsRouteImport.update({
@@ -65,11 +76,45 @@ const UpgradeRoute = UpgradeRouteImport.update({
   path: '/upgrade',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedApplyingRoute = AuthenticatedApplyingRouteImport.update({
+  id: '/applying',
+  path: '/applying',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const JobsIdRoute = JobsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => JobsRoute,
 } as any)
+const ApiPublicWorkerJobsClaimRoute =
+  ApiPublicWorkerJobsClaimRouteImport.update({
+    id: '/api/public/worker/jobs/claim',
+    path: '/api/public/worker/jobs/claim',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWorkerJobsIdFailureRoute =
+  ApiPublicWorkerJobsIdFailureRouteImport.update({
+    id: '/api/public/worker/jobs/$id/failure',
+    path: '/api/public/worker/jobs/$id/failure',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWorkerJobsIdStatusRoute =
+  ApiPublicWorkerJobsIdStatusRouteImport.update({
+    id: '/api/public/worker/jobs/$id/status',
+    path: '/api/public/worker/jobs/$id/status',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWorkerJobsIdSubmissionRoute =
+  ApiPublicWorkerJobsIdSubmissionRouteImport.update({
+    id: '/api/public/worker/jobs/$id/submission',
+    path: '/api/public/worker/jobs/$id/submission',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,7 +126,13 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
+  '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
+  '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,11 +144,18 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
+  '/admin': typeof AuthenticatedAdminRoute
+  '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
+  '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
+  '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/applications': typeof ApplicationsRoute
   '/jobs': typeof JobsRouteWithChildren
   '/login': typeof LoginRoute
@@ -106,7 +164,13 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/upgrade': typeof UpgradeRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
+  '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
+  '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +184,13 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/upgrade'
+    | '/admin'
+    | '/applying'
     | '/jobs/$id'
+    | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/jobs/$id/failure'
+    | '/api/public/worker/jobs/$id/status'
+    | '/api/public/worker/jobs/$id/submission'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,10 +202,17 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/upgrade'
+    | '/admin'
+    | '/applying'
     | '/jobs/$id'
+    | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/jobs/$id/failure'
+    | '/api/public/worker/jobs/$id/status'
+    | '/api/public/worker/jobs/$id/submission'
   id:
     | '__root__'
     | '/'
+    | '/_authenticated'
     | '/applications'
     | '/jobs'
     | '/login'
@@ -144,11 +221,18 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/upgrade'
+    | '/_authenticated/admin'
+    | '/_authenticated/applying'
     | '/jobs/$id'
+    | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/jobs/$id/failure'
+    | '/api/public/worker/jobs/$id/status'
+    | '/api/public/worker/jobs/$id/submission'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   ApplicationsRoute: typeof ApplicationsRoute
   JobsRoute: typeof JobsRouteWithChildren
   LoginRoute: typeof LoginRoute
@@ -157,6 +241,10 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   UpgradeRoute: typeof UpgradeRoute
+  ApiPublicWorkerJobsClaimRoute: typeof ApiPublicWorkerJobsClaimRoute
+  ApiPublicWorkerJobsIdFailureRoute: typeof ApiPublicWorkerJobsIdFailureRoute
+  ApiPublicWorkerJobsIdStatusRoute: typeof ApiPublicWorkerJobsIdStatusRoute
+  ApiPublicWorkerJobsIdSubmissionRoute: typeof ApiPublicWorkerJobsIdSubmissionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -166,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/applications': {
@@ -224,6 +319,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UpgradeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/applying': {
+      id: '/_authenticated/applying'
+      path: '/applying'
+      fullPath: '/applying'
+      preLoaderRoute: typeof AuthenticatedApplyingRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/jobs/$id': {
       id: '/jobs/$id'
       path: '/$id'
@@ -231,8 +340,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsIdRouteImport
       parentRoute: typeof JobsRoute
     }
+    '/api/public/worker/jobs/claim': {
+      id: '/api/public/worker/jobs/claim'
+      path: '/api/public/worker/jobs/claim'
+      fullPath: '/api/public/worker/jobs/claim'
+      preLoaderRoute: typeof ApiPublicWorkerJobsClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/worker/jobs/$id/failure': {
+      id: '/api/public/worker/jobs/$id/failure'
+      path: '/api/public/worker/jobs/$id/failure'
+      fullPath: '/api/public/worker/jobs/$id/failure'
+      preLoaderRoute: typeof ApiPublicWorkerJobsIdFailureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/worker/jobs/$id/status': {
+      id: '/api/public/worker/jobs/$id/status'
+      path: '/api/public/worker/jobs/$id/status'
+      fullPath: '/api/public/worker/jobs/$id/status'
+      preLoaderRoute: typeof ApiPublicWorkerJobsIdStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/worker/jobs/$id/submission': {
+      id: '/api/public/worker/jobs/$id/submission'
+      path: '/api/public/worker/jobs/$id/submission'
+      fullPath: '/api/public/worker/jobs/$id/submission'
+      preLoaderRoute: typeof ApiPublicWorkerJobsIdSubmissionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedApplyingRoute: typeof AuthenticatedApplyingRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedApplyingRoute: AuthenticatedApplyingRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface JobsRouteChildren {
   JobsIdRoute: typeof JobsIdRoute
@@ -246,6 +396,7 @@ const JobsRouteWithChildren = JobsRoute._addFileChildren(JobsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   ApplicationsRoute: ApplicationsRoute,
   JobsRoute: JobsRouteWithChildren,
   LoginRoute: LoginRoute,
@@ -254,6 +405,10 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   UpgradeRoute: UpgradeRoute,
+  ApiPublicWorkerJobsClaimRoute: ApiPublicWorkerJobsClaimRoute,
+  ApiPublicWorkerJobsIdFailureRoute: ApiPublicWorkerJobsIdFailureRoute,
+  ApiPublicWorkerJobsIdStatusRoute: ApiPublicWorkerJobsIdStatusRoute,
+  ApiPublicWorkerJobsIdSubmissionRoute: ApiPublicWorkerJobsIdSubmissionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
