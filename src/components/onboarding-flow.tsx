@@ -478,7 +478,20 @@ export function OnboardingFlow() {
         );
       }
 
-      const merged: Profile = { ...profile, ...fields };
+      // A CV is useful for career history, but it should never overwrite
+      // higher-confidence identity we already got from the authenticated
+      // account or a previously confirmed profile. This prevents PDF layout
+      // headings such as "Work Experience" from replacing the user's name.
+      const merged: Profile = {
+        ...profile,
+        ...fields,
+        firstName: profile.firstName || fields.firstName || "",
+        lastName: profile.lastName || fields.lastName || "",
+        email: profile.email || fields.email || "",
+        phone: profile.phone || fields.phone || "",
+        country: profile.country || fields.country || "",
+        city: profile.city || fields.city || "",
+      };
       setReading(false);
       setProfile(merged);
       setCvParsed(
