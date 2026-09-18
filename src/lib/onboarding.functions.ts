@@ -385,6 +385,7 @@ function factRows(
     claim: string,
     section: string,
     allowedForResume = true,
+    sourceRef: string | null = null,
   ) => {
     const cleaned = clean(claim, 2000);
     if (!cleaned) return;
@@ -393,7 +394,7 @@ function factRows(
       fact_type: factType,
       claim: cleaned,
       source_type: "onboarding",
-      source_ref: primaryExperienceId,
+      source_ref: sourceRef,
       user_confirmed: true,
       allowed_for_resume: allowedForResume,
       confidence: 1,
@@ -401,35 +402,62 @@ function factRows(
     });
   };
 
+  // Experience-specific facts can support bullets for that experience.
   for (const responsibility of data.careerContext.responsibilities) {
-    add("responsibility", responsibility, "experience");
+    add(
+      "responsibility",
+      responsibility,
+      "experience",
+      true,
+      primaryExperienceId,
+    );
   }
   for (const result of data.careerContext.results) {
-    add("achievement", result, "results");
+    add("achievement", result, "results", true, primaryExperienceId);
   }
   for (const tool of data.careerContext.tools) {
-    add("tool", tool, "tools");
+    add("tool", tool, "tools", true, primaryExperienceId);
   }
+
+  // Explicit skills are globally usable resume facts, but not tied to one job.
   for (const skill of data.skills) {
-    add("skill", skill, "skills");
+    add("skill", skill, "skills", true, null);
   }
+
+  // Self-positioning is valuable context for selection and narrative answers,
+  // but must not silently become a factual resume claim.
   for (const strength of data.careerContext.strengths) {
-    add("strength", strength, "strengths");
+    add("strength", strength, "strengths", false, null);
   }
   for (const differentiator of data.careerContext.differentiators) {
-    add("differentiator", differentiator, "positioning");
+    add("differentiator", differentiator, "positioning", false, null);
   }
 
   if (data.experience) {
-    add("experience_description", data.experience.description, "experience");
+    add(
+      "experience_description",
+      data.experience.description,
+      "experience",
+      true,
+      primaryExperienceId,
+    );
     for (const achievement of data.experience.achievements.split(/\n|;/)) {
-      add("achievement", achievement, "experience");
+      add(
+        "achievement",
+        achievement,
+        "experience",
+        true,
+        primaryExperienceId,
+      );
     }
   }
 
-  add("project", data.careerContext.proudProject, "story");
-  add("career_goal", data.careerContext.careerGoal, "career_goal", false);
-  add("challenge_story", data.careerContext.challengeStory, "story", false);
+  // Project/challenge/career-goal stories stay available to application answers
+  // but are not resume claims unless we later ask the user to bind them to an
+  // experience/project record explicitly.
+  add("project", data.careerContext.proudProject, "story", false, null);
+  add("career_goal", data.careerContext.careerGoal, "career_goal", false, null);
+  add("challenge_story", data.careerContext.challengeStory, "story", false, null);
   return rows.slice(0, 120);
 }
 
