@@ -369,8 +369,8 @@ function validateAgainstSource(
         !experience.evidence?.dates?.text?.trim() ||
         evidenceExists(source, experience.evidence.dates.text);
       const descriptionSupported =
-        !experience.evidence?.description?.text?.trim() ||
-        evidenceExists(source, experience.evidence.description.text);
+        !experience.description.trim() ||
+        evidenceExists(source, experience.evidence?.description?.text);
 
       const achievements = (experience.achievements ?? [])
         .filter((achievement) => {
