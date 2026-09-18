@@ -232,7 +232,24 @@ function JobsPage() {
   );
 }
 
-type RealJob = NonNullable<Awaited<ReturnType<ReturnType<typeof useServerFn<typeof listAutoApplyJobs>>>>["jobs"]>[number];
+type RealJob = {
+  id: string;
+  title: string;
+  company: string;
+  logoUrl: string | null;
+  location: string | null;
+  remoteType: string | null;
+  employmentType: string | null;
+  seniority: string | null;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+  publishedAt: string | null;
+  adapter: string | null;
+  matchScore: number | null;
+  hardRequirementsMet: boolean;
+  explanation: unknown;
+};
 
 function RealJobRow({
   job,
