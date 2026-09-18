@@ -71,7 +71,7 @@ export function parseCvText(raw: string): CvResult {
   });
   if (nameLine) {
     const words = nameLine.split(/\s+/).map((word) => word.length > 2 && word === word.toUpperCase() ? word[0] + word.slice(1).toLowerCase() : word);
-    fields.firstName = words[0];
+    fields.firstName = words[0] ?? "";
     fields.lastName = words.slice(1).join(" ");
   }
 
