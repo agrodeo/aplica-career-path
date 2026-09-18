@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AdapterTestConsole } from "@/components/adapter-test-console";
+import { AdminDryRunConsole } from "@/components/admin-dry-run-console";
 import { GreenhouseDiscoveryConsole } from "@/components/greenhouse-discovery-console";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { getAdminDashboard } from "@/lib/admin.functions";
@@ -84,6 +85,7 @@ function AdminPage() {
             </div>
 
             <GreenhouseDiscoveryConsole />
+            <AdminDryRunConsole />
             <AdapterTestConsole />
           </>
         )}
