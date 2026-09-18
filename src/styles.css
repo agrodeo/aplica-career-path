@@ -206,11 +206,12 @@
   position: relative;
   isolation: isolate;
   background: linear-gradient(180deg,
-    oklch(0.79 0.128 252) 0%,
-    oklch(0.862 0.096 251) 24%,
-    oklch(0.922 0.058 250) 48%,
-    oklch(0.965 0.028 250) 74%,
-    oklch(0.992 0.006 250) 100%);
+    oklch(0.68 0.17 253) 0%,
+    oklch(0.76 0.155 252) 16%,
+    oklch(0.84 0.12 251) 34%,
+    oklch(0.91 0.075 250) 54%,
+    oklch(0.958 0.038 250) 74%,
+    oklch(0.988 0.008 250) 100%);
 }
 .home-continuum::before {
   content: "";
@@ -282,7 +283,7 @@
   padding: 0 clamp(40px, 6vw, 96px) 54px;
 }
 .onboarding-promise { max-width: 740px; padding-bottom: 6px; }
-.onboarding-promise h1 { max-width: 700px; font-size: clamp(58px, 4.2vw, 68px); font-weight: 700; line-height: 1; letter-spacing: -2.5px; }
+.onboarding-promise h1 { max-width: 700px; font-size: clamp(58px, 4.2vw, 68px); font-weight: 700; line-height: 1; letter-spacing: -2.5px; text-shadow: 0 2px 4px oklch(0.55 0.14 252 / 0.18), 0 1px 2px oklch(0.55 0.14 252 / 0.12); }
 .onboarding-promise h1 span { color: var(--home-accent); }
 .onboarding-promise > p { max-width: 460px; margin-top: 30px; color: color-mix(in oklab, var(--foreground) 62%, transparent); font-size: 18px; line-height: 1.5; }
 .onboarding-promise > .home-primary { width: 330px; height: 66px; margin-top: 34px; border-radius: 12px; font-size: 19px; box-shadow: 0 16px 34px -16px color-mix(in oklab, var(--home-accent) 78%, transparent); }
