@@ -205,10 +205,11 @@
 .home-continuum {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(ellipse 58% 42% at 84% 3%, color-mix(in oklab, var(--home-backdrop-lilac) 76%, transparent), transparent 74%),
-    radial-gradient(ellipse 62% 48% at 8% 72%, color-mix(in oklab, var(--home-backdrop-cool) 72%, transparent), transparent 78%),
-    var(--home-backdrop);
+  background: linear-gradient(180deg,
+    oklch(0.925 0.058 252) 0%,
+    oklch(0.952 0.042 251) 32%,
+    oklch(0.972 0.022 250) 66%,
+    oklch(0.982 0.012 250) 100%);
 }
 .home-continuum::before {
   content: "";
