@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -427,7 +427,15 @@ function RealJobRow({
           )}
 
           <div className="min-w-0">
-            <h2 className="text-lg font-medium">{job.title}</h2>
+            <h2 className="text-lg font-medium">
+              <Link
+                to="/jobs/$id"
+                params={{ id: job.id }}
+                className="hover:text-primary"
+              >
+                {job.title}
+              </Link>
+            </h2>
             <p className="mt-0.5 text-sm text-foreground">{job.company}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {[job.location, job.remoteType, job.employmentType]
