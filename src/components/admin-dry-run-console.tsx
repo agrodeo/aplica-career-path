@@ -149,7 +149,8 @@ export function AdminDryRunConsole() {
 
               <p className="text-xs leading-5 text-muted-foreground">
                 {run.errorCode && run.errorCode !== "DRY_RUN_COMPLETE"
-                  ? \`\${run.errorCode}\${run.errorMessage ? \` · \${run.errorMessage}\` : ""}\`
+                  ? run.errorCode +
+                    (run.errorMessage ? " · " + run.errorMessage : "")
                   : run.errorCode === "DRY_RUN_COMPLETE"
                     ? "Formulario completado; submit final omitido."
                     : "Esperando al worker."}
