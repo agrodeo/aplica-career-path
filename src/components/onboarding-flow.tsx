@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, Check, FileText, Loader2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  FileText,
+  Loader2,
+  Sparkles,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -11,54 +25,223 @@ import { Choice } from "./aplica";
 import { OnboardingShell } from "./onboarding-shell";
 import { industries, skills } from "@/lib/aplica-data";
 import { refreshJobMatches } from "@/lib/auto-apply.functions";
-import { getOnboardingSeed, saveOnboardingProfile } from "@/lib/onboarding.functions";
+import {
+  getOnboardingSeed,
+  saveOnboardingDraft,
+  saveOnboardingProfile,
+  type CareerVoice,
+} from "@/lib/onboarding.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-const TOTAL = 14;
+const TOTAL = 23;
+
 const titles = [
-  "¿Qué trabajo estás buscando?", "Empecemos por tu experiencia", "Tus datos", "Revisá tu experiencia",
-  "¿Dónde estudiaste?", "¿Qué sabés hacer?", "¿Qué idiomas hablás?", "¿Qué puestos te interesan?",
-  "¿Cómo querés trabajar?", "¿Dónde trabajarías?", "¿Qué salario buscás?", "¿Qué nivel de puesto buscás?",
-  "Algunas preguntas frecuentes", "Últimos detalles",
+  "¿Qué trabajo querés conseguir?",
+  "Subí tu CV",
+  "Primero, confirmemos quién sos",
+  "Revisá tu experiencia principal",
+  "¿Qué hacías realmente en ese trabajo?",
+  "¿Qué herramientas usabas?",
+  "¿Qué resultados lograste?",
+  "Mirá lo que Aplica ya entendió de vos",
+  "Contanos una situación que te haya exigido",
+  "¿Dónde estudiaste?",
+  "¿Qué sabés hacer?",
+  "¿Qué idiomas hablás?",
+  "¿Qué puestos te interesan?",
+  "¿Qué te gustaría hacer más?",
+  "¿Qué preferís evitar?",
+  "¿Cómo querés trabajar?",
+  "¿Dónde trabajarías?",
+  "¿Qué salario buscás?",
+  "Preguntas que aparecen en postulaciones",
+  "¿Qué tipo de empresa te interesa?",
+  "¿Cómo querés que la IA te presente?",
+  "Tu Career Profile ya tiene contexto",
+  "Último paso antes de buscar trabajos",
 ];
 
 type Answers = Record<string, string[]>;
 
 type Profile = {
-  firstName: string; lastName: string; email: string; phone: string; country: string; city: string;
-  company: string; role: string; start: string; end: string; description: string; achievements: string;
-  institution: string; degree: string; area: string; studyDates: string; language: string; level: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  country: string;
+  city: string;
+  linkedin: string;
+  portfolio: string;
+  company: string;
+  role: string;
+  start: string;
+  end: string;
+  description: string;
+  achievements: string;
+  institution: string;
+  degree: string;
+  area: string;
+  studyDates: string;
+  language: string;
+  level: string;
+};
+
+type CareerContextState = {
+  responsibilities: string[];
+  tools: string[];
+  results: string[];
+  preferredTasks: string[];
+  avoidTasks: string[];
+  strengths: string[];
+  differentiators: string[];
+  proudProject: string;
+  challengeStory: string;
+  careerGoal: string;
+  targetEnvironment: string;
+  availability: string;
+  travelPreference: string;
+};
+
+type WritingState = {
+  voice: CareerVoice;
+  emphasis: string[];
+  deEmphasis: string[];
+  summaryStyle: string;
 };
 
 const emptyProfile: Profile = {
-  firstName: "", lastName: "", email: "", phone: "", country: "", city: "",
-  company: "", role: "", start: "", end: "", description: "", achievements: "",
-  institution: "", degree: "", area: "", studyDates: "", language: "Español", level: "Nativo",
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  country: "",
+  city: "",
+  linkedin: "",
+  portfolio: "",
+  company: "",
+  role: "",
+  start: "",
+  end: "",
+  description: "",
+  achievements: "",
+  institution: "",
+  degree: "",
+  area: "",
+  studyDates: "",
+  language: "Español",
+  level: "Nativo",
 };
 
+const emptyCareerContext: CareerContextState = {
+  responsibilities: [],
+  tools: [],
+  results: [],
+  preferredTasks: [],
+  avoidTasks: [],
+  strengths: [],
+  differentiators: [],
+  proudProject: "",
+  challengeStory: "",
+  careerGoal: "",
+  targetEnvironment: "",
+  availability: "",
+  travelPreference: "",
+};
+
+const responsibilitySuggestions = [
+  "Analizar datos",
+  "Crear contenido",
+  "Hablar con clientes",
+  "Gestionar campañas",
+  "Liderar proyectos",
+  "Vender",
+  "Programar",
+  "Diseñar",
+  "Automatizar procesos",
+  "Investigar",
+  "Reportar resultados",
+  "Coordinar equipos",
+];
+
+const toolSuggestions = [
+  "Excel",
+  "Google Sheets",
+  "SQL",
+  "Python",
+  "Canva",
+  "Figma",
+  "Notion",
+  "HubSpot",
+  "Salesforce",
+  "Meta Ads",
+  "Google Ads",
+  "Google Analytics",
+];
+
+const strengthSuggestions = [
+  "Resolver problemas",
+  "Analizar datos",
+  "Escribir",
+  "Vender",
+  "Hablar con clientes",
+  "Organizar",
+  "Negociar",
+  "Aprender rápido",
+  "Crear",
+  "Liderar",
+];
+
+const taskSuggestions = [
+  "Crear estrategia",
+  "Construir cosas",
+  "Analizar",
+  "Trabajar con clientes",
+  "Vender",
+  "Escribir",
+  "Investigar",
+  "Gestionar proyectos",
+  "Programar",
+  "Diseñar",
+];
 
 export function OnboardingFlow() {
   const navigate = useNavigate();
-  const [onboardingStep, setOnboardingStep] = useState(1);
+  const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [searchPreferences, setSearchPreferences] = useState({
     role: "",
     location: "",
     mode: "Remoto",
   });
-  const step = Math.min(TOTAL, Math.max(1, onboardingStep));
   const [selected, setSelected] = useState<Answers>({
-    skills: [], roles: searchPreferences.role ? [searchPreferences.role] : [],
-    mode: [searchPreferences.mode || "Remoto"], employment: ["Full-time"], seniority: [],
-    industry: [], size: [], avoid: [], dealbreakers: [],
+    skills: [],
+    roles: [],
+    mode: ["Remoto"],
+    employment: ["Full-time"],
+    seniority: [],
+    industry: [],
+    size: [],
+    dealbreakers: [],
+    relocate: [],
   });
   const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [careerContext, setCareerContext] =
+    useState<CareerContextState>(emptyCareerContext);
+  const [writing, setWriting] = useState<WritingState>({
+    voice: "balanced",
+    emphasis: ["Impacto", "Experiencia relevante"],
+    deEmphasis: [],
+    summaryStyle: "concise",
+  });
   const [cvParsed, setCvParsed] = useState(false);
   const [uploadedName, setUploadedName] = useState("");
   const [reading, setReading] = useState(false);
   const [consents, setConsents] = useState([false, false, false]);
-  const [sensitiveAnswers, setSensitiveAnswers] = useState<{ workAuthorization: boolean | null; sponsorship: boolean | null }>({
+  const [sensitiveAnswers, setSensitiveAnswers] = useState<{
+    workAuthorization: boolean | null;
+    sponsorship: boolean | null;
+  }>({
     workAuthorization: null,
     sponsorship: null,
   });
@@ -75,18 +258,76 @@ export function OnboardingFlow() {
   const [matchStage, setMatchStage] = useState(0);
   const [count, setCount] = useState(0);
   const [matchedCount, setMatchedCount] = useState(0);
-  const persistOnboarding = useServerFn(saveOnboardingProfile);
-  const fetchOnboardingSeed = useServerFn(getOnboardingSeed);
-  const calculateMatches = useServerFn(refreshJobMatches);
+  const [factCount, setFactCount] = useState(0);
   const [seedLoaded, setSeedLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const toggle = (group: string, value: string) => setSelected((current) => ({
-    ...current,
-    [group]: current[group]?.includes(value) ? current[group].filter((item) => item !== value) : [...(current[group] ?? []), value],
-  }));
-  const next = () => setOnboardingStep(Math.min(TOTAL, step + 1));
-  const back = () => setOnboardingStep(Math.max(1, step - 1));
+  const persistOnboarding = useServerFn(saveOnboardingProfile);
+  const persistDraft = useServerFn(saveOnboardingDraft);
+  const fetchOnboardingSeed = useServerFn(getOnboardingSeed);
+  const calculateMatches = useServerFn(refreshJobMatches);
+
+  const toggle = (group: string, value: string) =>
+    setSelected((current) => ({
+      ...current,
+      [group]: current[group]?.includes(value)
+        ? current[group].filter((item) => item !== value)
+        : [...(current[group] ?? []), value],
+    }));
+
+  const toggleContext = (
+    group:
+      | "responsibilities"
+      | "tools"
+      | "preferredTasks"
+      | "avoidTasks"
+      | "strengths"
+      | "differentiators",
+    value: string,
+  ) =>
+    setCareerContext((current) => ({
+      ...current,
+      [group]: current[group].includes(value)
+        ? current[group].filter((item) => item !== value)
+        : [...current[group], value],
+    }));
+
+  const draftState = () => ({
+    name,
+    searchPreferences,
+    selected,
+    profile,
+    careerContext,
+    writing,
+    sensitiveAnswers,
+    internationalRemote,
+    salaryCurrency,
+    minimumSalary,
+    salaryPeriod,
+    skipSalary,
+    baseResumePath,
+    uploadedName,
+    cvParsed,
+    consents,
+  });
+
+  const saveDraft = async (targetStep = step) => {
+    await persistDraft({
+      data: { step: targetStep, state: draftState() },
+    }).catch(() => undefined);
+  };
+
+  const next = async () => {
+    const target = Math.min(TOTAL, step + 1);
+    await saveDraft(target);
+    setStep(target);
+  };
+
+  const back = async () => {
+    const target = Math.max(1, step - 1);
+    await saveDraft(target);
+    setStep(target);
+  };
 
   const finish = async () => {
     if (saving || !consents.every(Boolean)) return;
@@ -94,11 +335,19 @@ export function OnboardingFlow() {
     setSaveError(null);
 
     try {
-      const targetRoles = [...new Set([searchPreferences.role, ...(selected.roles ?? [])].map((value) => value.trim()).filter(Boolean))];
-      const targetLocations = [searchPreferences.location || profile.city || profile.country].filter(Boolean);
+      const targetRoles = [
+        ...new Set(
+          [searchPreferences.role, ...(selected.roles ?? [])]
+            .map((value) => value.trim())
+            .filter(Boolean),
+        ),
+      ];
+      const targetLocations = [
+        searchPreferences.location || profile.city || profile.country,
+      ].filter(Boolean);
       const relocate = selected.relocate?.[0] ?? "No";
 
-      await persistOnboarding({
+      const result = await persistOnboarding({
         data: {
           identity: {
             firstName: (name || profile.firstName).trim(),
@@ -109,16 +358,21 @@ export function OnboardingFlow() {
             city: (profile.city || searchPreferences.location).trim(),
             currentTitle: profile.role.trim(),
           },
-          experience: profile.company.trim() && profile.role.trim()
-            ? {
-                company: profile.company,
-                title: profile.role,
-                start: profile.start,
-                end: profile.end,
-                description: profile.description,
-                achievements: profile.achievements,
-              }
-            : null,
+          links: {
+            linkedin: profile.linkedin,
+            portfolio: profile.portfolio,
+          },
+          experience:
+            profile.company.trim() && profile.role.trim()
+              ? {
+                  company: profile.company,
+                  title: profile.role,
+                  start: profile.start,
+                  end: profile.end,
+                  description: profile.description,
+                  achievements: profile.achievements,
+                }
+              : null,
           education: profile.institution.trim()
             ? {
                 institution: profile.institution,
@@ -131,6 +385,8 @@ export function OnboardingFlow() {
           languages: profile.language.trim()
             ? [{ language: profile.language, level: profile.level }]
             : [],
+          careerContext,
+          writingPreferences: writing,
           preferences: {
             targetRoles,
             targetLocations,
@@ -139,7 +395,10 @@ export function OnboardingFlow() {
             seniorityLevels: selected.seniority ?? [],
             willingToRelocate: relocate === "Sí" || relocate === "Depende",
             internationalRemote,
-            minimumSalary: skipSalary || !minimumSalary.trim() ? null : Number(minimumSalary),
+            minimumSalary:
+              skipSalary || !minimumSalary.trim()
+                ? null
+                : Number(minimumSalary),
             salaryCurrency: skipSalary ? null : salaryCurrency,
             salaryPeriod: skipSalary ? null : salaryPeriod,
             preferredIndustries: selected.industry ?? [],
@@ -152,18 +411,24 @@ export function OnboardingFlow() {
         },
       });
 
-      const result = await calculateMatches();
-      setMatchedCount(result.readyCount);
+      setFactCount(result.factCount);
+      const matchResult = await calculateMatches();
+      setMatchedCount(matchResult.readyCount);
       setCount(0);
       setMatching(true);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "No pudimos guardar tu perfil.");
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "No pudimos guardar tu perfil.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const updateProfile = (key: keyof Profile, value: string) => setProfile((current) => ({ ...current, [key]: value }));
+  const updateProfile = (key: keyof Profile, value: string) =>
+    setProfile((current) => ({ ...current, [key]: value }));
 
   const acceptFile = (file?: File) => {
     if (!file || reading) return;
@@ -181,41 +446,66 @@ export function OnboardingFlow() {
         fields = result.fields as Partial<Profile>;
         foundSkills = result.skills;
       } catch (error) {
-        setCvError(error instanceof Error ? error.message : "No pudimos leer el CV.");
+        setCvError(
+          error instanceof Error ? error.message : "No pudimos leer el CV.",
+        );
       }
 
       try {
         const { data } = await supabase.auth.getUser();
         if (!data.user) throw new Error("Tu sesión venció. Ingresá de nuevo.");
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120);
+        const safeName = file.name
+          .replace(/[^a-zA-Z0-9._-]+/g, "-")
+          .slice(-120);
         const storagePath = `${data.user.id}/base/${crypto.randomUUID()}-${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from("resumes")
           .upload(storagePath, file, {
-            contentType: file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            contentType:
+              file.type ||
+              (file.name.toLowerCase().endsWith(".pdf")
+                ? "application/pdf"
+                : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
             upsert: false,
           });
         if (uploadError) throw uploadError;
         setBaseResumePath(storagePath);
       } catch (error) {
-        setCvError(error instanceof Error ? `Leímos tu CV, pero no pudimos guardarlo: ${error.message}` : "No pudimos guardar tu CV.");
+        setCvError(
+          error instanceof Error
+            ? `Leímos tu CV, pero no pudimos guardarlo: ${error.message}`
+            : "No pudimos guardar tu CV.",
+        );
       }
 
       const merged: Profile = { ...profile, ...fields };
       setReading(false);
       setProfile(merged);
-      setCvParsed(Object.values(fields).some((value) => typeof value === "string" && value.trim().length > 0));
+      setCvParsed(
+        Object.values(fields).some(
+          (value) => typeof value === "string" && value.trim().length > 0,
+        ),
+      );
       if (merged.firstName) setName(merged.firstName);
-      if (merged.city) setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || merged.city });
-      if (foundSkills.length) setSelected((current) => ({ ...current, skills: foundSkills }));
-      setOnboardingStep(3);
+      if (merged.city) {
+        setSearchPreferences((current) => ({
+          ...current,
+          location: current.location || merged.city,
+        }));
+      }
+      if (foundSkills.length) {
+        setSelected((current) => ({ ...current, skills: foundSkills }));
+      }
+      setStep(3);
     })();
   };
+
   const skipCv = () => {
     setCvParsed(false);
     setUploadedName("");
-    setOnboardingStep(3);
+    setStep(3);
   };
+
   const dropFile = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     acceptFile(event.dataTransfer.files[0]);
@@ -229,7 +519,7 @@ export function OnboardingFlow() {
       .then((seed) => {
         if (!active) return;
 
-        setName(seed.identity.firstName || name);
+        setName(seed.identity.firstName || "");
         setProfile((current) => ({
           ...current,
           firstName: seed.identity.firstName,
@@ -238,8 +528,13 @@ export function OnboardingFlow() {
           phone: seed.identity.phone,
           country: seed.identity.country,
           city: seed.identity.city,
+          linkedin: seed.links.linkedin,
+          portfolio: seed.links.portfolio,
           company: seed.experience?.company ?? current.company,
-          role: seed.experience?.title ?? seed.identity.currentTitle ?? current.role,
+          role:
+            seed.experience?.title ??
+            seed.identity.currentTitle ??
+            current.role,
           start: seed.experience?.start ?? current.start,
           end: seed.experience?.end ?? current.end,
           description: seed.experience?.description ?? current.description,
@@ -252,63 +547,54 @@ export function OnboardingFlow() {
           level: seed.languages[0]?.level ?? current.level,
         }));
 
-        if (seed.skills.length) {
-          setSelected((current) => ({
-            ...current,
-            skills: seed.skills,
-            roles: seed.preferences?.targetRoles?.length
-              ? seed.preferences.targetRoles
-              : current.roles,
-            mode: seed.preferences?.modes?.length
-              ? seed.preferences.modes
-              : current.mode,
-            employment: seed.preferences?.employmentTypes?.length
-              ? seed.preferences.employmentTypes
-              : current.employment,
-            seniority: seed.preferences?.seniorityLevels?.length
-              ? seed.preferences.seniorityLevels
-              : current.seniority,
-            industry: seed.preferences?.preferredIndustries?.length
-              ? seed.preferences.preferredIndustries
-              : current.industry,
-            relocate: seed.preferences
-              ? [seed.preferences.willingToRelocate ? "Sí" : "No"]
-              : current.relocate,
-          }));
-        } else if (seed.preferences) {
-          setSelected((current) => ({
-            ...current,
-            roles: seed.preferences?.targetRoles?.length
-              ? seed.preferences.targetRoles
-              : current.roles,
-            mode: seed.preferences?.modes?.length
-              ? seed.preferences.modes
-              : current.mode,
-            employment: seed.preferences?.employmentTypes?.length
-              ? seed.preferences.employmentTypes
-              : current.employment,
-            seniority: seed.preferences?.seniorityLevels?.length
-              ? seed.preferences.seniorityLevels
-              : current.seniority,
-            industry: seed.preferences?.preferredIndustries?.length
-              ? seed.preferences.preferredIndustries
-              : current.industry,
-            relocate: [seed.preferences.willingToRelocate ? "Sí" : "No"],
-          }));
-        }
+        setCareerContext({
+          responsibilities: seed.careerContext.responsibilities,
+          tools: seed.careerContext.tools,
+          results: seed.careerContext.results,
+          preferredTasks: seed.careerContext.preferredTasks,
+          avoidTasks: seed.careerContext.avoidTasks,
+          strengths: seed.careerContext.strengths,
+          differentiators: seed.careerContext.differentiators,
+          proudProject: seed.careerContext.proudProject,
+          challengeStory: seed.careerContext.challengeStory,
+          careerGoal: seed.careerContext.careerGoal,
+          targetEnvironment: seed.careerContext.targetEnvironment,
+          availability: seed.careerContext.availability,
+          travelPreference: seed.careerContext.travelPreference,
+        });
+        setWriting(seed.writingPreferences);
+
+        setSelected((current) => ({
+          ...current,
+          skills: seed.skills.length ? seed.skills : current.skills,
+          roles: seed.preferences?.targetRoles?.length
+            ? seed.preferences.targetRoles
+            : current.roles,
+          mode: seed.preferences?.modes?.length
+            ? seed.preferences.modes
+            : current.mode,
+          employment: seed.preferences?.employmentTypes?.length
+            ? seed.preferences.employmentTypes
+            : current.employment,
+          seniority: seed.preferences?.seniorityLevels?.length
+            ? seed.preferences.seniorityLevels
+            : current.seniority,
+          industry: seed.preferences?.preferredIndustries?.length
+            ? seed.preferences.preferredIndustries
+            : current.industry,
+          relocate: seed.preferences
+            ? [seed.preferences.willingToRelocate ? "Sí" : "No"]
+            : current.relocate,
+        }));
 
         if (seed.preferences) {
           setSearchPreferences({
-            role:
-              seed.preferences.targetRoles[0] ??
-              searchPreferences.role,
+            role: seed.preferences.targetRoles[0] ?? "",
             location:
               seed.preferences.targetLocations[0] ??
               seed.identity.city ??
-              searchPreferences.location,
-            mode:
-              seed.preferences.modes[0] ??
-              searchPreferences.mode,
+              "",
+            mode: seed.preferences.modes[0] ?? "Remoto",
           });
           setInternationalRemote(seed.preferences.internationalRemote);
           setMinimumSalary(
@@ -324,16 +610,88 @@ export function OnboardingFlow() {
         setSensitiveAnswers(seed.sensitiveAnswers);
         setBaseResumePath(seed.baseResumePath);
         if (seed.authorizeAutoApply) {
-          setConsents((current) => [
-            current[0] ?? false,
-            current[1] ?? false,
-            true,
-          ]);
+          setConsents([true, true, true]);
+        }
+
+        const draft = seed.draft?.state;
+        if (draft && typeof draft === "object" && !Array.isArray(draft)) {
+          const state = draft as Record<string, unknown>;
+          if (typeof state["name"] === "string") setName(state["name"]);
+          if (isRecord(state["searchPreferences"])) {
+            setSearchPreferences(
+              state["searchPreferences"] as {
+                role: string;
+                location: string;
+                mode: string;
+              },
+            );
+          }
+          if (isRecord(state["profile"])) {
+            setProfile((current) => ({
+              ...current,
+              ...(state["profile"] as Partial<Profile>),
+            }));
+          }
+          if (isRecord(state["careerContext"])) {
+            setCareerContext((current) => ({
+              ...current,
+              ...(state["careerContext"] as Partial<CareerContextState>),
+            }));
+          }
+          if (isRecord(state["writing"])) {
+            setWriting((current) => ({
+              ...current,
+              ...(state["writing"] as Partial<WritingState>),
+            }));
+          }
+          if (isRecord(state["selected"])) {
+            setSelected(state["selected"] as Answers);
+          }
+          if (isRecord(state["sensitiveAnswers"])) {
+            setSensitiveAnswers(
+              state["sensitiveAnswers"] as {
+                workAuthorization: boolean | null;
+                sponsorship: boolean | null;
+              },
+            );
+          }
+          if (typeof state["internationalRemote"] === "boolean") {
+            setInternationalRemote(state["internationalRemote"]);
+          }
+          if (typeof state["salaryCurrency"] === "string") {
+            setSalaryCurrency(state["salaryCurrency"]);
+          }
+          if (typeof state["minimumSalary"] === "string") {
+            setMinimumSalary(state["minimumSalary"]);
+          }
+          if (typeof state["salaryPeriod"] === "string") {
+            setSalaryPeriod(state["salaryPeriod"]);
+          }
+          if (typeof state["skipSalary"] === "boolean") {
+            setSkipSalary(state["skipSalary"]);
+          }
+          if (
+            typeof state["baseResumePath"] === "string" ||
+            state["baseResumePath"] === null
+          ) {
+            setBaseResumePath(state["baseResumePath"] as string | null);
+          }
+          if (typeof state["uploadedName"] === "string") {
+            setUploadedName(state["uploadedName"]);
+          }
+          if (typeof state["cvParsed"] === "boolean") {
+            setCvParsed(state["cvParsed"]);
+          }
+          if (
+            Array.isArray(state["consents"]) &&
+            state["consents"].every((value) => typeof value === "boolean")
+          ) {
+            setConsents(state["consents"] as boolean[]);
+          }
+          setStep(Math.min(TOTAL, Math.max(1, seed.draft?.step ?? 1)));
         }
       })
-      .catch(() => {
-        // A brand-new profile legitimately has nothing to prefill.
-      })
+      .catch(() => undefined)
       .finally(() => {
         if (active) setSeedLoaded(true);
       });
@@ -363,120 +721,1342 @@ export function OnboardingFlow() {
 
   return (
     <OnboardingShell flow className="onboarding-sheet-flow">
-      {matching ? <Matching count={count} stage={matchStage} done={matchStage === 4} onDone={() => void navigate({ to: "/jobs" })} /> : <>
-        <div className="sheet-progress">
-          <span>Paso {step} de {TOTAL}</span>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => void navigate({ to: "/" })}>Guardar y salir</Button>
-        </div>
-        <div className="sheet-progress-track"><span style={{ width: `${(step / TOTAL) * 100}%` }} /></div>
-
-        <div key={step} className="sheet-step">
-          <h2>{titles[step - 1]}</h2>
-          <div className="sheet-step-body">
-            {renderStep(step, {
-              selected,
-              toggle,
-              name,
-              setName,
-              searchPreferences,
-              setSearchPreferences,
-              reading,
-              uploadedName,
-              inputRef,
-              acceptFile,
-              dropFile,
-              consents,
-              setConsents,
-              profile,
-              updateProfile,
-              cvParsed,
-              skipCv,
-              sensitiveAnswers,
-              setSensitiveAnswers,
-              internationalRemote,
-              setInternationalRemote,
-              salaryCurrency,
-              setSalaryCurrency,
-              minimumSalary,
-              setMinimumSalary,
-              salaryPeriod,
-              setSalaryPeriod,
-              skipSalary,
-              setSkipSalary,
-              cvError,
-            })}
+      {matching ? (
+        <Matching
+          count={count}
+          stage={matchStage}
+          done={matchStage === 4}
+          factCount={factCount}
+          onDone={() => void navigate({ to: "/jobs" })}
+        />
+      ) : (
+        <>
+          <div className="sheet-progress">
+            <span>
+              Paso {step} de {TOTAL}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              onClick={() =>
+                void saveDraft(step).then(() => navigate({ to: "/" }))
+              }
+            >
+              Guardar y salir
+            </Button>
           </div>
-        </div>
+          <div className="sheet-progress-track">
+            <span style={{ width: `${(step / TOTAL) * 100}%` }} />
+          </div>
 
-        {saveError && <p className="px-1 pb-2 text-sm text-destructive">{saveError}</p>}
-        <div className="sheet-actions">
-          <Button type="button" variant="ghost" onClick={back} disabled={step === 1 || saving}><ArrowLeft /> Atrás</Button>
-          <Button type="button" className="home-primary min-w-36" onClick={() => void (step === TOTAL ? finish() : Promise.resolve(next()))} disabled={saving || (step === TOTAL && !consents.every(Boolean))}>
-            {saving ? <><Loader2 className="animate-spin" /> Guardando perfil</> : <>{step === TOTAL ? "Buscar mis trabajos" : step === 4 ? "Todo correcto" : "Continuar"} <ArrowRight /></>}
-          </Button>
-        </div>
-      </>}
+          <div key={step} className="sheet-step">
+            <h2>{titles[step - 1]}</h2>
+            <div className="sheet-step-body">
+              {renderStep(step, {
+                selected,
+                toggle,
+                searchPreferences,
+                setSearchPreferences,
+                reading,
+                uploadedName,
+                inputRef,
+                acceptFile,
+                dropFile,
+                profile,
+                updateProfile,
+                cvParsed,
+                skipCv,
+                careerContext,
+                setCareerContext,
+                toggleContext,
+                writing,
+                setWriting,
+                sensitiveAnswers,
+                setSensitiveAnswers,
+                internationalRemote,
+                setInternationalRemote,
+                salaryCurrency,
+                setSalaryCurrency,
+                minimumSalary,
+                setMinimumSalary,
+                salaryPeriod,
+                setSalaryPeriod,
+                skipSalary,
+                setSkipSalary,
+                consents,
+                setConsents,
+                cvError,
+              })}
+            </div>
+          </div>
+
+          {saveError && (
+            <p className="px-1 pb-2 text-sm text-destructive">{saveError}</p>
+          )}
+
+          <div className="sheet-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => void back()}
+              disabled={step === 1 || saving}
+            >
+              <ArrowLeft /> Atrás
+            </Button>
+            <Button
+              type="button"
+              className="home-primary min-w-36"
+              onClick={() => void (step === TOTAL ? finish() : next())}
+              disabled={
+                saving ||
+                (step === TOTAL && !consents.every(Boolean))
+              }
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="animate-spin" /> Guardando perfil
+                </>
+              ) : (
+                <>
+                  {step === TOTAL ? "Buscar mis trabajos" : "Continuar"}{" "}
+                  <ArrowRight />
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      )}
     </OnboardingShell>
   );
 }
 
 type StepProps = {
-  selected: Answers; toggle: (group: string, value: string) => void; name: string; setName: (value: string) => void;
-  searchPreferences: { role: string; location: string; mode: string }; setSearchPreferences: (value: { role: string; location: string; mode: string }) => void;
-  reading: boolean; uploadedName: string; inputRef: React.RefObject<HTMLInputElement | null>; acceptFile: (file?: File) => void;
-  dropFile: (event: DragEvent<HTMLDivElement>) => void; consents: boolean[]; setConsents: (value: boolean[]) => void;
-  profile: Profile; updateProfile: (key: keyof Profile, value: string) => void; cvParsed: boolean; skipCv: () => void;
-  sensitiveAnswers: { workAuthorization: boolean | null; sponsorship: boolean | null };
-  setSensitiveAnswers: (value: { workAuthorization: boolean | null; sponsorship: boolean | null }) => void;
-  internationalRemote: boolean; setInternationalRemote: (value: boolean) => void;
-  salaryCurrency: string; setSalaryCurrency: (value: string) => void;
-  minimumSalary: string; setMinimumSalary: (value: string) => void;
-  salaryPeriod: string; setSalaryPeriod: (value: string) => void;
-  skipSalary: boolean; setSkipSalary: (value: boolean) => void;
+  selected: Answers;
+  toggle: (group: string, value: string) => void;
+  searchPreferences: { role: string; location: string; mode: string };
+  setSearchPreferences: (value: {
+    role: string;
+    location: string;
+    mode: string;
+  }) => void;
+  reading: boolean;
+  uploadedName: string;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  acceptFile: (file?: File) => void;
+  dropFile: (event: DragEvent<HTMLDivElement>) => void;
+  profile: Profile;
+  updateProfile: (key: keyof Profile, value: string) => void;
+  cvParsed: boolean;
+  skipCv: () => void;
+  careerContext: CareerContextState;
+  setCareerContext: React.Dispatch<React.SetStateAction<CareerContextState>>;
+  toggleContext: (
+    group:
+      | "responsibilities"
+      | "tools"
+      | "preferredTasks"
+      | "avoidTasks"
+      | "strengths"
+      | "differentiators",
+    value: string,
+  ) => void;
+  writing: WritingState;
+  setWriting: React.Dispatch<React.SetStateAction<WritingState>>;
+  sensitiveAnswers: {
+    workAuthorization: boolean | null;
+    sponsorship: boolean | null;
+  };
+  setSensitiveAnswers: (value: {
+    workAuthorization: boolean | null;
+    sponsorship: boolean | null;
+  }) => void;
+  internationalRemote: boolean;
+  setInternationalRemote: (value: boolean) => void;
+  salaryCurrency: string;
+  setSalaryCurrency: (value: string) => void;
+  minimumSalary: string;
+  setMinimumSalary: (value: string) => void;
+  salaryPeriod: string;
+  setSalaryPeriod: (value: string) => void;
+  skipSalary: boolean;
+  setSkipSalary: (value: boolean) => void;
+  consents: boolean[];
+  setConsents: (value: boolean[]) => void;
   cvError: string | null;
 };
 
-function CvNote({ show }: { show: boolean }) {
-  if (!show) return null;
-  return <p className="sheet-help mb-4 flex items-center gap-2 text-primary"><Check className="size-4" /> Completado automáticamente desde tu CV. Revisalo y editá lo que haga falta.</p>;
-}
-
 function renderStep(step: number, p: StepProps): ReactNode {
-  const chips = (group: string, values: string[]) => <div className="sheet-chips">{values.map((value) => <Button type="button" variant="outline" key={value} onClick={() => p.toggle(group, value)} className={cn("sheet-chip", p.selected[group]?.includes(value) && "sheet-chip-selected")}>{value}</Button>)}</div>;
-  const updateSearch = (key: "role" | "location" | "mode", value: string) => p.setSearchPreferences({ ...p.searchPreferences, [key]: value });
+  const chips = (group: string, values: string[]) => (
+    <div className="sheet-chips">
+      {values.map((value) => (
+        <Button
+          type="button"
+          variant="outline"
+          key={value}
+          onClick={() => p.toggle(group, value)}
+          className={cn(
+            "sheet-chip",
+            p.selected[group]?.includes(value) && "sheet-chip-selected",
+          )}
+        >
+          {value}
+        </Button>
+      ))}
+    </div>
+  );
+
+  const contextChips = (
+    group:
+      | "responsibilities"
+      | "tools"
+      | "preferredTasks"
+      | "avoidTasks"
+      | "strengths"
+      | "differentiators",
+    values: string[],
+  ) => (
+    <div className="sheet-chips">
+      {values.map((value) => (
+        <Button
+          type="button"
+          variant="outline"
+          key={value}
+          onClick={() => p.toggleContext(group, value)}
+          className={cn(
+            "sheet-chip",
+            p.careerContext[group].includes(value) &&
+              "sheet-chip-selected",
+          )}
+        >
+          {value}
+        </Button>
+      ))}
+    </div>
+  );
+
+  const updateSearch = (
+    key: "role" | "location" | "mode",
+    value: string,
+  ) =>
+    p.setSearchPreferences({ ...p.searchPreferences, [key]: value });
+
   switch (step) {
-    case 1: return <div className="space-y-5"><Field label="Puesto o área"><Input value={p.searchPreferences.role} onChange={(event) => updateSearch("role", event.target.value)} placeholder="Growth Manager" /></Field><Field label="Ubicación"><Input value={p.searchPreferences.location} onChange={(event) => updateSearch("location", event.target.value)} placeholder="Buenos Aires" /></Field><Field label="Modalidad">{chips("mode", ["Remoto", "Híbrido", "Presencial"])}</Field></div>;
-    case 2: return <><p className="sheet-copy">Subí tu CV y completamos gran parte del perfil por vos.</p><input ref={p.inputRef} className="hidden" type="file" accept=".pdf,.docx" onChange={(event) => p.acceptFile(event.target.files?.[0])} /><div className="sheet-upload" role="button" tabIndex={0} onClick={() => p.inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") p.inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={p.dropFile}>{p.reading ? <><span className="sheet-upload-icon animate-pulse-soft"><FileText /></span><strong>Leyendo y guardando tu CV…</strong><span>{p.uploadedName}</span></> : p.uploadedName ? <><span className="sheet-upload-icon"><Check /></span><strong>{p.uploadedName}</strong><span>Completamos tu perfil con estos datos</span></> : <><span className="sheet-upload-icon"><Upload /></span><strong>Subí tu CV</strong><span>PDF o DOCX · arrastrá o elegí un archivo</span></>}</div>{p.cvError && <p className="mt-3 text-sm text-caution">{p.cvError}</p>}<Button type="button" variant="ghost" className="mt-3 w-full text-muted-foreground" onClick={p.skipCv}>Continuar sin CV</Button></>;
-    case 3: return <><CvNote show={p.cvParsed} /><div className="sheet-field-grid"><Field label="Nombre"><Input value={p.cvParsed ? (p.name || p.profile.firstName) : p.name} placeholder="Sofía" onChange={(event) => p.setName(event.target.value)} /></Field><Field label="Apellido"><Input value={p.profile.lastName} placeholder="Fernández" onChange={(event) => p.updateProfile("lastName", event.target.value)} /></Field><Field label="Email"><Input type="email" value={p.profile.email} placeholder="tu@email.com" onChange={(event) => p.updateProfile("email", event.target.value)} /></Field><Field label="WhatsApp"><Input value={p.profile.phone} placeholder="+54 9 11 ..." onChange={(event) => p.updateProfile("phone", event.target.value)} /></Field><Field label="País"><SelectLike options={["Argentina", "México", "Colombia", "Chile", "Uruguay"]} value={p.profile.country} onChange={(value) => p.updateProfile("country", value)} /></Field><Field label="Ciudad"><Input value={p.profile.city || p.searchPreferences.location} placeholder="Buenos Aires" onChange={(event) => p.updateProfile("city", event.target.value)} /></Field></div></>;
-    case 4: return <><p className="sheet-copy">{p.cvParsed ? "Confirmá que los datos extraídos de tu CV sean correctos. Podés editar todo." : "Contanos tu experiencia más reciente."}</p><CvNote show={p.cvParsed} /><div className="sheet-experience"><div className="sheet-field-grid"><Field label="Empresa"><Input value={p.profile.company} placeholder="Empresa" onChange={(event) => p.updateProfile("company", event.target.value)} /></Field><Field label="Puesto"><Input value={p.profile.role} placeholder="Puesto" onChange={(event) => p.updateProfile("role", event.target.value)} /></Field><Field label="Fecha de inicio"><Input value={p.profile.start} placeholder="Mar 2023" onChange={(event) => p.updateProfile("start", event.target.value)} /></Field><Field label="Fecha de fin"><Input value={p.profile.end} placeholder="Actualidad" onChange={(event) => p.updateProfile("end", event.target.value)} /></Field></div><Field label="Descripción"><Textarea value={p.profile.description} placeholder="Qué hacías en el puesto" onChange={(event) => p.updateProfile("description", event.target.value)} /></Field><Field label="Logros"><Textarea value={p.profile.achievements} placeholder="Un resultado concreto" onChange={(event) => p.updateProfile("achievements", event.target.value)} /></Field></div></>;
-    case 5: return <><CvNote show={p.cvParsed} /><div className="sheet-field-grid"><Field label="Institución"><Input value={p.profile.institution} placeholder="Universidad" onChange={(event) => p.updateProfile("institution", event.target.value)} /></Field><Field label="Carrera o título"><Input value={p.profile.degree} placeholder="Licenciatura" onChange={(event) => p.updateProfile("degree", event.target.value)} /></Field><Field label="Área"><Input value={p.profile.area} placeholder="Administración" onChange={(event) => p.updateProfile("area", event.target.value)} /></Field><Field label="Fechas"><Input value={p.profile.studyDates} placeholder="2018 — 2022" onChange={(event) => p.updateProfile("studyDates", event.target.value)} /></Field></div></>;
-    case 6: return <><p className="sheet-copy">Elegí sólo habilidades que realmente puedas defender.</p><CvNote show={p.cvParsed} />{chips("skills", skills)}</>;
-    case 7: return <><div className="sheet-field-grid"><Field label="Idioma"><SelectLike options={["Español", "Inglés", "Portugués"]} value={p.profile.language} onChange={(value) => p.updateProfile("language", value)} /></Field><Field label="Nivel"><SelectLike options={["Básico", "Intermedio", "Avanzado", "Profesional", "Nativo"]} value={p.profile.level} onChange={(value) => p.updateProfile("level", value)} /></Field></div></>;
-    case 8: return <>{chips("roles", ["Growth Manager", "Growth Analyst", "Product Marketing", "Business Analyst"])}<ToggleRow label="También mostrar puestos similares" /></>;
-    case 9: return <><SectionLabel>Modalidad</SectionLabel>{chips("mode", ["Remoto", "Híbrido", "Presencial"])}<SectionLabel>Tipo de trabajo</SectionLabel>{chips("employment", ["Full-time", "Part-time", "Contractor", "Freelance"])}</>;
-    case 10: return <><Field label="Ciudad o país"><Input value={p.searchPreferences.location} onChange={(event) => updateSearch("location", event.target.value)} placeholder="Buenos Aires, Argentina" /></Field><ToggleRow label="¿Trabajarías remoto para empresas de otros países?" checked={p.internationalRemote} onCheckedChange={p.setInternationalRemote} /><SectionLabel>¿Te mudarías por una buena oportunidad?</SectionLabel>{chips("relocate", ["Sí", "No", "Depende"])}</>;
-    case 11: return <><div className="sheet-field-grid sheet-field-grid-3"><Field label="Moneda"><SelectLike options={["USD", "ARS", "MXN", "BRL"]} value={p.salaryCurrency} onChange={p.setSalaryCurrency} /></Field><Field label="Mínimo esperado"><Input inputMode="numeric" value={p.minimumSalary} disabled={p.skipSalary} placeholder="3200" onChange={(event) => p.setMinimumSalary(event.target.value.replace(/[^0-9.]/g, ""))} /></Field><Field label="Período"><SelectLike options={["Mensual", "Anual"]} value={p.salaryPeriod} onChange={p.setSalaryPeriod} /></Field></div><label className="mt-5 flex items-center gap-3 text-sm"><Checkbox checked={p.skipSalary} onCheckedChange={(checked) => p.setSkipSalary(checked === true)} /> No quiero filtrar por salario</label></>;
-    case 12: return <>{chips("seniority", ["Entry level", "Junior", "Semi Senior", "Senior", "Lead", "Manager", "Director"])}<p className="sheet-help">Podés elegir niveles adyacentes.</p></>;
-    case 13: return <><p className="sheet-copy">Estas respuestas salen directamente de vos. Nunca inferimos tu situación migratoria.</p><Question title="¿Tenés autorización para trabajar en Estados Unidos?" value={p.sensitiveAnswers.workAuthorization} onChange={(value) => p.setSensitiveAnswers({ ...p.sensitiveAnswers, workAuthorization: value })} /><Question title="¿Necesitarías sponsorship?" value={p.sensitiveAnswers.sponsorship} onChange={(value) => p.setSensitiveAnswers({ ...p.sensitiveAnswers, sponsorship: value })} /></>;
-    case 14: return <><SectionLabel>Industrias que te gustan</SectionLabel>{chips("industry", industries.slice(0, 6))}<SectionLabel>Tamaño de empresa</SectionLabel>{chips("size", ["Startup", "Pequeña", "Mediana", "Grande"])}<SectionLabel>Condiciones que querés evitar</SectionLabel>{chips("dealbreakers", ["No trabajos a comisión", "No presencial", "No fines de semana", "No relocation", "No roles sin pago"])}<div className="mt-5 space-y-3">{[
-      "La información que proporcioné es verdadera.",
-      "Aplica puede reformular mi CV, pero nunca inventar experiencia, estudios o habilidades.",
-      "Autorizo a Aplica a enviar las postulaciones que yo seleccione usando mi perfil y CV.",
-    ].map((text, index) => <label key={text} className="sheet-consent"><Checkbox checked={p.consents[index] ?? false} onCheckedChange={() => { const next = [...p.consents]; next[index] = !next[index]; p.setConsents(next); }} /><span>{text}</span></label>)}</div></>;
-    default: return null;
+    case 1:
+      return (
+        <div className="space-y-5">
+          <p className="sheet-copy">
+            Empezamos por el objetivo. Después vamos a conocerte mucho mejor
+            que un CV tradicional.
+          </p>
+          <Field label="Puesto o área">
+            <Input
+              value={p.searchPreferences.role}
+              onChange={(event) => updateSearch("role", event.target.value)}
+              placeholder="Growth Manager"
+            />
+          </Field>
+          <Field label="Ubicación">
+            <Input
+              value={p.searchPreferences.location}
+              onChange={(event) =>
+                updateSearch("location", event.target.value)
+              }
+              placeholder="Buenos Aires"
+            />
+          </Field>
+          <Field label="Modalidad">
+            {chips("mode", ["Remoto", "Híbrido", "Presencial"])}
+          </Field>
+        </div>
+      );
+
+    case 2:
+      return (
+        <>
+          <p className="sheet-copy">
+            El CV es sólo el punto de partida. Lo usamos para evitar que tengas
+            que escribir de nuevo lo que ya sabemos.
+          </p>
+          <input
+            ref={p.inputRef}
+            className="hidden"
+            type="file"
+            accept=".pdf,.docx"
+            onChange={(event) => p.acceptFile(event.target.files?.[0])}
+          />
+          <div
+            className="sheet-upload"
+            role="button"
+            tabIndex={0}
+            onClick={() => p.inputRef.current?.click()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                p.inputRef.current?.click();
+              }
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={p.dropFile}
+          >
+            {p.reading ? (
+              <>
+                <span className="sheet-upload-icon animate-pulse-soft">
+                  <FileText />
+                </span>
+                <strong>Leyendo y guardando tu CV…</strong>
+                <span>{p.uploadedName}</span>
+              </>
+            ) : p.uploadedName ? (
+              <>
+                <span className="sheet-upload-icon">
+                  <Check />
+                </span>
+                <strong>{p.uploadedName}</strong>
+                <span>Lo usamos como base, pero vos confirmás los hechos.</span>
+              </>
+            ) : (
+              <>
+                <span className="sheet-upload-icon">
+                  <Upload />
+                </span>
+                <strong>Subí tu CV</strong>
+                <span>PDF o DOCX · arrastrá o elegí un archivo</span>
+              </>
+            )}
+          </div>
+          {p.cvError && (
+            <p className="mt-3 text-sm text-caution">{p.cvError}</p>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-3 w-full text-muted-foreground"
+            onClick={p.skipCv}
+          >
+            Continuar sin CV
+          </Button>
+        </>
+      );
+
+    case 3:
+      return (
+        <div className="space-y-5">
+          <CvNote show={p.cvParsed} />
+          <div className="sheet-field-grid">
+            <Field label="Nombre">
+              <Input
+                value={p.profile.firstName}
+                onChange={(event) =>
+                  p.updateProfile("firstName", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Apellido">
+              <Input
+                value={p.profile.lastName}
+                onChange={(event) =>
+                  p.updateProfile("lastName", event.target.value)
+                }
+              />
+            </Field>
+          </div>
+          <Field label="Email">
+            <Input
+              type="email"
+              value={p.profile.email}
+              onChange={(event) => p.updateProfile("email", event.target.value)}
+            />
+          </Field>
+          <Field label="Teléfono">
+            <Input
+              value={p.profile.phone}
+              onChange={(event) => p.updateProfile("phone", event.target.value)}
+            />
+          </Field>
+          <div className="sheet-field-grid">
+            <Field label="Ciudad">
+              <Input
+                value={p.profile.city}
+                onChange={(event) => p.updateProfile("city", event.target.value)}
+              />
+            </Field>
+            <Field label="País">
+              <Input
+                value={p.profile.country}
+                onChange={(event) =>
+                  p.updateProfile("country", event.target.value)
+                }
+              />
+            </Field>
+          </div>
+          <Field label="LinkedIn (opcional)">
+            <Input
+              value={p.profile.linkedin}
+              onChange={(event) =>
+                p.updateProfile("linkedin", event.target.value)
+              }
+            />
+          </Field>
+          <Field label="Portfolio / GitHub / web (opcional)">
+            <Input
+              value={p.profile.portfolio}
+              onChange={(event) =>
+                p.updateProfile("portfolio", event.target.value)
+              }
+            />
+          </Field>
+        </div>
+      );
+
+    case 4:
+      return (
+        <div className="space-y-4">
+          <CvNote show={p.cvParsed} />
+          <div className="sheet-field-grid">
+            <Field label="Empresa">
+              <Input
+                value={p.profile.company}
+                onChange={(event) =>
+                  p.updateProfile("company", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Puesto">
+              <Input
+                value={p.profile.role}
+                onChange={(event) => p.updateProfile("role", event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="sheet-field-grid">
+            <Field label="Desde">
+              <Input
+                value={p.profile.start}
+                onChange={(event) =>
+                  p.updateProfile("start", event.target.value)
+                }
+                placeholder="03/2025"
+              />
+            </Field>
+            <Field label="Hasta">
+              <Input
+                value={p.profile.end}
+                onChange={(event) => p.updateProfile("end", event.target.value)}
+                placeholder="Actualidad"
+              />
+            </Field>
+          </div>
+          <Field label="Qué dice hoy tu CV">
+            <Textarea
+              value={p.profile.description}
+              onChange={(event) =>
+                p.updateProfile("description", event.target.value)
+              }
+              placeholder="Contanos brevemente qué hacías."
+            />
+          </Field>
+        </div>
+      );
+
+    case 5:
+      return (
+        <>
+          <p className="sheet-copy">
+            Elegí sólo cosas que realmente hacías. Esto le da contexto a la IA
+            para escribir mejor sin inventar responsabilidades.
+          </p>
+          {contextChips("responsibilities", responsibilitySuggestions)}
+          <ListTextarea
+            label="Algo importante que no esté arriba"
+            placeholder="Ej: preparaba reportes semanales para dirección"
+            values={p.careerContext.responsibilities}
+            onChange={(responsibilities) =>
+              p.setCareerContext((current) => ({
+                ...current,
+                responsibilities,
+              }))
+            }
+          />
+        </>
+      );
+
+    case 6:
+      return (
+        <>
+          <p className="sheet-copy">
+            Sólo seleccioná herramientas que hayas usado de verdad.
+          </p>
+          {contextChips("tools", toolSuggestions)}
+          <ListTextarea
+            label="Otras herramientas"
+            placeholder="Una por línea"
+            values={p.careerContext.tools}
+            onChange={(tools) =>
+              p.setCareerContext((current) => ({ ...current, tools }))
+            }
+          />
+        </>
+      );
+
+    case 7:
+      return (
+        <>
+          <p className="sheet-copy">
+            Los resultados son lo que más ayuda a transformar un CV genérico en
+            uno convincente. Podés usar números o resultados cualitativos.
+          </p>
+          <Field label="Resultados o logros">
+            <Textarea
+              rows={6}
+              value={p.careerContext.results.join("\n")}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  results: lines(event.target.value),
+                }))
+              }
+              placeholder={"Ej:\nAumenté el tráfico orgánico 35%\nLancé 12 campañas\nReduje el tiempo de respuesta del equipo"}
+            />
+          </Field>
+          <Field label="¿Hay algún proyecto del que estés especialmente orgulloso?">
+            <Textarea
+              value={p.careerContext.proudProject}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  proudProject: event.target.value,
+                }))
+              }
+              placeholder="Qué hiciste vos, qué problema resolvía y qué pasó."
+            />
+          </Field>
+        </>
+      );
+
+    case 8:
+      return (
+        <ProductProof
+          before={
+            p.profile.description ||
+            p.careerContext.responsibilities[0] ||
+            "Todavía no agregaste una descripción."
+          }
+          after={previewBullet(p)}
+          note="La IA puede reformular y ordenar estos hechos para cada vacante, pero no puede agregar una habilidad, número o responsabilidad que no hayas confirmado."
+        />
+      );
+
+    case 9:
+      return (
+        <>
+          <p className="sheet-copy">
+            Esto nos ayuda con preguntas como “contame un desafío” sin tener que
+            inventar historias durante una aplicación.
+          </p>
+          <Field label="Un problema difícil que hayas resuelto">
+            <Textarea
+              rows={6}
+              value={p.careerContext.challengeStory}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  challengeStory: event.target.value,
+                }))
+              }
+              placeholder="Contexto → qué hiciste vos → resultado"
+            />
+          </Field>
+        </>
+      );
+
+    case 10:
+      return (
+        <div className="space-y-4">
+          <CvNote show={p.cvParsed} />
+          <Field label="Institución">
+            <Input
+              value={p.profile.institution}
+              onChange={(event) =>
+                p.updateProfile("institution", event.target.value)
+              }
+            />
+          </Field>
+          <div className="sheet-field-grid">
+            <Field label="Carrera / título">
+              <Input
+                value={p.profile.degree}
+                onChange={(event) =>
+                  p.updateProfile("degree", event.target.value)
+                }
+              />
+            </Field>
+            <Field label="Área">
+              <Input
+                value={p.profile.area}
+                onChange={(event) => p.updateProfile("area", event.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="Fechas">
+            <Input
+              value={p.profile.studyDates}
+              onChange={(event) =>
+                p.updateProfile("studyDates", event.target.value)
+              }
+              placeholder="2024 — Actualidad"
+            />
+          </Field>
+        </div>
+      );
+
+    case 11:
+      return (
+        <>
+          <p className="sheet-copy">
+            Confirmá sólo habilidades que podrías defender en una entrevista.
+          </p>
+          {chips("skills", skills.slice(0, 18))}
+          <ListTextarea
+            label="Otras habilidades"
+            placeholder="Una por línea"
+            values={p.selected.skills ?? []}
+            onChange={(values) => {
+              const next = [...new Set(values)];
+              p.selected.skills = next;
+              // force through existing toggle-compatible state
+              for (const current of p.selected.skills ?? []) void current;
+            }}
+            readOnlyHint="También podés elegir los chips de arriba."
+          />
+        </>
+      );
+
+    case 12:
+      return (
+        <div className="space-y-4">
+          <Field label="Idioma">
+            <Input
+              value={p.profile.language}
+              onChange={(event) =>
+                p.updateProfile("language", event.target.value)
+              }
+            />
+          </Field>
+          <Field label="Nivel">
+            <SelectLike
+              options={[
+                "Nativo",
+                "Bilingüe",
+                "Avanzado",
+                "Intermedio",
+                "Básico",
+              ]}
+              value={p.profile.level}
+              onChange={(value) => p.updateProfile("level", value)}
+            />
+          </Field>
+        </div>
+      );
+
+    case 13:
+      return (
+        <>
+          <Field label="Puesto principal">
+            <Input
+              value={p.searchPreferences.role}
+              onChange={(event) =>
+                updateSearch("role", event.target.value)
+              }
+              placeholder="Growth Manager"
+            />
+          </Field>
+          <SectionLabel>También me interesan</SectionLabel>
+          {chips("roles", [
+            "Growth Manager",
+            "Growth Analyst",
+            "Product Marketing",
+            "Business Analyst",
+            "Operations",
+            "Account Executive",
+          ])}
+          <Field label="¿Qué querés lograr en tu próximo trabajo?">
+            <Textarea
+              value={p.careerContext.careerGoal}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  careerGoal: event.target.value,
+                }))
+              }
+              placeholder="Ej: tener más ownership, trabajar en un producto global, pasar a un rol más analítico..."
+            />
+          </Field>
+        </>
+      );
+
+    case 14:
+      return (
+        <>
+          <p className="sheet-copy">
+            Esto ayuda a distinguir dos puestos con el mismo título pero trabajo
+            diario muy distinto.
+          </p>
+          <SectionLabel>Tareas que querés hacer más</SectionLabel>
+          {contextChips("preferredTasks", taskSuggestions)}
+          <SectionLabel>¿Qué sentís que hacés especialmente bien?</SectionLabel>
+          {contextChips("strengths", strengthSuggestions)}
+        </>
+      );
+
+    case 15:
+      return (
+        <>
+          <p className="sheet-copy">
+            Decinos qué no querés para evitar aplicar a trabajos que se ven bien
+            por título pero no encajan con vos.
+          </p>
+          {contextChips("avoidTasks", [
+            "Ventas a comisión",
+            "Soporte telefónico",
+            "Trabajo repetitivo",
+            "Gestión de equipos",
+            "Viajes frecuentes",
+            "Trabajo de fin de semana",
+            "Prospección en frío",
+            "Guardias",
+          ])}
+          <SectionLabel>Condiciones que son dealbreaker</SectionLabel>
+          {chips("dealbreakers", [
+            "No trabajos a comisión",
+            "No presencial",
+            "No fines de semana",
+            "No relocation",
+            "No roles sin pago",
+          ])}
+        </>
+      );
+
+    case 16:
+      return (
+        <>
+          <SectionLabel>Modalidad</SectionLabel>
+          {chips("mode", ["Remoto", "Híbrido", "Presencial"])}
+          <SectionLabel>Tipo de empleo</SectionLabel>
+          {chips("employment", [
+            "Full-time",
+            "Part-time",
+            "Contractor",
+            "Internship",
+          ])}
+          <SectionLabel>Seniority</SectionLabel>
+          {chips("seniority", [
+            "Intern",
+            "Junior",
+            "Mid",
+            "Senior",
+            "Lead",
+            "Manager",
+            "Director",
+          ])}
+          <Field label="Disponibilidad">
+            <Input
+              value={p.careerContext.availability}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  availability: event.target.value,
+                }))
+              }
+              placeholder="Inmediata / 2 semanas / 30 días"
+            />
+          </Field>
+        </>
+      );
+
+    case 17:
+      return (
+        <>
+          <Field label="Ciudad o país">
+            <Input
+              value={p.searchPreferences.location}
+              onChange={(event) =>
+                updateSearch("location", event.target.value)
+              }
+              placeholder="Buenos Aires, Argentina"
+            />
+          </Field>
+          <ToggleRow
+            label="¿Trabajarías remoto para empresas de otros países?"
+            checked={p.internationalRemote}
+            onCheckedChange={p.setInternationalRemote}
+          />
+          <SectionLabel>¿Te mudarías por una buena oportunidad?</SectionLabel>
+          {chips("relocate", ["Sí", "No", "Depende"])}
+          <Field label="Disponibilidad para viajar (opcional)">
+            <Input
+              value={p.careerContext.travelPreference}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  travelPreference: event.target.value,
+                }))
+              }
+              placeholder="No / hasta 20% / ocasionalmente"
+            />
+          </Field>
+        </>
+      );
+
+    case 18:
+      return (
+        <>
+          <div className="sheet-field-grid sheet-field-grid-3">
+            <Field label="Moneda">
+              <SelectLike
+                options={["USD", "ARS", "MXN", "BRL", "EUR"]}
+                value={p.salaryCurrency}
+                onChange={p.setSalaryCurrency}
+              />
+            </Field>
+            <Field label="Mínimo esperado">
+              <Input
+                inputMode="numeric"
+                value={p.minimumSalary}
+                disabled={p.skipSalary}
+                placeholder="3200"
+                onChange={(event) =>
+                  p.setMinimumSalary(
+                    event.target.value.replace(/[^0-9.]/g, ""),
+                  )
+                }
+              />
+            </Field>
+            <Field label="Período">
+              <SelectLike
+                options={["Mensual", "Anual"]}
+                value={p.salaryPeriod}
+                onChange={p.setSalaryPeriod}
+              />
+            </Field>
+          </div>
+          <label className="mt-5 flex items-center gap-3 text-sm">
+            <Checkbox
+              checked={p.skipSalary}
+              onCheckedChange={(checked) =>
+                p.setSkipSalary(checked === true)
+              }
+            />
+            No quiero filtrar por salario
+          </label>
+        </>
+      );
+
+    case 19:
+      return (
+        <>
+          <p className="sheet-copy">
+            Nunca inferimos estas respuestas. Si no buscás trabajo en EE.UU.,
+            podés dejarlas sin responder.
+          </p>
+          <Question
+            title="¿Tenés autorización para trabajar en Estados Unidos?"
+            value={p.sensitiveAnswers.workAuthorization}
+            onChange={(value) =>
+              p.setSensitiveAnswers({
+                ...p.sensitiveAnswers,
+                workAuthorization: value,
+              })
+            }
+          />
+          <Question
+            title="¿Necesitarías sponsorship ahora o en el futuro?"
+            value={p.sensitiveAnswers.sponsorship}
+            onChange={(value) =>
+              p.setSensitiveAnswers({
+                ...p.sensitiveAnswers,
+                sponsorship: value,
+              })
+            }
+          />
+        </>
+      );
+
+    case 20:
+      return (
+        <>
+          <SectionLabel>Industrias que te interesan</SectionLabel>
+          {chips("industry", industries.slice(0, 10))}
+          <SectionLabel>Tamaño de empresa</SectionLabel>
+          {chips("size", ["Startup", "Pequeña", "Mediana", "Grande"])}
+          <Field label="¿En qué ambiente rendís mejor?">
+            <Textarea
+              value={p.careerContext.targetEnvironment}
+              onChange={(event) =>
+                p.setCareerContext((current) => ({
+                  ...current,
+                  targetEnvironment: event.target.value,
+                }))
+              }
+              placeholder="Ej: equipo chico, mucha autonomía, producto B2B, ritmo rápido..."
+            />
+          </Field>
+        </>
+      );
+
+    case 21:
+      return (
+        <>
+          <p className="sheet-copy">
+            Esto cambia el framing de cada CV, no los hechos.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["direct", "Directo", "Claro, profesional y al punto."],
+                [
+                  "ambitious",
+                  "Ambicioso",
+                  "Destaca ownership, impacto y crecimiento.",
+                ],
+                [
+                  "technical",
+                  "Técnico",
+                  "Prioriza herramientas, procesos y expertise.",
+                ],
+                [
+                  "balanced",
+                  "Equilibrado",
+                  "Combina impacto, skills y responsabilidades.",
+                ],
+              ] as const
+            ).map(([voice, title, description]) => (
+              <button
+                key={voice}
+                type="button"
+                onClick={() =>
+                  p.setWriting((current) => ({ ...current, voice }))
+                }
+                className={cn(
+                  "rounded-xl border p-4 text-left",
+                  p.writing.voice === voice
+                    ? "border-primary bg-selected"
+                    : "border-border",
+                )}
+              >
+                <strong className="text-sm">{title}</strong>
+                <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                  {description}
+                </span>
+              </button>
+            ))}
+          </div>
+          <SectionLabel>Quiero que destaque</SectionLabel>
+          <div className="sheet-chips">
+            {["Impacto", "Ownership", "Skills", "Liderazgo", "Velocidad", "Experiencia relevante"].map(
+              (value) => (
+                <Button
+                  type="button"
+                  variant="outline"
+                  key={value}
+                  onClick={() =>
+                    p.setWriting((current) => ({
+                      ...current,
+                      emphasis: current.emphasis.includes(value)
+                        ? current.emphasis.filter((item) => item !== value)
+                        : [...current.emphasis, value],
+                    }))
+                  }
+                  className={cn(
+                    "sheet-chip",
+                    p.writing.emphasis.includes(value) &&
+                      "sheet-chip-selected",
+                  )}
+                >
+                  {value}
+                </Button>
+              ),
+            )}
+          </div>
+        </>
+      );
+
+    case 22:
+      return (
+        <ProfileProof
+          profile={p.profile}
+          selected={p.selected}
+          careerContext={p.careerContext}
+          writing={p.writing}
+        />
+      );
+
+    case 23:
+      return (
+        <>
+          <p className="sheet-copy">
+            A partir de acá Aplica puede buscar trabajos, adaptar el CV usando
+            solamente hechos confirmados y preparar postulaciones para que vos
+            elijas cuáles enviar.
+          </p>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <p className="text-sm font-medium">Regla de la IA</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Puede mejorar redacción, jerarquía y framing. No puede inventar
+              empleadores, estudios, habilidades, responsabilidades, fechas ni
+              resultados.
+            </p>
+          </div>
+          <div className="mt-5 space-y-3">
+            {[
+              "La información que proporcioné es verdadera.",
+              "Aplica puede reformular y endulzar mi CV usando únicamente hechos que confirmé.",
+              "Autorizo a Aplica a enviar en mi nombre las postulaciones que yo seleccione.",
+            ].map((text, index) => (
+              <label key={text} className="sheet-consent">
+                <Checkbox
+                  checked={p.consents[index] ?? false}
+                  onCheckedChange={() => {
+                    const next = [...p.consents];
+                    next[index] = !next[index];
+                    p.setConsents(next);
+                  }}
+                />
+                <span>{text}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      );
+
+    default:
+      return null;
   }
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="sheet-field"><span>{label}</span>{children}</label>; }
-function SectionLabel({ children }: { children: ReactNode }) { return <h3 className="mb-3 mt-6 text-sm font-medium first:mt-0">{children}</h3>; }
-function SelectLike({ options, value, onChange }: { options: string[]; value?: string; onChange?: (value: string) => void }) {
-  const current = value ?? "";
-  return <select className="sheet-select" value={current} onChange={(event) => onChange?.(event.target.value)}>{!current && <option value="">Seleccioná una opción</option>}{options.map((option) => <option key={option}>{option}</option>)}</select>;
+function CvNote({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <p className="sheet-help mb-4 flex items-center gap-2 text-primary">
+      <Check className="size-4" />
+      Completado automáticamente desde tu CV. Revisalo y corregí lo que haga
+      falta.
+    </p>
+  );
 }
-function ToggleRow({ label, checked = true, onCheckedChange }: { label: string; checked?: boolean; onCheckedChange?: (value: boolean) => void }) { return <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-border pt-5"><span className="min-w-0 text-sm">{label}</span><Switch className="shrink-0" checked={checked} onCheckedChange={onCheckedChange} /></div>; }
-function Question({ title, value, onChange }: { title: string; value: boolean | null; onChange: (value: boolean) => void }) { return <div className="mb-5"><p className="mb-3 text-sm font-medium">{title}</p><div className="grid grid-cols-2 gap-2"><Choice selected={value === true} onClick={() => onChange(true)}>Sí</Choice><Choice selected={value === false} onClick={() => onChange(false)}>No</Choice></div></div>; }
 
-function Matching({ count, stage, done, onDone }: { count: number; stage: number; done: boolean; onDone: () => void }) {
-  const status = ["Analizando tu perfil", "Encontrando puestos relevantes", "Comparando requisitos", "Ordenando tus mejores matches", "Listo"];
-  return <div className="matching-card"><div className="matching-orbit"><span>{done ? <Check /> : count}</span></div>{done ? <><p className="sheet-kicker">Búsqueda completa</p><h2>{count === 1 ? "Encontramos 1 trabajo para vos." : `Encontramos ${count} trabajos para vos.`}</h2><p className="sheet-subtitle">{count > 0 ? "Ordenados según qué tan bien coinciden con tu experiencia y preferencias." : "Todavía no hay vacantes Auto Apply que superen tu match mínimo. Podés ajustar tus preferencias cuando quieras."}</p><Button className="home-primary mt-8 h-12 px-7" onClick={onDone}>Ver trabajos <ArrowRight /></Button></> : <><h2>Buscando oportunidades para vos</h2><div className="matching-count">{count}</div><p className="sheet-subtitle">oportunidades</p><p className="matching-status">{status[stage]}</p></>}</div>;
+function ProductProof({
+  before,
+  after,
+  note,
+}: {
+  before: string;
+  after: string;
+  note: string;
+}) {
+  return (
+    <div>
+      <p className="sheet-copy">
+        Ya tenemos suficiente contexto para mejorar cómo contás esta experiencia.
+      </p>
+      <div className="grid gap-4">
+        <div className="rounded-xl border border-border p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Lo que nos diste
+          </p>
+          <p className="mt-3 text-sm leading-6">{before}</p>
+        </div>
+        <div className="rounded-xl border border-primary/40 bg-selected p-4">
+          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-primary">
+            <Sparkles className="h-4 w-4" />
+            Cómo puede estructurarlo Aplica
+          </p>
+          <p className="mt-3 text-sm leading-6">{after}</p>
+        </div>
+      </div>
+      <p className="mt-4 text-xs leading-5 text-muted-foreground">{note}</p>
+    </div>
+  );
+}
+
+function ProfileProof({
+  profile,
+  selected,
+  careerContext,
+  writing,
+}: {
+  profile: Profile;
+  selected: Answers;
+  careerContext: CareerContextState;
+  writing: WritingState;
+}) {
+  const factEstimate =
+    careerContext.responsibilities.length +
+    careerContext.tools.length +
+    careerContext.results.length +
+    careerContext.strengths.length +
+    (selected.skills?.length ?? 0) +
+    (profile.description ? 1 : 0) +
+    (profile.achievements ? lines(profile.achievements).length : 0) +
+    (careerContext.proudProject ? 1 : 0);
+
+  return (
+    <div>
+      <p className="sheet-copy">
+        Esto ya no es sólo tu CV. Es el contexto que Aplica usa para decidir qué
+        destacar en cada puesto.
+      </p>
+      <div className="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+        <Stat label="Hechos y señales confirmadas" value={String(factEstimate)} />
+        <Stat
+          label="Habilidades confirmadas"
+          value={String(selected.skills?.length ?? 0)}
+        />
+        <Stat
+          label="Resultados guardados"
+          value={String(careerContext.results.length)}
+        />
+        <Stat
+          label="Estilo de CV"
+          value={voiceLabel(writing.voice)}
+        />
+      </div>
+      <div className="mt-5 rounded-xl border border-border p-4">
+        <p className="text-sm font-medium">La IA puede ahora:</p>
+        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+          <li>✓ elegir qué experiencia priorizar según la vacante</li>
+          <li>✓ reescribir bullets sin cambiar los hechos</li>
+          <li>✓ adaptar el resumen profesional al rol</li>
+          <li>✓ responder preguntas usando historias que vos confirmaste</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function Matching({
+  count,
+  stage,
+  done,
+  factCount,
+  onDone,
+}: {
+  count: number;
+  stage: number;
+  done: boolean;
+  factCount: number;
+  onDone: () => void;
+}) {
+  const status = [
+    "Analizando tu Career Profile",
+    "Encontrando puestos relevantes",
+    "Comparando requisitos",
+    "Revisando qué formularios podemos completar",
+    "Listo",
+  ];
+  return (
+    <div className="matching-card">
+      <div className="matching-orbit">
+        <span>{done ? <Check /> : count}</span>
+      </div>
+      {done ? (
+        <>
+          <p className="sheet-kicker">Búsqueda completa</p>
+          <h2>
+            {count === 1
+              ? "Encontramos 1 trabajo listo para aplicar."
+              : `Encontramos ${count} trabajos listos para aplicar.`}
+          </h2>
+          <p className="sheet-subtitle">
+            {factCount > 0
+              ? `Tu perfil quedó construido con ${factCount} hechos confirmados que la IA puede usar sin inventar.`
+              : "Tu perfil y tus preferencias ya están guardados."}
+          </p>
+          <Button
+            className="home-primary mt-8 h-12 px-7"
+            onClick={onDone}
+          >
+            Ver trabajos <ArrowRight />
+          </Button>
+        </>
+      ) : (
+        <>
+          <h2>Buscando oportunidades para vos</h2>
+          <div className="matching-count">{count}</div>
+          <p className="sheet-subtitle">listas para aplicar</p>
+          <p className="matching-status">{status[stage]}</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block text-sm font-medium">
+      {label}
+      <div className="mt-2">{children}</div>
+    </label>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="mb-3 mt-6 text-sm font-medium first:mt-0">{children}</p>
+  );
+}
+
+function Question({
+  title,
+  value,
+  onChange,
+}: {
+  title: string;
+  value: boolean | null;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="mb-5">
+      <p className="mb-3 text-sm font-medium">{title}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <Choice selected={value === true} onClick={() => onChange(true)}>
+          Sí
+        </Choice>
+        <Choice selected={value === false} onClick={() => onChange(false)}>
+          No
+        </Choice>
+      </div>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-border pt-5">
+      <span className="min-w-0 text-sm">{label}</span>
+      <Switch
+        className="shrink-0"
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+      />
+    </div>
+  );
+}
+
+function SelectLike({
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      className="sheet-select w-full"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option}>{option}</option>
+      ))}
+    </select>
+  );
+}
+
+function ListTextarea({
+  label,
+  placeholder,
+  values,
+  onChange,
+  readOnlyHint,
+}: {
+  label: string;
+  placeholder: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+  readOnlyHint?: string;
+}) {
+  return (
+    <Field label={label}>
+      <Textarea
+        rows={4}
+        placeholder={placeholder}
+        value={values.join("\n")}
+        onChange={(event) => onChange(lines(event.target.value))}
+      />
+      {readOnlyHint && (
+        <p className="mt-2 text-xs text-muted-foreground">{readOnlyHint}</p>
+      )}
+    </Field>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-background p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-medium">{value}</p>
+    </div>
+  );
+}
+
+function previewBullet(p: StepProps) {
+  const responsibility =
+    p.careerContext.responsibilities[0] || p.profile.description;
+  const tools = p.careerContext.tools.slice(0, 2).join(" y ");
+  const result =
+    p.careerContext.results[0] ||
+    lines(p.profile.achievements)[0] ||
+    "";
+
+  const pieces = [
+    responsibility
+      ? sentenceCase(responsibility)
+      : "Experiencia relevante confirmada por el usuario",
+    tools ? `usando ${tools}` : "",
+    result ? `con un resultado confirmado: ${result}` : "",
+  ].filter(Boolean);
+
+  return pieces.join(", ") + ".";
+}
+
+function voiceLabel(voice: CareerVoice) {
+  return {
+    direct: "Directo",
+    ambitious: "Ambicioso",
+    technical: "Técnico",
+    balanced: "Equilibrado",
+  }[voice];
+}
+
+function sentenceCase(value: string) {
+  const cleanValue = value.trim().replace(/[.]+$/, "");
+  if (!cleanValue) return "";
+  return cleanValue[0].toUpperCase() + cleanValue.slice(1);
+}
+
+function lines(value: string) {
+  return value
+    .split(/\n|;/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
