@@ -25,7 +25,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       if (stored !== null) answers.push({ field, value: stored, source: "verified_answer" });
       else if (decline) answers.push({ field, value: decline.value, source: "decline" });
       else if (field.required) {
-        throw new ApplicationError("UNSUPPORTED_FIELD", `Required demographic question without a decline option: ${field.label}`);
+        throw new ApplicationError("PROFILE_INCOMPLETE", `Required demographic question needs an explicit user answer: ${field.label}`);
       }
       continue;
     }
@@ -35,7 +35,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       answers.push({ field, value, source: field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey) ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
       continue;
     }
-    if (field.required) throw new ApplicationError("UNSUPPORTED_FIELD", `Required question without a verified answer: ${field.label}`);
+    if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Required question without a verified answer: ${field.label}`);
   }
 
   return answers;
