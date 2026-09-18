@@ -6,6 +6,7 @@ on:
       - "worker/**"
       - "src/lib/worker-*.server.ts"
       - "src/routes/api/public/worker/**"
+      - "src/components/adapter-test-console.tsx"
       - "src/routeTree.gen.ts"
       - "package.json"
       - "bun.lock"
