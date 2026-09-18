@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       adapter_inspections: {
         Row: {
+          test_mode: boolean
           adapter: string | null
           ats_type: string | null
           auto_apply_eligible: boolean | null
@@ -38,6 +39,7 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
+          test_mode?: boolean
           adapter?: string | null
           ats_type?: string | null
           auto_apply_eligible?: boolean | null
@@ -60,6 +62,7 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
+          test_mode?: boolean
           adapter?: string | null
           ats_type?: string | null
           auto_apply_eligible?: boolean | null
@@ -362,6 +365,7 @@ export type Database = {
       }
       application_queue: {
         Row: {
+          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
@@ -376,6 +380,7 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
+          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -390,6 +395,7 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
+          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -1470,6 +1476,10 @@ export type Database = {
           _queue_id: string
           _status?: string
         }
+        Returns: string
+      }
+      enqueue_admin_dry_run: {
+        Args: { _job_id: string; _user_id: string }
         Returns: string
       }
       has_role: {
