@@ -104,7 +104,22 @@ export function parseCvText(raw: string): CvResult {
       .replace(/[._-]+/g, " ")
       .replace(/\d+/g, " ")
       .trim();
-    if (emailName && isLikelyPersonName(emailName, { allowLowercase: true })) {
+    const emailWords = emailName.split(/\s+/).filter(Boolean);
+    if (
+      emailWords.length === 1 &&
+      /^[\p{L}][\p{L}'-]{1,}$/u.test(emailWords[0]) &&
+      !nameStopWords.has(
+        emailWords[0]
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase(),
+      )
+    ) {
+      fields.firstName = normalizePersonName(emailWords[0])[0];
+    } else if (
+      emailName &&
+      isLikelyPersonName(emailName, { allowLowercase: true })
+    ) {
       const words = normalizePersonName(emailName);
       fields.firstName = words[0] ?? "";
       if (words.length > 1) fields.lastName = words.slice(1).join(" ");
