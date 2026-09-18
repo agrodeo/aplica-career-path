@@ -44,7 +44,7 @@ export function OnboardingFlow() {
   const { onboardingStep, setOnboardingStep, completeOnboarding, name, setName, searchPreferences, setSearchPreferences } = useAplica();
   const step = Math.min(TOTAL, Math.max(1, onboardingStep));
   const [selected, setSelected] = useState<Answers>({
-    skills: [], roles: [searchPreferences.role || "Growth Manager"],
+    skills: [], roles: searchPreferences.role ? [searchPreferences.role] : [],
     mode: [searchPreferences.mode || "Remoto"], employment: ["Full-time"], seniority: [],
     industry: [], size: [], avoid: [], dealbreakers: [],
   });
@@ -89,7 +89,7 @@ export function OnboardingFlow() {
     setSaveError(null);
 
     try {
-      const targetRoles = selected.roles.filter(Boolean);
+      const targetRoles = [...new Set([searchPreferences.role, ...(selected.roles ?? [])].map((value) => value.trim()).filter(Boolean))];
       const targetLocations = [searchPreferences.location || profile.city || profile.country].filter(Boolean);
       const relocate = selected.relocate?.[0] ?? "No";
 
