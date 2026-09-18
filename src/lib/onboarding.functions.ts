@@ -126,8 +126,9 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [profile, experience, education, skills, languages, preferences, answers, consent] =
+    const [authUser, profile, experience, education, skills, languages, preferences, answers, consent] =
       await Promise.all([
+        supabase.auth.getUser(),
         supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("experiences").select("*").eq("user_id", userId).order("sort_order").limit(1).maybeSingle(),
         supabase.from("educations").select("*").eq("user_id", userId).limit(1).maybeSingle(),
@@ -148,9 +149,11 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
 
     return {
       identity: {
-        firstName: profile.data?.first_name ?? "",
+        firstName:
+          profile.data?.first_name ??
+          String(authUser.data.user?.user_metadata?.["first_name"] ?? ""),
         lastName: profile.data?.last_name ?? "",
-        email: profile.data?.email ?? "",
+        email: profile.data?.email ?? authUser.data.user?.email ?? "",
         phone: profile.data?.phone ?? "",
         country: profile.data?.country ?? "",
         city: profile.data?.city ?? "",
