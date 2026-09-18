@@ -4,19 +4,29 @@ import { ProductDemo } from "@/components/product-demo";
 import { applications, jobs } from "@/lib/aplica-data";
 import accentureAsset from "@/assets/accenture.png.asset.json";
 import amazonAsset from "@/assets/amazon.png.asset.json";
+import anthropicAsset from "@/assets/anthropic.png.asset.json";
 import canvaAsset from "@/assets/canva.png.asset.json";
 import kavakAsset from "@/assets/kavak.png.asset.json";
 import mercadoLibreAsset from "@/assets/mercado-libre.png.asset.json";
+import metaAsset from "@/assets/meta.png.asset.json";
+import rampAsset from "@/assets/ramp.png.asset.json";
 import rappiAsset from "@/assets/rappi.png.asset.json";
 import santanderAsset from "@/assets/santander.png.asset.json";
+import stripeAsset from "@/assets/stripe.png.asset.json";
+import ualaAsset from "@/assets/uala.png.asset.json";
 
 const coverageLogos: { name: string; src: string }[] = [
   { name: "Mercado Libre", src: mercadoLibreAsset.url },
   { name: "Amazon", src: amazonAsset.url },
+  { name: "Meta", src: metaAsset.url },
   { name: "Santander", src: santanderAsset.url },
+  { name: "Stripe", src: stripeAsset.url },
   { name: "Accenture", src: accentureAsset.url },
+  { name: "Anthropic", src: anthropicAsset.url },
   { name: "Kavak", src: kavakAsset.url },
+  { name: "Ramp", src: rampAsset.url },
   { name: "Rappi", src: rappiAsset.url },
+  { name: "Ualá", src: ualaAsset.url },
   { name: "Canva", src: canvaAsset.url },
 ];
 
