@@ -226,8 +226,8 @@
     radial-gradient(ellipse 54% 56% at 5% 90%, color-mix(in oklab, var(--home-backdrop-cool) 72%, transparent), transparent 76%),
     var(--home-backdrop);
 }
-.home-continuum > .onboarding-scene { min-height: 820px; background: transparent; }
-.home-continuum > .onboarding-scene .onboarding-grid { min-height: 680px; padding-bottom: 58px; }
+.home-continuum > .onboarding-scene { min-height: 780px; background: transparent; }
+.home-continuum > .onboarding-scene .onboarding-grid { min-height: 640px; padding-bottom: 34px; }
 .onboarding-scene::before {
   content: "";
   position: absolute;
@@ -260,32 +260,32 @@
   max-width: 1500px;
   grid-template-columns: minmax(0, 46fr) minmax(560px, 54fr);
   align-items: center;
-  gap: clamp(64px, 7vw, 112px);
+  gap: clamp(72px, 7.5vw, 120px);
   margin-inline: auto;
-  padding: 12px clamp(40px, 6vw, 96px) 84px;
+  padding: 0 clamp(40px, 6vw, 96px) 54px;
 }
-.onboarding-promise { max-width: 620px; padding-bottom: 10px; }
-.onboarding-promise h1 { max-width: 610px; font-size: clamp(58px, 4.7vw, 72px); font-weight: 700; line-height: .98; letter-spacing: -2px; }
+.onboarding-promise { max-width: 650px; padding-bottom: 6px; }
+.onboarding-promise h1 { max-width: 650px; font-size: clamp(64px, 5vw, 76px); font-weight: 700; line-height: .96; letter-spacing: -2px; }
 .onboarding-promise h1 span { color: var(--home-accent); }
-.onboarding-promise > p { max-width: 420px; margin-top: 32px; color: color-mix(in oklab, var(--foreground) 62%, transparent); font-size: 18px; line-height: 1.45; }
-.onboarding-promise > .home-primary { margin-top: 34px; font-size: 18px; box-shadow: 0 14px 30px -16px color-mix(in oklab, var(--home-accent) 75%, transparent); }
-.onboarding-promise small { display: block; margin-top: 16px; color: color-mix(in oklab, var(--foreground) 46%, transparent); font-size: 12px; }
+.onboarding-promise > p { max-width: 420px; margin-top: 30px; color: color-mix(in oklab, var(--foreground) 62%, transparent); font-size: 18px; line-height: 1.45; }
+.onboarding-promise > .home-primary { width: 250px; height: 60px; margin-top: 32px; font-size: 18px; box-shadow: 0 14px 30px -16px color-mix(in oklab, var(--home-accent) 75%, transparent); }
+.onboarding-promise small { display: block; margin-top: 13px; color: color-mix(in oklab, var(--foreground) 43%, transparent); font-size: 11px; }
 .onboarding-sheet {
   width: min(100%, 590px);
-  min-height: 560px;
+  min-height: 540px;
   justify-self: end;
-  padding: clamp(40px, 3.25vw, 48px);
-  border: 1px solid color-mix(in oklab, var(--foreground) 5%, transparent);
-  border-radius: 10px;
+  padding: clamp(42px, 3.4vw, 50px);
+  border: 0;
+  border-radius: 11px;
   background: var(--background);
   box-shadow: var(--home-card-shadow);
 }
 .onboarding-sheet-flow { display: flex; min-height: 570px; flex-direction: column; }
-.sheet-intro h2, .sheet-step h2, .matching-card h2 { margin-top: 10px; font-size: 34px; font-weight: 650; line-height: 1.08; letter-spacing: -1px; }
+.sheet-intro h2, .sheet-step h2, .matching-card h2 { margin-top: 11px; font-size: 36px; font-weight: 650; line-height: 1.08; letter-spacing: -1px; }
 .sheet-kicker { color: var(--home-accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.sheet-subtitle, .sheet-copy { margin-top: 14px; color: var(--muted-foreground); font-size: 15px; line-height: 1.5; }
+.sheet-subtitle, .sheet-copy { margin-top: 13px; color: var(--muted-foreground); font-size: 15px; line-height: 1.5; }
 .sheet-form, .sheet-step-body { display: grid; gap: 21px; }
-.sheet-intro + .sheet-form { margin-top: 36px; }
+.sheet-intro + .sheet-form { margin-top: 38px; }
 .sheet-field { display: block; min-width: 0; }
 .sheet-field > span, .sheet-field > legend { display: block; margin-bottom: 9px; color: color-mix(in oklab, var(--foreground) 70%, transparent); font-size: 12px; font-weight: 600; }
 .sheet-field input, .sheet-select { height: 54px; border-radius: 9px; font-size: 15px; }
@@ -324,18 +324,17 @@
 .coverage-section {
   position: relative;
   z-index: 2;
-  min-height: 260px;
+  min-height: 236px;
   overflow: hidden;
-  padding: 32px 0 28px;
+  padding: 20px 0 25px;
   text-align: center;
 }
 .coverage-heading { margin-inline: auto; padding-inline: 24px; }
 .coverage-kicker { color: var(--home-accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.coverage-heading h2 { max-width: 620px; margin: 8px auto 0; font-size: clamp(23px, 2vw, 30px); font-weight: 680; line-height: 1.1; letter-spacing: -.5px; }
-.coverage-heading > p:last-child { margin-top: 9px; color: var(--muted-foreground); font-size: 13px; }
+.coverage-heading h2 { max-width: 620px; margin: 7px auto 0; font-size: clamp(21px, 1.7vw, 27px); font-weight: 680; line-height: 1.1; letter-spacing: -.5px; }
 .coverage-wall {
   width: 100%;
-  margin-top: 27px;
+  margin-top: 24px;
   mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 .coverage-marquee { overflow: hidden; padding-block: 11px; }
@@ -343,7 +342,7 @@
 .coverage-wall:hover .coverage-track { animation-play-state: paused; }
 .coverage-group { display: flex; align-items: center; gap: clamp(42px, 4.8vw, 76px); padding-right: clamp(42px, 4.8vw, 76px); }
 .coverage-logo { color: color-mix(in oklab, var(--foreground) 52%, transparent); font-size: clamp(21px, 1.75vw, 28px); font-weight: 680; line-height: 1; white-space: nowrap; filter: grayscale(1); }
-.coverage-disclaimer { max-width: 760px; margin: 19px auto 0; padding-inline: 24px; color: color-mix(in oklab, var(--foreground) 38%, transparent); font-size: 9px; line-height: 1.5; }
+.coverage-disclaimer { max-width: 760px; margin: 17px auto 0; padding-inline: 24px; color: color-mix(in oklab, var(--foreground) 38%, transparent); font-size: 9px; line-height: 1.5; }
 @keyframes coverage-left { to { transform: translateX(-25%); } }
 @keyframes sheet-change { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -411,7 +410,7 @@
 
 @media (max-width: 767px) {
   .home-continuum > .onboarding-scene { min-height: 100svh; }
-  .home-continuum > .onboarding-scene .onboarding-grid { min-height: auto; padding-bottom: 40px; }
+  .home-continuum > .onboarding-scene .onboarding-grid { min-height: auto; padding-bottom: 36px; }
   .home-page { min-height: 100svh; }
   .home-page { background: linear-gradient(180deg, var(--background) 0%, var(--background) 58%, var(--home-field) 72%, var(--home-field-deep) 108%); }
   .opportunity-map { inset: 60% -42% -8%; }
@@ -430,9 +429,11 @@
   .onboarding-nav nav > a:first-child { display: none; }
   .onboarding-nav nav > a:nth-child(2) { display: none; }
   .onboarding-grid { display: block; min-height: auto; padding: 30px 16px 40px; }
-  .onboarding-promise { padding: 0 4px 28px; }
+  .onboarding-promise { padding: 0 4px 34px; }
   .onboarding-promise h1 { max-width: 360px; font-size: 40px; line-height: 1.02; letter-spacing: -1px; }
-  .onboarding-promise > p, .onboarding-promise > .home-primary, .onboarding-promise small { display: none; }
+  .onboarding-promise > p { display: block; max-width: 340px; margin-top: 21px; font-size: 16px; line-height: 1.45; }
+  .onboarding-promise > .home-primary { display: inline-flex; width: 100%; height: 58px; margin-top: 24px; }
+  .onboarding-promise small { display: block; margin-top: 11px; }
   .onboarding-sheet { width: 100%; min-height: 520px; justify-self: auto; padding: 30px 22px; }
   .onboarding-sheet-flow { min-height: 610px; }
   .sheet-intro h2, .sheet-step h2, .matching-card h2 { font-size: 29px; }
@@ -440,9 +441,8 @@
   .sheet-step-body { max-height: none; overflow: visible; }
   .sheet-actions { position: sticky; bottom: 0; margin: 18px -22px -26px; padding: 14px 22px 18px; border-top: 1px solid var(--border); background: var(--background); }
   .onboarding-trust { position: relative; bottom: auto; left: auto; flex-direction: column; transform: none; gap: 6px; padding: 0 20px 28px; text-align: center; }
-  .coverage-section { min-height: 280px; padding: 40px 0 26px; }
-  .coverage-heading h2 { max-width: 340px; font-size: 25px; }
-  .coverage-heading > p:last-child { font-size: 13px; }
+  .coverage-section { min-height: 250px; padding: 34px 0 24px; }
+  .coverage-heading h2 { max-width: 340px; font-size: 23px; }
   .coverage-wall { margin-top: 25px; mask-image: linear-gradient(to right, transparent, black 13%, black 87%, transparent); }
   .coverage-marquee { padding-block: 11px; }
   .coverage-group { gap: 38px; padding-right: 38px; }

@@ -35,11 +35,11 @@ function Index() {
 
   return (
     <div className="home-continuum">
-      <OnboardingShell trust>
+      <OnboardingShell>
         <div className="sheet-intro">
-          <p className="sheet-kicker">Empezá por lo importante</p>
-          <h2>¿Qué trabajo estás buscando?</h2>
-          <p className="sheet-subtitle">Definí tu búsqueda. Después completamos tu perfil una sola vez.</p>
+          <p className="sheet-kicker">Empezá en segundos</p>
+          <h2>¿Qué trabajo buscás?</h2>
+          <p className="sheet-subtitle">Decinos qué querés y empezamos.</p>
         </div>
         <form onSubmit={submitSearch} className="sheet-form mt-8" aria-label="Buscar trabajos">
           <label className="sheet-field">
@@ -62,9 +62,8 @@ function Index() {
 
       <section className="coverage-section" aria-labelledby="coverage-title">
         <div className="coverage-heading">
-          <p className="coverage-kicker">Oportunidades en todo el mercado</p>
-          <h2 id="coverage-title">Encontrá oportunidades en empresas de toda la región.</h2>
-          <p>Desde startups hasta compañías con alcance global.</p>
+          <p className="coverage-kicker">Vacantes en empresas de la región y el mundo</p>
+          <h2 id="coverage-title">Más lugares para encontrar tu próximo trabajo.</h2>
         </div>
         <div className="coverage-wall" aria-label={`Cobertura de oportunidades públicas en ${coveredCompanies.join(", ")}`}>
           <div className="coverage-marquee">
@@ -77,7 +76,7 @@ function Index() {
               </div>
           </div>
         </div>
-        <p className="coverage-disclaimer">Las marcas pertenecen a sus respectivos propietarios. La inclusión indica disponibilidad de oportunidades públicas y no implica afiliación con Aplica.</p>
+        <p className="coverage-disclaimer">La inclusión de marcas indica disponibilidad de oportunidades públicas y no implica afiliación.</p>
       </section>
     </div>
   );
