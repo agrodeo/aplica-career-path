@@ -43,7 +43,7 @@ const titles = [
   "¿Qué trabajo querés conseguir?",
   "Subí tu CV",
   "Primero, confirmemos quién sos",
-  "Revisá tu experiencia principal",
+  "Revisá tu experiencia laboral",
   "¿Qué hacías realmente en ese trabajo?",
   "¿Qué herramientas usabas?",
   "¿Qué resultados lograste?",
@@ -516,7 +516,20 @@ export function OnboardingFlow() {
   };
 
   const addExperience = () =>
-    setExperiences((current) => [...current, emptyExperience()]);
+    setExperiences((current) => {
+      if (current.length) return [...current, emptyExperience()];
+      const primary: ExperienceDraft = {
+        company: profile.company,
+        title: profile.role,
+        start: profile.start,
+        end: profile.end,
+        description: profile.description,
+        achievements: profile.achievements,
+        location: "",
+        confidence: null,
+      };
+      return [primary, emptyExperience()];
+    });
 
   const removeExperience = (index: number) =>
     setExperiences((current) => {
@@ -1356,8 +1369,21 @@ function renderStep(step: number, p: StepProps): ReactNode {
             Aplica puede usar para matching y CVs.
           </p>
 
-          {(p.experiences.length ? p.experiences : [emptyExperience()]).map(
-            (experience, index) => (
+          {(p.experiences.length
+            ? p.experiences
+            : [
+                {
+                  company: p.profile.company,
+                  title: p.profile.role,
+                  start: p.profile.start,
+                  end: p.profile.end,
+                  description: p.profile.description,
+                  achievements: p.profile.achievements,
+                  location: "",
+                  confidence: null,
+                },
+              ]
+          ).map((experience, index) => (
               <div
                 key={index}
                 className="rounded-xl border border-border bg-surface p-4"
