@@ -5,7 +5,18 @@ import type { WorkerDb } from "./worker-api.server";
  * This is the ONLY way the worker receives personal data: scoped to one user,
  * one job, one attempt. There is no bulk export path anywhere in the contract.
  */
-export async function buildApplicationPayload(db: WorkerDb, queue: { id: string; user_id: string; job_id: string; attempt_id: string; batch_id: string | null; attempts: number }) {
+export async function buildApplicationPayload(
+  db: WorkerDb,
+  queue: {
+    id: string;
+    user_id: string;
+    job_id: string;
+    attempt_id: string;
+    batch_id: string | null;
+    attempts: number;
+    test_mode: boolean;
+  },
+) {
   const userId = queue.user_id;
 
   const [
@@ -69,6 +80,7 @@ export async function buildApplicationPayload(db: WorkerDb, queue: { id: string;
     queue_id: queue.id,
     attempt_number: queue.attempts,
     batch_id: queue.batch_id,
+    test_mode: queue.test_mode,
     job: {
       id: jobRow.id,
       title: jobRow.title,
