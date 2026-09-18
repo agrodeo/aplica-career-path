@@ -293,8 +293,9 @@
   box-shadow: var(--home-card-shadow);
 }
 .onboarding-sheet-demo { width: min(100%, 600px); height: 520px; min-height: 500px; padding: 0; overflow: hidden; }
-.product-demo { height: 100%; }
-.product-demo-frame { position: relative; display: flex; height: 100%; flex-direction: column; padding: 42px 46px; animation: demo-frame-in 280ms ease-out both; }
+.product-demo { position: relative; height: 100%; }
+.product-demo-frame { position: absolute; inset: 0; display: flex; height: 100%; flex-direction: column; padding: 42px 46px; will-change: transform, opacity, filter; animation: demo-frame-in 620ms cubic-bezier(.16,.84,.28,1) both; }
+.product-demo-frame.is-exiting { pointer-events: none; animation: demo-frame-out 420ms cubic-bezier(.4,0,.7,.4) both; }
 .demo-progress { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 42px; }
 .demo-progress span { height: 2px; overflow: hidden; border-radius: 2px; background: color-mix(in oklab, var(--foreground) 8%, transparent); }
 .demo-progress span::after { content: ""; display: block; width: 0; height: 100%; background: var(--home-accent); }
