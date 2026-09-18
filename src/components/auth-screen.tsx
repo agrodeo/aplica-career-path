@@ -50,7 +50,21 @@ export function AuthScreen({ mode }: { mode: "login" | "signup" }) {
         password,
       });
       if (signInError) throw signInError;
-      await navigate({ to: "/jobs" });
+
+      const [{ data: profile }, { data: preferences }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id")
+          .maybeSingle(),
+        supabase
+          .from("job_preferences")
+          .select("target_roles")
+          .maybeSingle(),
+      ]);
+      const hasProfile =
+        Boolean(profile?.id) &&
+        Boolean(preferences?.target_roles?.length);
+      await navigate({ to: hasProfile ? "/jobs" : "/onboarding" });
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "No pudimos completar la operación.";
       setError(message);
