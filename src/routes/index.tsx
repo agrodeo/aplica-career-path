@@ -21,7 +21,7 @@ function Index() {
         <ProductDemo />
       </OnboardingShell>
 
-      <section className="coverage-section" aria-labelledby="coverage-title">
+      <section className="coverage-section" aria-label="Cobertura de oportunidades">
         <div className="coverage-heading">
           <p className="coverage-kicker">Vacantes en más de 10.000 empresas</p>
         </div>
