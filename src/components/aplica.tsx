@@ -21,11 +21,11 @@ export function SiteHeader({ simple = false }: { simple?: boolean }) {
       {!simple && product && <nav className="hidden items-center gap-7 md:flex" aria-label="Principal">
         <NavLink to="/jobs">Trabajos</NavLink><NavLink to="/applications">Aplicaciones</NavLink><NavLink to="/profile">Perfil</NavLink>
       </nav>}
-      {!simple && !product && <nav className="hidden items-center gap-6 md:flex"><a className="text-sm text-muted-foreground hover:text-foreground" href="#como-funciona">Cómo funciona</a><Link className="text-sm text-muted-foreground hover:text-foreground" to="/login">Ingresar</Link><Button asChild size="sm"><Link to="/onboarding">Empezar</Link></Button></nav>}
+      {!simple && !product && <nav className="hidden items-center gap-6 md:flex"><a className="text-sm text-muted-foreground hover:text-foreground" href="#como-funciona">Cómo funciona</a><Link className="text-sm text-muted-foreground hover:text-foreground" to="/login">Ingresar</Link><Button asChild size="sm"><Link to="/signup">Empezar</Link></Button></nav>}
       {!simple && product && <Link to="/profile" className="hidden h-9 w-9 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background md:flex">SF</Link>}
       {!simple && <Button variant="ghost" size="icon" className="md:hidden" aria-label={open ? "Cerrar menú" : "Abrir menú"} onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</Button>}
     </div>
-    {open && <nav className="border-t border-border bg-background px-5 py-4 md:hidden"><div className="flex flex-col gap-1">{product ? <><MobileLink to="/jobs">Trabajos</MobileLink><MobileLink to="/applications">Aplicaciones</MobileLink><MobileLink to="/profile">Perfil</MobileLink><MobileLink to="/settings">Configuración</MobileLink></> : <><a className="py-3 text-sm" href="#como-funciona">Cómo funciona</a><MobileLink to="/login">Ingresar</MobileLink><Button asChild className="mt-2"><Link to="/onboarding">Empezar</Link></Button></>}</div></nav>}
+    {open && <nav className="border-t border-border bg-background px-5 py-4 md:hidden"><div className="flex flex-col gap-1">{product ? <><MobileLink to="/jobs">Trabajos</MobileLink><MobileLink to="/applications">Aplicaciones</MobileLink><MobileLink to="/profile">Perfil</MobileLink><MobileLink to="/settings">Configuración</MobileLink></> : <><a className="py-3 text-sm" href="#como-funciona">Cómo funciona</a><MobileLink to="/login">Ingresar</MobileLink><Button asChild className="mt-2"><Link to="/signup">Empezar</Link></Button></>}</div></nav>}
   </header>;
 }
 

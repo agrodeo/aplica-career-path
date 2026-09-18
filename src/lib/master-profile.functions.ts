@@ -31,7 +31,18 @@ export const getMasterProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MasterProfile> => {
     const { supabase, userId } = context;
-    const [profile, experiences, educations, skills, languages, preferences, answers] = await Promise.all([
+    const [
+      profile,
+      experiences,
+      educations,
+      skills,
+      languages,
+      preferences,
+      answers,
+      careerContext,
+      writingPreferences,
+      facts,
+    ] = await Promise.all([
       supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("experiences").select("*").eq("user_id", userId).order("sort_order", { ascending: true }),
       supabase.from("educations").select("*").eq("user_id", userId),
@@ -39,6 +50,14 @@ export const getMasterProfile = createServerFn({ method: "GET" })
       supabase.from("languages").select("*").eq("user_id", userId),
       supabase.from("job_preferences").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("application_answers").select("*").eq("user_id", userId),
+      supabase.from("career_contexts").select("*").eq("user_id", userId).maybeSingle(),
+      supabase.from("writing_preferences").select("*").eq("user_id", userId).maybeSingle(),
+      supabase
+        .from("fact_ledger")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("user_confirmed", true)
+        .eq("allowed_for_resume", true),
     ]);
 
     const p = profile.data;
@@ -111,6 +130,37 @@ export const getMasterProfile = createServerFn({ method: "GET" })
       })),
       links: { linkedin: p?.linkedin_url ?? "", portfolio: p?.portfolio_url ?? "" },
       baseResumePath: p?.base_resume_path ?? null,
+      careerContext: {
+        preferredTasks: careerContext.data?.preferred_tasks ?? [],
+        avoidTasks: careerContext.data?.avoid_tasks ?? [],
+        strengths: careerContext.data?.strengths ?? [],
+        differentiators: careerContext.data?.differentiators ?? [],
+        tools: careerContext.data?.tools ?? [],
+        responsibilities: careerContext.data?.responsibilities ?? [],
+        results: careerContext.data?.results ?? [],
+        proudProject: careerContext.data?.proud_project ?? "",
+        challengeStory: careerContext.data?.challenge_story ?? "",
+        careerGoal: careerContext.data?.career_goal ?? "",
+        targetEnvironment: careerContext.data?.target_environment ?? "",
+        availability: careerContext.data?.availability ?? "",
+        travelPreference: careerContext.data?.travel_preference ?? "",
+      },
+      writingPreferences: {
+        voice: (writingPreferences.data?.voice ?? "balanced") as "direct" | "ambitious" | "technical" | "balanced",
+        emphasis: writingPreferences.data?.emphasis ?? [],
+        deEmphasis: writingPreferences.data?.de_emphasis ?? [],
+        summaryStyle: writingPreferences.data?.summary_style ?? "concise",
+      },
+      facts: (facts.data ?? []).map((fact) => ({
+        id: fact.id,
+        factType: fact.fact_type,
+        claim: fact.claim,
+        sourceType: fact.source_type,
+        sourceRef: fact.source_ref,
+        userConfirmed: fact.user_confirmed,
+        allowedForResume: fact.allowed_for_resume,
+        confidence: Number(fact.confidence),
+      })),
     };
   });
 

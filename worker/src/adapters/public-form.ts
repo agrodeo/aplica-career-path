@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
+import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { SENSITIVE_KEYS, type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
@@ -63,7 +63,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const form = page.locator(options.formSelector).first();
       const formExists = (await form.count()) > 0;
-      const fields = formExists ? await readFields(page, options.formSelector) : [];
+      const fields = formExists
+        ? await readFields(page, options.formSelector, url)
+        : [];
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
@@ -76,12 +78,13 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
       const unknownRequiredFields = fields
         .filter(
-          (f) =>
-            f.required &&
-            !f.canonicalKey &&
-            !(f.demographic && f.options && findDeclineOption(f.options)),
+          (field) =>
+            field.required &&
+            !field.canonicalKey &&
+            (field.type === "unknown" || field.type === "file") &&
+            !(field.demographic && field.options && findDeclineOption(field.options)),
         )
-        .map((f) => f.label);
+        .map((field) => field.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
@@ -123,6 +126,22 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           continue;
         }
 
+        if (field.type === "checkbox") {
+          const storedCheckbox = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (
+            !storedCheckbox ||
+            storedCheckbox.answerType !== "boolean" ||
+            storedCheckbox.booleanValue !== true
+          ) {
+            missingProfileAnswers.push(field.label);
+            continue;
+          }
+        }
+
         // MVP only generates/uploads the resume. Required extra documents are
         // a capability gap of the adapter, not a profile gap.
         if (field.type === "file") {
@@ -131,7 +150,16 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         }
 
         if (!field.canonicalKey) {
-          unsupportedFields.push(field.label);
+          if (field.type === "unknown") {
+            unsupportedFields.push(field.label);
+            continue;
+          }
+          const custom = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (!custom) missingProfileAnswers.push(field.label);
           continue;
         }
 
@@ -272,6 +300,8 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
       return Boolean(profile.identity.phone);
     case "location":
       return Boolean(profile.identity.city || profile.identity.country);
+    case "country":
+      return Boolean(profile.identity.country);
     case "linkedin":
       return Boolean(profile.links.linkedin);
     case "portfolio":
@@ -286,13 +316,40 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     case "resume":
       return true;
     case "cover_letter":
-      return Boolean(profile.identity.professionalSummary || profile.experience.length);
+      return Boolean(
+        profile.identity.professionalSummary ||
+          profile.experience.length ||
+          profile.facts.length,
+      );
+    case "motivation":
+      return Boolean(
+        profile.careerContext.careerGoal ||
+          profile.careerContext.preferredTasks.length ||
+          profile.facts.length,
+      );
+    case "about_you":
+      return Boolean(
+        profile.identity.currentTitle ||
+          profile.experience.length ||
+          profile.facts.length,
+      );
+    case "challenge_story":
+      return Boolean(profile.careerContext.challengeStory);
+    case "proud_achievement":
+      return Boolean(
+        profile.careerContext.proudProject ||
+          profile.careerContext.results.length,
+      );
     default:
       return Boolean(stored);
   }
 }
 
-async function readFields(page: Page, formSelector: string): Promise<InspectedField[]> {
+async function readFields(
+  page: Page,
+  formSelector: string,
+  applicationUrl: string,
+): Promise<InspectedField[]> {
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
     if (!form) return [];
@@ -383,13 +440,15 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
 
   return raw.map((field) => {
     const type = normalizeType(field.type);
+    const canonicalKey = canonicalKeyFor(field.label);
     return {
       selector: field.selector,
       label: field.label,
+      answerKey: answerKeyFor(field.label, applicationUrl),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
-      canonicalKey: canonicalKeyFor(field.label),
+      canonicalKey,
       demographic: isDemographicQuestion(field.label),
     } satisfies InspectedField;
   });

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
+import {
+  prepareAnswers,
+  validateGeneratedAnswer,
+} from "../application/answers.js";
 import { createPublicFormAdapter } from "./public-form.js";
 import type { MasterProfile } from "./types.js";
 
@@ -48,6 +55,28 @@ const baseProfile: MasterProfile = {
   languages: [{ language: "Español", level: "Nativo" }],
   verifiedApplicationAnswers: [],
   links: { linkedin: "https://linkedin.com/in/example", portfolio: "" },
+  careerContext: {
+    preferredTasks: [],
+    avoidTasks: [],
+    strengths: [],
+    differentiators: [],
+    tools: [],
+    responsibilities: [],
+    results: [],
+    proudProject: "",
+    challengeStory: "",
+    careerGoal: "",
+    targetEnvironment: "",
+    availability: "",
+    travelPreference: "",
+  },
+  writingPreferences: {
+    voice: "balanced",
+    emphasis: [],
+    deEmphasis: [],
+    summaryStyle: "concise",
+  },
+  facts: [],
 };
 
 function html(extra = "") {
@@ -62,6 +91,13 @@ function html(extra = "") {
 
   <label for="email">Email *</label>
   <input id="email" name="email" type="email" required />
+
+  <label for="country">Country *</label>
+  <select id="country" name="country" required>
+    <option value="">Select</option>
+    <option value="AR">Argentina</option>
+    <option value="US">United States</option>
+  </select>
 
   <label for="resume">Resume/CV *</label>
   <input id="resume" name="resume" type="file" required />
@@ -78,15 +114,43 @@ function html(extra = "") {
 </body></html>`;
 }
 
+function withSponsorship(profile: MasterProfile = baseProfile): MasterProfile {
+  return {
+    ...profile,
+    verifiedApplicationAnswers: [
+      ...profile.verifiedApplicationAnswers,
+      {
+        canonicalKey: "sponsorship",
+        answerType: "boolean",
+        booleanValue: false,
+        textValue: null,
+        numericValue: null,
+        userConfirmed: true,
+      },
+    ],
+  };
+}
+
 before(async () => {
   server = createServer((request, response) => {
-    const unknown = request.url?.includes("unknown");
+    const custom = request.url?.includes("custom");
+    const unsupported = request.url?.includes("unsupported");
     const cover = request.url?.includes("cover");
-    const extra = unknown
-      ? '<label for="mystery">Favorite moon *</label><input id="mystery" required />'
-      : cover
-        ? '<label for="cover">Cover Letter *</label><input id="cover" type="file" required />'
-        : "";
+    const checkbox = request.url?.includes("checkbox");
+    const narrative = request.url?.includes("narrative");
+
+    const extra = custom
+      ? '<label for="moon">Favorite moon *</label><select id="moon" required><option value="">Select</option><option value="europa">Europa</option><option value="titan">Titan</option></select>'
+      : unsupported
+        ? '<label for="start">Exact availability date *</label><input id="start" type="date" required />'
+        : cover
+          ? '<label for="cover">Cover Letter *</label><input id="cover" type="file" required />'
+          : checkbox
+            ? '<label><input id="privacy" type="checkbox" required /> I agree to the privacy notice *</label>'
+            : narrative
+              ? '<label for="motivation">Why are you interested in this role? *</label><textarea id="motivation" required></textarea><label for="challenge">Tell us about a challenge you faced *</label><textarea id="challenge" required></textarea>'
+              : "";
+
     response.writeHead(200, { "content-type": "text/html" });
     response.end(html(extra));
   });
@@ -125,6 +189,76 @@ test("radio group question maps to sponsorship instead of Yes/No option label", 
   }
 });
 
+test("country is mapped from the profile to the ATS option value", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(baseUrl, page);
+    const profile = withSponsorship();
+    const answers = prepareAnswers(schema, profile, {
+      id: "job",
+      title: "Growth Analyst",
+      description: "",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    });
+    const country = answers.find((answer) => answer.field.canonicalKey === "country");
+    assert.equal(country?.value, "AR");
+  } finally {
+    await page.close();
+  }
+});
+
+test("dry run fills verified fields and stops before final submit", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(baseUrl, page);
+    const profile = withSponsorship();
+    const job = {
+      id: "job",
+      title: "Growth Analyst",
+      description: "",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    };
+    const answers = prepareAnswers(schema, profile, job);
+
+    const dir = await mkdtemp(join(tmpdir(), "aplica-test-"));
+    const resumePath = join(dir, "resume.pdf");
+    await writeFile(resumePath, Buffer.from("%PDF-1.4\n% test resume"));
+
+    const result = await adapter.submit({
+      job,
+      profile,
+      schema,
+      answers,
+      resumePath,
+      page,
+      dryRun: true,
+    });
+
+    assert.equal(result.dryRun, true);
+    assert.equal(result.submitted, false);
+    assert.equal(await page.locator("#first_name").inputValue(), "Sofia");
+    assert.equal(await page.locator("#last_name").inputValue(), "Fernandez");
+    assert.equal(await page.locator("#email").inputValue(), "sofia@example.com");
+    assert.equal(await page.locator("#country").inputValue(), "AR");
+    assert.equal(
+      await page.locator('input[name="sponsorship"]:checked').inputValue(),
+      "no",
+    );
+    const uploadedFiles = await page.locator("#resume").evaluate(
+      (input) => (input as HTMLInputElement).files?.length ?? 0,
+    );
+    assert.equal(uploadedFiles, 1);
+  } finally {
+    await page.close();
+  }
+});
+
 test("missing user sponsorship answer is PROFILE_INCOMPLETE, not a global unsupported job", async () => {
   const page = await browser.newPage();
   try {
@@ -141,11 +275,91 @@ test("explicit sensitive answer makes the same form eligible", async () => {
   const page = await browser.newPage();
   try {
     const schema = await adapter.inspect(baseUrl, page);
+    const eligibility = await adapter.canSubmit(schema, withSponsorship());
+    assert.equal(eligibility.eligible, true);
+  } finally {
+    await page.close();
+  }
+});
+
+test("custom required select is a user answer gap, not a global adapter blocker", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(`${baseUrl}/custom`, page);
+    assert.equal(schema.unknownRequiredFields.length, 0);
+
+    const missing = await adapter.canSubmit(schema, withSponsorship());
+    assert.equal(missing.failureCode, "PROFILE_INCOMPLETE");
+
+    const customField = schema.fields.find((field) => /favorite moon/i.test(field.label));
+    assert.ok(customField);
+
     const profile: MasterProfile = {
-      ...baseProfile,
+      ...withSponsorship(),
       verifiedApplicationAnswers: [
+        ...withSponsorship().verifiedApplicationAnswers,
         {
-          canonicalKey: "sponsorship",
+          canonicalKey: customField.answerKey,
+          answerType: "text",
+          booleanValue: null,
+          textValue: "europa",
+          numericValue: null,
+          userConfirmed: true,
+        },
+      ],
+    };
+
+    const eligible = await adapter.canSubmit(schema, profile);
+    assert.equal(eligible.eligible, true);
+
+    const answers = prepareAnswers(schema, profile, {
+      id: "job",
+      title: "Growth Analyst",
+      description: "",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    });
+    const customAnswer = answers.find((answer) => answer.field.answerKey === customField.answerKey);
+    assert.equal(customAnswer?.value, "europa");
+    assert.equal(customAnswer?.source, "verified_answer");
+  } finally {
+    await page.close();
+  }
+});
+
+test("custom answers are scoped to the application URL", async () => {
+  const first = await browser.newPage();
+  const second = await browser.newPage();
+  try {
+    const schemaA = await adapter.inspect(`${baseUrl}/custom?a=1`, first);
+    const schemaB = await adapter.inspect(`${baseUrl}/custom?a=2`, second);
+    const fieldA = schemaA.fields.find((field) => /favorite moon/i.test(field.label));
+    const fieldB = schemaB.fields.find((field) => /favorite moon/i.test(field.label));
+    assert.ok(fieldA);
+    assert.ok(fieldB);
+    assert.notEqual(fieldA.answerKey, fieldB.answerKey);
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+
+test("required checkbox must be explicitly accepted, not merely answered", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(`${baseUrl}/checkbox`, page);
+    const checkbox = schema.fields.find((field) => field.type === "checkbox");
+    assert.ok(checkbox);
+
+    const base = withSponsorship();
+    const declined: MasterProfile = {
+      ...base,
+      verifiedApplicationAnswers: [
+        ...base.verifiedApplicationAnswers,
+        {
+          canonicalKey: checkbox.answerKey,
           answerType: "boolean",
           booleanValue: false,
           textValue: null,
@@ -154,19 +368,37 @@ test("explicit sensitive answer makes the same form eligible", async () => {
         },
       ],
     };
-    const eligibility = await adapter.canSubmit(schema, profile);
-    assert.equal(eligibility.eligible, true);
+    assert.equal(
+      (await adapter.canSubmit(schema, declined)).failureCode,
+      "PROFILE_INCOMPLETE",
+    );
+
+    const accepted: MasterProfile = {
+      ...base,
+      verifiedApplicationAnswers: [
+        ...base.verifiedApplicationAnswers,
+        {
+          canonicalKey: checkbox.answerKey,
+          answerType: "boolean",
+          booleanValue: true,
+          textValue: null,
+          numericValue: null,
+          userConfirmed: true,
+        },
+      ],
+    };
+    assert.equal((await adapter.canSubmit(schema, accepted)).eligible, true);
   } finally {
     await page.close();
   }
 });
 
-test("unknown required form field is a global adapter blocker", async () => {
+test("truly unsupported required control remains a global adapter blocker", async () => {
   const page = await browser.newPage();
   try {
-    const schema = await adapter.inspect(`${baseUrl}/unknown`, page);
-    assert.ok(schema.unknownRequiredFields.includes("Favorite moon *"));
-    const eligibility = await adapter.canSubmit(schema, baseProfile);
+    const schema = await adapter.inspect(`${baseUrl}/unsupported`, page);
+    assert.ok(schema.unknownRequiredFields.includes("Exact availability date *"));
+    const eligibility = await adapter.canSubmit(schema, withSponsorship());
     assert.equal(eligibility.failureCode, "UNSUPPORTED_FIELD");
   } finally {
     await page.close();
@@ -177,23 +409,103 @@ test("required extra file is unsupported until we intentionally generate it", as
   const page = await browser.newPage();
   try {
     const schema = await adapter.inspect(`${baseUrl}/cover`, page);
-    const profile: MasterProfile = {
-      ...baseProfile,
-      verifiedApplicationAnswers: [
-        {
-          canonicalKey: "sponsorship",
-          answerType: "boolean",
-          booleanValue: false,
-          textValue: null,
-          numericValue: null,
-          userConfirmed: true,
-        },
-      ],
-    };
-    const eligibility = await adapter.canSubmit(schema, profile);
+    const eligibility = await adapter.canSubmit(schema, withSponsorship());
     assert.equal(eligibility.failureCode, "UNSUPPORTED_FIELD");
-    assert.ok(eligibility.unknownRequiredFields.some((field) => /cover letter/i.test(field)));
+    assert.ok(
+      eligibility.unknownRequiredFields.some((field) => /cover letter/i.test(field)),
+    );
   } finally {
     await page.close();
   }
+});
+
+
+test("common narrative questions use confirmed career context instead of becoming custom gaps", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(`${baseUrl}/narrative`, page);
+    const motivation = schema.fields.find(
+      (field) => field.canonicalKey === "motivation",
+    );
+    const challenge = schema.fields.find(
+      (field) => field.canonicalKey === "challenge_story",
+    );
+    assert.ok(motivation);
+    assert.ok(challenge);
+
+    const base = withSponsorship();
+    const profile: MasterProfile = {
+      ...base,
+      careerContext: {
+        ...base.careerContext,
+        careerGoal: "Trabajar en productos con crecimiento medible",
+        preferredTasks: ["Analizar adquisición"],
+        challengeStory:
+          "Detecté una caída en conversión, revisé el funnel y corregí el seguimiento de eventos.",
+      },
+    };
+
+    const eligibility = await adapter.canSubmit(schema, profile);
+    assert.equal(eligibility.eligible, true);
+
+    const answers = prepareAnswers(schema, profile, {
+      id: "job",
+      title: "Growth Analyst",
+      description: "Analizar adquisición y experimentos de crecimiento.",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    });
+
+    assert.equal(
+      answers.find((answer) => answer.field.canonicalKey === "challenge_story")
+        ?.value,
+      profile.careerContext.challengeStory,
+    );
+    assert.equal(
+      answers.find((answer) => answer.field.canonicalKey === "motivation")
+        ?.source,
+      "generated",
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test("generated answer validator accepts confirmed context and rejects invented metrics", () => {
+  const profile: MasterProfile = {
+    ...withSponsorship(),
+    careerContext: {
+      ...withSponsorship().careerContext,
+      results: ["Aumenté la conversión 12%"],
+      careerGoal: "Seguir trabajando en crecimiento de producto",
+    },
+  };
+  const job = {
+    id: "job",
+    title: "Growth Analyst",
+    description: "Buscamos alguien para analizar adquisición.",
+    company: "Example",
+    location: "Buenos Aires",
+    applicationUrl: baseUrl,
+    atsType: "test",
+  };
+
+  assert.equal(
+    validateGeneratedAnswer(
+      "Entre mis resultados confirmados está: Aumenté la conversión 12%.",
+      profile,
+      job,
+    ).valid,
+    true,
+  );
+
+  const invalid = validateGeneratedAnswer(
+    "Aumenté la conversión 90%.",
+    profile,
+    job,
+  );
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.unsupportedClaims.includes("90%"));
 });

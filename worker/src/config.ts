@@ -12,6 +12,11 @@ const schema = z.object({
   POLL_INTERVAL_MS: z.coerce.number().default(5000),
   MAX_CONCURRENCY: z.coerce.number().min(1).max(4).default(1),
   LOG_LEVEL: z.string().default("info"),
+  OPENAI_API_KEY: z.string().min(20).optional(),
+  RESUME_LLM_MODEL: z.string().min(1).optional(),
+  RESUME_LLM_VERIFIER_MODEL: z.string().min(1).optional(),
+  APPLICATION_LLM_MODEL: z.string().min(1).optional(),
+  APPLICATION_LLM_VERIFIER_MODEL: z.string().min(1).optional(),
 });
 
 export type WorkerConfig = z.infer<typeof schema>;

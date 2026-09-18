@@ -48,6 +48,40 @@ export interface MasterLanguage {
   level: string;
 }
 
+export interface CareerContext {
+  preferredTasks: string[];
+  avoidTasks: string[];
+  strengths: string[];
+  differentiators: string[];
+  tools: string[];
+  responsibilities: string[];
+  results: string[];
+  proudProject: string;
+  challengeStory: string;
+  careerGoal: string;
+  targetEnvironment: string;
+  availability: string;
+  travelPreference: string;
+}
+
+export interface WritingPreferences {
+  voice: "direct" | "ambitious" | "technical" | "balanced";
+  emphasis: string[];
+  deEmphasis: string[];
+  summaryStyle: string;
+}
+
+export interface ResumeFact {
+  id: string;
+  factType: string;
+  claim: string;
+  sourceType: string;
+  sourceRef: string | null;
+  userConfirmed: boolean;
+  allowedForResume: boolean;
+  confidence: number;
+}
+
 export interface MasterPreferences {
   targetRoles: string[];
   targetLocations: string[];
@@ -90,6 +124,9 @@ export interface MasterProfile {
   verifiedApplicationAnswers: VerifiedApplicationAnswer[];
   links: { linkedin: string; portfolio: string };
   baseResumePath: string | null;
+  careerContext: CareerContext;
+  writingPreferences: WritingPreferences;
+  facts: ResumeFact[];
 }
 
 export interface JobRecord {

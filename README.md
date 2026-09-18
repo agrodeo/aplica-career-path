@@ -1756,3 +1756,26 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+
+## Structured CV extraction
+
+Aplica no relies on regex as the primary CV parser anymore. The browser first
+extracts PDF/DOCX text, preserving PDF visual row order where possible, then the
+authenticated app server can run an evidence-grounded structured extractor.
+
+Configure the app/server environment:
+
+```env
+OPENAI_API_KEY=...
+CV_EXTRACTION_MODEL=...
+```
+
+The extractor returns every work experience separately and must provide
+verbatim evidence for company, title, dates and description. Server-side
+validation drops employers/titles that cannot be found in the source document
+and removes unsupported descriptions. The user then reviews every extracted
+experience before it becomes a verified MasterProfile fact.
+
+If the structured extractor is not configured or temporarily fails, Aplica
+falls back to the deterministic parser instead of blocking onboarding.

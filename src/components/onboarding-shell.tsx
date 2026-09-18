@@ -15,7 +15,7 @@ export function OnboardingShell({ children, trust = false, flow = false, classNa
           <Link className="text-sm text-foreground/75 transition-colors hover:text-foreground" to="/login">Ingresar</Link>
           {!flow && (
             <Button asChild variant="outline" size="sm" className="h-9 rounded-[10px] bg-background px-4 font-medium shadow-none">
-              <Link to="/onboarding">Empezar <ArrowRight className="h-3.5 w-3.5" /></Link>
+              <Link to="/signup">Empezar <ArrowRight className="h-3.5 w-3.5" /></Link>
             </Button>
           )}
         </nav>
@@ -31,7 +31,7 @@ export function OnboardingShell({ children, trust = false, flow = false, classNa
             <h1>La forma más rápida<br />de conseguir <span>trabajo.</span></h1>
             <p>Subí tu CV y aplicá más rápido a trabajos que encajan con vos.</p>
             <Button asChild size="lg" className="home-primary mt-8 h-[66px] w-[330px] rounded-[12px] text-[19px] font-semibold">
-              <Link to="/onboarding">Empezar ahora <ArrowRight /></Link>
+              <Link to="/signup">Empezar ahora <ArrowRight /></Link>
             </Button>
             <small>Tu perfil usa información real.</small>
           </section>
