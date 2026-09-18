@@ -281,6 +281,24 @@ export async function processInspection(item: InspectionItem): Promise<void> {
 
     await withIsolatedPage(async (page) => {
       const schema = await adapter.inspect(item.url, page);
+      const unsupportedRequiredFiles = schema.fields
+        .filter(
+          (field) =>
+            field.required &&
+            field.type === "file" &&
+            field.canonicalKey !== "resume",
+        )
+        .map((field) => field.label);
+      const structuralBlockers = [
+        ...schema.unknownRequiredFields,
+        ...unsupportedRequiredFiles,
+      ];
+      const autoApplyEligible =
+        schema.valid &&
+        schema.supportsFileUpload &&
+        schema.supportsAutoSubmit &&
+        structuralBlockers.length === 0;
+
       await reportInspection(item.id, {
         status: "completed",
         adapter: adapter.id,
@@ -289,36 +307,40 @@ export async function processInspection(item: InspectionItem): Promise<void> {
         captchaDetected: schema.captchaDetected,
         loginRequired: schema.loginRequired,
         requiredFields: schema.requiredFields,
+        unknownRequiredFields: schema.unknownRequiredFields,
+        supportsFileUpload: schema.supportsFileUpload,
+        supportsAutoSubmit: schema.supportsAutoSubmit,
+        valid: schema.valid,
+        fields: schema.fields,
         mappedFields: schema.fields
-          .filter((f) => f.canonicalKey)
-          .map((f) => ({
-            label: f.label,
-            canonicalKey: f.canonicalKey,
-            type: f.type,
-            required: f.required,
+          .filter((field) => field.canonicalKey)
+          .map((field) => ({
+            label: field.label,
+            canonicalKey: field.canonicalKey,
+            type: field.type,
+            required: field.required,
           })),
         unknownFields: schema.fields
-          .filter((f) => !f.canonicalKey)
-          .map((f) => ({
-            label: f.label,
-            type: f.type,
-            required: f.required,
+          .filter((field) => !field.canonicalKey)
+          .map((field) => ({
+            label: field.label,
+            type: field.type,
+            required: field.required,
           })),
-        autoApplyEligible:
-          schema.valid &&
-          schema.supportsFileUpload &&
-          schema.unknownRequiredFields.length === 0,
+        autoApplyEligible,
         reason: schema.captchaDetected
           ? "CAPTCHA detectado"
           : schema.loginRequired
             ? "Requiere iniciar sesión"
             : schema.unknownRequiredFields.length
               ? `Preguntas obligatorias no soportadas: ${schema.unknownRequiredFields.join(", ")}`
-              : !schema.supportsFileUpload
-                ? "El formulario no acepta subir un CV"
-                : !schema.submitSelector
-                  ? "No se encontró el control de envío"
-                  : null,
+              : unsupportedRequiredFiles.length
+                ? `Archivos obligatorios no soportados: ${unsupportedRequiredFiles.join(", ")}`
+                : !schema.supportsFileUpload
+                  ? "El formulario no acepta subir un CV"
+                  : !schema.submitSelector
+                    ? "No se encontró el control de envío"
+                    : null,
       });
     });
   } catch (error) {
