@@ -277,10 +277,10 @@
   .map-canvas { min-width: 760px; }
   .map-label-role { font-size: 12px; }
   .map-label-match { font-size: 11px; }
-  .map-label-product-growth { left: 20%; top: 30%; }
+  .map-label-product-growth { left: 31%; top: 30%; }
   .map-label-growth { left: 56%; top: 20%; }
   .map-label-analyst { left: 43%; top: 48%; }
-  .map-label-marketing { left: 72%; top: 63%; }
+  .map-label-marketing { left: 61%; top: 63%; }
   .map-label-business, .map-label-product { display: none; }
 }
 
