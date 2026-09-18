@@ -515,6 +515,7 @@
   .coverage-marquee { padding-block: 11px; }
   .coverage-group { gap: 38px; padding-right: 38px; }
   .coverage-logo { font-size: 20px; }
+  .coverage-logo-img { height: 22px; }
   .coverage-disclaimer { max-width: 350px; margin-top: 22px; font-size: 9px; }
 }
 
