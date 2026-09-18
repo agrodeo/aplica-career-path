@@ -429,9 +429,11 @@
   .onboarding-nav nav > a:first-child { display: none; }
   .onboarding-nav nav > a:nth-child(2) { display: none; }
   .onboarding-grid { display: block; min-height: auto; padding: 30px 16px 40px; }
-  .onboarding-promise { padding: 0 4px 28px; }
+  .onboarding-promise { padding: 0 4px 34px; }
   .onboarding-promise h1 { max-width: 360px; font-size: 40px; line-height: 1.02; letter-spacing: -1px; }
-  .onboarding-promise > p, .onboarding-promise > .home-primary, .onboarding-promise small { display: none; }
+  .onboarding-promise > p { display: block; max-width: 340px; margin-top: 21px; font-size: 16px; line-height: 1.45; }
+  .onboarding-promise > .home-primary { display: inline-flex; width: 100%; height: 58px; margin-top: 24px; }
+  .onboarding-promise small { display: block; margin-top: 11px; }
   .onboarding-sheet { width: 100%; min-height: 520px; justify-self: auto; padding: 30px 22px; }
   .onboarding-sheet-flow { min-height: 610px; }
   .sheet-intro h2, .sheet-step h2, .matching-card h2 { font-size: 29px; }
