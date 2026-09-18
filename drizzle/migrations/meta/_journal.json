@@ -8,6 +8,20 @@
       "when": 1789753911975,
       "tag": "0000_auto_apply_core_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789754620582,
+      "tag": "0001_auto_apply_first_submission",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789754643926,
+      "tag": "0002_evidence_and_resume_storage_policies",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,25 @@
+{
+  "name": "aplica-auto-apply-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aplica external Auto Apply worker: prepares, submits and verifies job applications.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.58.0",
+    "pino": "^9.5.0",
+    "playwright": "^1.56.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

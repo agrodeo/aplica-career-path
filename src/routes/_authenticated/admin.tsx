@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { AdapterTestConsole } from "@/components/adapter-test-console";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { getAdminDashboard } from "@/lib/admin.functions";
 import { cn } from "@/lib/utils";
@@ -80,6 +81,8 @@ function AdminPage() {
                 </div>
               ))}
             </div>
+
+            <AdapterTestConsole />
           </>
         )}
       </PageShell>

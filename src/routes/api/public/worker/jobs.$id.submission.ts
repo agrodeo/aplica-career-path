@@ -15,9 +15,11 @@ export const Route = createFileRoute("/api/public/worker/jobs/$id/submission")({
         const body = (await request.json().catch(() => ({}))) as {
           verified?: boolean;
           verificationSignal?: string;
+          verificationType?: string;
+          verificationValue?: string;
           submissionReference?: string;
           evidencePath?: string;
-          answers?: Record<string, unknown>;
+          answers?: Record<string, unknown> | unknown[];
           profileSnapshot?: Record<string, unknown>;
           jobSnapshot?: Record<string, unknown>;
           resumeVariantId?: string;
@@ -42,14 +44,31 @@ export const Route = createFileRoute("/api/public/worker/jobs/$id/submission")({
         if (error) return jsonResponse({ error: error.message }, 500);
 
         if (queueRow?.attempt_id) {
-          await admin.from("application_snapshots").insert({
-            application_attempt_id: queueRow.attempt_id,
-            user_id: queueRow.user_id,
-            resume_variant_id: body.resumeVariantId ?? null,
-            answers: (body.answers ?? {}) as never,
-            profile_snapshot: (body.profileSnapshot ?? {}) as never,
-            job_snapshot: (body.jobSnapshot ?? {}) as never,
-          });
+          await admin
+            .from("application_attempts")
+            .update({
+              verification_type: (body.verificationType ?? body.verificationSignal) as string,
+              verification_value: body.verificationValue ?? body.submissionReference,
+              resume_variant_id: body.resumeVariantId ?? null,
+            })
+            .eq("id", queueRow.attempt_id);
+
+          const { data: existingSnapshot } = await admin
+            .from("application_snapshots")
+            .select("id")
+            .eq("application_attempt_id", queueRow.attempt_id)
+            .maybeSingle();
+
+          if (!existingSnapshot && body.answers) {
+            await admin.from("application_snapshots").insert({
+              application_attempt_id: queueRow.attempt_id,
+              user_id: queueRow.user_id,
+              resume_variant_id: body.resumeVariantId ?? null,
+              answers: (body.answers ?? {}) as never,
+              profile_snapshot: (body.profileSnapshot ?? {}) as never,
+              job_snapshot: (body.jobSnapshot ?? {}) as never,
+            });
+          }
         }
 
         return jsonResponse({ result: data });

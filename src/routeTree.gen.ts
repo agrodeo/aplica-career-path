@@ -22,7 +22,9 @@ import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedApplyingRouteImport } from './routes/_authenticated/applying'
 import { Route as JobsIdRouteImport } from './routes/jobs.$id'
+import { Route as ApiPublicWorkerInspectionsClaimRouteImport } from './routes/api/public/worker/inspections.claim'
 import { Route as ApiPublicWorkerJobsClaimRouteImport } from './routes/api/public/worker/jobs.claim'
+import { Route as ApiPublicWorkerInspectionsIdResultRouteImport } from './routes/api/public/worker/inspections.$id.result'
 import { Route as ApiPublicWorkerJobsIdFailureRouteImport } from './routes/api/public/worker/jobs.$id.failure'
 import { Route as ApiPublicWorkerJobsIdStatusRouteImport } from './routes/api/public/worker/jobs.$id.status'
 import { Route as ApiPublicWorkerJobsIdSubmissionRouteImport } from './routes/api/public/worker/jobs.$id.submission'
@@ -91,10 +93,22 @@ const JobsIdRoute = JobsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => JobsRoute,
 } as any)
+const ApiPublicWorkerInspectionsClaimRoute =
+  ApiPublicWorkerInspectionsClaimRouteImport.update({
+    id: '/api/public/worker/inspections/claim',
+    path: '/api/public/worker/inspections/claim',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicWorkerJobsClaimRoute =
   ApiPublicWorkerJobsClaimRouteImport.update({
     id: '/api/public/worker/jobs/claim',
     path: '/api/public/worker/jobs/claim',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicWorkerInspectionsIdResultRoute =
+  ApiPublicWorkerInspectionsIdResultRouteImport.update({
+    id: '/api/public/worker/inspections/$id/result',
+    path: '/api/public/worker/inspections/$id/result',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicWorkerJobsIdFailureRoute =
@@ -129,7 +143,9 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
   '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
   '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
   '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
@@ -147,7 +163,9 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
   '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
   '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
   '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
@@ -167,7 +185,9 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
+  '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
   '/api/public/worker/jobs/$id/failure': typeof ApiPublicWorkerJobsIdFailureRoute
   '/api/public/worker/jobs/$id/status': typeof ApiPublicWorkerJobsIdStatusRoute
   '/api/public/worker/jobs/$id/submission': typeof ApiPublicWorkerJobsIdSubmissionRoute
@@ -187,7 +207,9 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
+    | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/inspections/$id/result'
     | '/api/public/worker/jobs/$id/failure'
     | '/api/public/worker/jobs/$id/status'
     | '/api/public/worker/jobs/$id/submission'
@@ -205,7 +227,9 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
+    | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/inspections/$id/result'
     | '/api/public/worker/jobs/$id/failure'
     | '/api/public/worker/jobs/$id/status'
     | '/api/public/worker/jobs/$id/submission'
@@ -224,7 +248,9 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/applying'
     | '/jobs/$id'
+    | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
+    | '/api/public/worker/inspections/$id/result'
     | '/api/public/worker/jobs/$id/failure'
     | '/api/public/worker/jobs/$id/status'
     | '/api/public/worker/jobs/$id/submission'
@@ -241,7 +267,9 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   UpgradeRoute: typeof UpgradeRoute
+  ApiPublicWorkerInspectionsClaimRoute: typeof ApiPublicWorkerInspectionsClaimRoute
   ApiPublicWorkerJobsClaimRoute: typeof ApiPublicWorkerJobsClaimRoute
+  ApiPublicWorkerInspectionsIdResultRoute: typeof ApiPublicWorkerInspectionsIdResultRoute
   ApiPublicWorkerJobsIdFailureRoute: typeof ApiPublicWorkerJobsIdFailureRoute
   ApiPublicWorkerJobsIdStatusRoute: typeof ApiPublicWorkerJobsIdStatusRoute
   ApiPublicWorkerJobsIdSubmissionRoute: typeof ApiPublicWorkerJobsIdSubmissionRoute
@@ -340,11 +368,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsIdRouteImport
       parentRoute: typeof JobsRoute
     }
+    '/api/public/worker/inspections/claim': {
+      id: '/api/public/worker/inspections/claim'
+      path: '/api/public/worker/inspections/claim'
+      fullPath: '/api/public/worker/inspections/claim'
+      preLoaderRoute: typeof ApiPublicWorkerInspectionsClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/worker/jobs/claim': {
       id: '/api/public/worker/jobs/claim'
       path: '/api/public/worker/jobs/claim'
       fullPath: '/api/public/worker/jobs/claim'
       preLoaderRoute: typeof ApiPublicWorkerJobsClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/worker/inspections/$id/result': {
+      id: '/api/public/worker/inspections/$id/result'
+      path: '/api/public/worker/inspections/$id/result'
+      fullPath: '/api/public/worker/inspections/$id/result'
+      preLoaderRoute: typeof ApiPublicWorkerInspectionsIdResultRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/worker/jobs/$id/failure': {
@@ -405,7 +447,10 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   UpgradeRoute: UpgradeRoute,
+  ApiPublicWorkerInspectionsClaimRoute: ApiPublicWorkerInspectionsClaimRoute,
   ApiPublicWorkerJobsClaimRoute: ApiPublicWorkerJobsClaimRoute,
+  ApiPublicWorkerInspectionsIdResultRoute:
+    ApiPublicWorkerInspectionsIdResultRoute,
   ApiPublicWorkerJobsIdFailureRoute: ApiPublicWorkerJobsIdFailureRoute,
   ApiPublicWorkerJobsIdStatusRoute: ApiPublicWorkerJobsIdStatusRoute,
   ApiPublicWorkerJobsIdSubmissionRoute: ApiPublicWorkerJobsIdSubmissionRoute,
