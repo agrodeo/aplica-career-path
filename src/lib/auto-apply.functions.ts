@@ -3,6 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
+const INVENTORY_FORM_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+const INVENTORY_SOURCE_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+
+function isRecent(value: string | null | undefined, maxAgeMs: number) {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp <= maxAgeMs;
+}
+
 function words(value: string) {
   return new Set(
     value
@@ -316,7 +325,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, source_updated_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, source_updated_at, last_verified_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url), job_sources(last_synced_at,last_sync_status)",
         )
         .eq("auto_apply_eligible", true)
         .eq("is_active", true)
@@ -348,7 +357,16 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
     ]);
 
     const matched = (jobs ?? [])
-      .filter((job) => !unavailableJobIds.has(job.id))
+      .filter(
+        (job) =>
+          !unavailableJobIds.has(job.id) &&
+          isRecent(job.last_verified_at, INVENTORY_FORM_MAX_AGE_MS) &&
+          job.job_sources?.last_sync_status === "success" &&
+          isRecent(
+            job.job_sources?.last_synced_at,
+            INVENTORY_SOURCE_MAX_AGE_MS,
+          ),
+      )
       .map((job) => {
         const match = matchByJob.get(job.id);
         return {
@@ -365,6 +383,8 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           salaryCurrency: job.salary_currency,
           publishedAt: job.published_at,
           sourceUpdatedAt: job.source_updated_at,
+          lastVerifiedAt: job.last_verified_at,
+          sourceLastSyncedAt: job.job_sources?.last_synced_at ?? null,
           adapter: job.auto_apply_adapter,
           applicationSchemaId: job.application_schema_id,
           matchScore: match ? Number(match.match_score) : null,
@@ -430,7 +450,7 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,source_updated_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,source_updated_at,last_verified_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website),job_sources(last_synced_at,last_sync_status)",
         )
         .eq("id", data.jobId)
         .eq("auto_apply_eligible", true)
@@ -457,7 +477,17 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
         .maybeSingle(),
     ]);
 
-    if (!job) return null;
+    if (
+      !job ||
+      !isRecent(job.last_verified_at, INVENTORY_FORM_MAX_AGE_MS) ||
+      job.job_sources?.last_sync_status !== "success" ||
+      !isRecent(
+        job.job_sources?.last_synced_at,
+        INVENTORY_SOURCE_MAX_AGE_MS,
+      )
+    ) {
+      return null;
+    }
 
     const readiness = await applicationReadiness(supabase, userId, [
       { id: job.id, application_schema_id: job.application_schema_id },
@@ -482,6 +512,8 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       salaryCurrency: job.salary_currency,
       publishedAt: job.published_at,
       sourceUpdatedAt: job.source_updated_at,
+      lastVerifiedAt: job.last_verified_at,
+      sourceLastSyncedAt: job.job_sources?.last_synced_at ?? null,
       adapter: job.auto_apply_adapter,
       matchScore: match ? Number(match.match_score) : null,
       hardRequirementsMet: match?.hard_requirements_met ?? false,
