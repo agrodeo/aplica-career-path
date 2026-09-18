@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, FileText, Plus, Search, Upload } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { ArrowLeft, ArrowRight, Check, FileText, Loader2, Plus, Search, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,9 @@ import { Choice } from "./aplica";
 import { OnboardingShell } from "./onboarding-shell";
 import { industries, skills } from "@/lib/aplica-data";
 import { useAplica } from "@/lib/aplica-store";
+import { refreshJobMatches } from "@/lib/auto-apply.functions";
+import { saveOnboardingProfile } from "@/lib/onboarding.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 const TOTAL = 14;
@@ -48,10 +52,26 @@ export function OnboardingFlow() {
   const [cvParsed, setCvParsed] = useState(false);
   const [uploadedName, setUploadedName] = useState("");
   const [reading, setReading] = useState(false);
-  const [consents, setConsents] = useState([false, false]);
+  const [consents, setConsents] = useState([false, false, false]);
+  const [sensitiveAnswers, setSensitiveAnswers] = useState<{ workAuthorization: boolean | null; sponsorship: boolean | null }>({
+    workAuthorization: null,
+    sponsorship: null,
+  });
+  const [internationalRemote, setInternationalRemote] = useState(true);
+  const [salaryCurrency, setSalaryCurrency] = useState("USD");
+  const [minimumSalary, setMinimumSalary] = useState("");
+  const [salaryPeriod, setSalaryPeriod] = useState("Mensual");
+  const [skipSalary, setSkipSalary] = useState(false);
+  const [baseResumePath, setBaseResumePath] = useState<string | null>(null);
+  const [cvError, setCvError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [matching, setMatching] = useState(false);
   const [matchStage, setMatchStage] = useState(0);
-  const [count, setCount] = useState(23);
+  const [count, setCount] = useState(0);
+  const [matchedCount, setMatchedCount] = useState(0);
+  const persistOnboarding = useServerFn(saveOnboardingProfile);
+  const calculateMatches = useServerFn(refreshJobMatches);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const toggle = (group: string, value: string) => setSelected((current) => ({
@@ -60,7 +80,82 @@ export function OnboardingFlow() {
   }));
   const next = () => setOnboardingStep(Math.min(TOTAL, step + 1));
   const back = () => setOnboardingStep(Math.max(1, step - 1));
-  const finish = () => { completeOnboarding(); setMatching(true); };
+
+  const finish = async () => {
+    if (saving || !consents.every(Boolean)) return;
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const targetRoles = selected.roles.filter(Boolean);
+      const targetLocations = [searchPreferences.location || profile.city || profile.country].filter(Boolean);
+      const relocate = selected.relocate?.[0] ?? "No";
+
+      await persistOnboarding({
+        data: {
+          identity: {
+            firstName: (name || profile.firstName).trim(),
+            lastName: profile.lastName.trim(),
+            email: profile.email.trim(),
+            phone: profile.phone.trim(),
+            country: profile.country.trim(),
+            city: (profile.city || searchPreferences.location).trim(),
+            currentTitle: profile.role.trim(),
+          },
+          experience: profile.company.trim() && profile.role.trim()
+            ? {
+                company: profile.company,
+                title: profile.role,
+                start: profile.start,
+                end: profile.end,
+                description: profile.description,
+                achievements: profile.achievements,
+              }
+            : null,
+          education: profile.institution.trim()
+            ? {
+                institution: profile.institution,
+                degree: profile.degree,
+                field: profile.area,
+                studyDates: profile.studyDates,
+              }
+            : null,
+          skills: selected.skills ?? [],
+          languages: profile.language.trim()
+            ? [{ language: profile.language, level: profile.level }]
+            : [],
+          preferences: {
+            targetRoles,
+            targetLocations,
+            modes: selected.mode ?? [],
+            employmentTypes: selected.employment ?? [],
+            seniorityLevels: selected.seniority ?? [],
+            willingToRelocate: relocate === "Sí" || relocate === "Depende",
+            internationalRemote,
+            minimumSalary: skipSalary || !minimumSalary.trim() ? null : Number(minimumSalary),
+            salaryCurrency: skipSalary ? null : salaryCurrency,
+            salaryPeriod: skipSalary ? null : salaryPeriod,
+            preferredIndustries: selected.industry ?? [],
+            dealbreakers: selected.dealbreakers ?? [],
+            minimumMatchScore: 70,
+          },
+          sensitiveAnswers,
+          baseResumePath,
+          authorizeAutoApply: consents[2] === true,
+        },
+      });
+
+      const result = await calculateMatches();
+      setMatchedCount(result.readyCount);
+      setCount(0);
+      completeOnboarding();
+      setMatching(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "No pudimos guardar tu perfil.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const updateProfile = (key: keyof Profile, value: string) => setProfile((current) => ({ ...current, [key]: value }));
 
@@ -68,17 +163,38 @@ export function OnboardingFlow() {
     if (!file || reading) return;
     setUploadedName(file.name);
     setReading(true);
+    setCvError(null);
+
     void (async () => {
       let fields: Partial<Profile> = {};
       let foundSkills: string[] = [];
+
       try {
         const { parseCvFile } = await import("@/lib/cv-parse");
         const result = await parseCvFile(file);
         fields = result.fields as Partial<Profile>;
         foundSkills = result.skills;
-      } catch {
-        fields = {};
+      } catch (error) {
+        setCvError(error instanceof Error ? error.message : "No pudimos leer el CV.");
       }
+
+      try {
+        const { data } = await supabase.auth.getUser();
+        if (!data.user) throw new Error("Tu sesión venció. Ingresá de nuevo.");
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-120);
+        const storagePath = `${data.user.id}/base/${crypto.randomUUID()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("resumes")
+          .upload(storagePath, file, {
+            contentType: file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            upsert: false,
+          });
+        if (uploadError) throw uploadError;
+        setBaseResumePath(storagePath);
+      } catch (error) {
+        setCvError(error instanceof Error ? `Leímos tu CV, pero no pudimos guardarlo: ${error.message}` : "No pudimos guardar tu CV.");
+      }
+
       const merged: Profile = { ...emptyProfile, ...fields };
       setReading(false);
       setProfile(merged);
@@ -102,13 +218,21 @@ export function OnboardingFlow() {
 
   useEffect(() => {
     if (!matching) return;
-    const values = [23, 48, 76, 104, 127];
-    const timers = values.map((value, index) => window.setTimeout(() => {
-      setMatchStage(index);
-      setCount(value);
-    }, index * 680));
+    const values = [
+      Math.round(matchedCount * 0.18),
+      Math.round(matchedCount * 0.44),
+      Math.round(matchedCount * 0.7),
+      Math.round(matchedCount * 0.9),
+      matchedCount,
+    ];
+    const timers = values.map((value, index) =>
+      window.setTimeout(() => {
+        setMatchStage(index);
+        setCount(value);
+      }, index * 520),
+    );
     return () => timers.forEach(window.clearTimeout);
-  }, [matching]);
+  }, [matching, matchedCount]);
 
   return (
     <OnboardingShell flow className="onboarding-sheet-flow">
@@ -122,14 +246,46 @@ export function OnboardingFlow() {
         <div key={step} className="sheet-step">
           <h2>{titles[step - 1]}</h2>
           <div className="sheet-step-body">
-            {renderStep(step, { selected, toggle, name, setName, searchPreferences, setSearchPreferences, reading, uploadedName, inputRef, acceptFile, dropFile, consents, setConsents, profile, updateProfile, cvParsed, skipCv })}
+            {renderStep(step, {
+              selected,
+              toggle,
+              name,
+              setName,
+              searchPreferences,
+              setSearchPreferences,
+              reading,
+              uploadedName,
+              inputRef,
+              acceptFile,
+              dropFile,
+              consents,
+              setConsents,
+              profile,
+              updateProfile,
+              cvParsed,
+              skipCv,
+              sensitiveAnswers,
+              setSensitiveAnswers,
+              internationalRemote,
+              setInternationalRemote,
+              salaryCurrency,
+              setSalaryCurrency,
+              minimumSalary,
+              setMinimumSalary,
+              salaryPeriod,
+              setSalaryPeriod,
+              skipSalary,
+              setSkipSalary,
+              cvError,
+            })}
           </div>
         </div>
 
+        {saveError && <p className="px-1 pb-2 text-sm text-destructive">{saveError}</p>}
         <div className="sheet-actions">
-          <Button type="button" variant="ghost" onClick={back} disabled={step === 1}><ArrowLeft /> Atrás</Button>
-          <Button type="button" className="home-primary min-w-36" onClick={step === TOTAL ? finish : next} disabled={step === TOTAL && !consents.every(Boolean)}>
-            {step === TOTAL ? "Buscar mis trabajos" : step === 4 ? "Todo correcto" : "Continuar"} <ArrowRight />
+          <Button type="button" variant="ghost" onClick={back} disabled={step === 1 || saving}><ArrowLeft /> Atrás</Button>
+          <Button type="button" className="home-primary min-w-36" onClick={() => void (step === TOTAL ? finish() : Promise.resolve(next()))} disabled={saving || (step === TOTAL && !consents.every(Boolean))}>
+            {saving ? <><Loader2 className="animate-spin" /> Guardando perfil</> : <>{step === TOTAL ? "Buscar mis trabajos" : step === 4 ? "Todo correcto" : "Continuar"} <ArrowRight /></>}
           </Button>
         </div>
       </>}
@@ -143,6 +299,14 @@ type StepProps = {
   reading: boolean; uploadedName: string; inputRef: React.RefObject<HTMLInputElement | null>; acceptFile: (file?: File) => void;
   dropFile: (event: DragEvent<HTMLDivElement>) => void; consents: boolean[]; setConsents: (value: boolean[]) => void;
   profile: Profile; updateProfile: (key: keyof Profile, value: string) => void; cvParsed: boolean; skipCv: () => void;
+  sensitiveAnswers: { workAuthorization: boolean | null; sponsorship: boolean | null };
+  setSensitiveAnswers: (value: { workAuthorization: boolean | null; sponsorship: boolean | null }) => void;
+  internationalRemote: boolean; setInternationalRemote: (value: boolean) => void;
+  salaryCurrency: string; setSalaryCurrency: (value: string) => void;
+  minimumSalary: string; setMinimumSalary: (value: string) => void;
+  salaryPeriod: string; setSalaryPeriod: (value: string) => void;
+  skipSalary: boolean; setSkipSalary: (value: boolean) => void;
+  cvError: string | null;
 };
 
 function CvNote({ show }: { show: boolean }) {
@@ -155,7 +319,7 @@ function renderStep(step: number, p: StepProps): ReactNode {
   const updateSearch = (key: "role" | "location" | "mode", value: string) => p.setSearchPreferences({ ...p.searchPreferences, [key]: value });
   switch (step) {
     case 1: return <div className="space-y-5"><Field label="Puesto o área"><Input value={p.searchPreferences.role} onChange={(event) => updateSearch("role", event.target.value)} placeholder="Growth Manager" /></Field><Field label="Ubicación"><Input value={p.searchPreferences.location} onChange={(event) => updateSearch("location", event.target.value)} placeholder="Buenos Aires" /></Field><Field label="Modalidad">{chips("mode", ["Remoto", "Híbrido", "Presencial"])}</Field></div>;
-    case 2: return <><p className="sheet-copy">Subí tu CV y completamos gran parte del perfil por vos.</p><input ref={p.inputRef} className="hidden" type="file" accept=".pdf,.docx" onChange={(event) => p.acceptFile(event.target.files?.[0])} /><div className="sheet-upload" role="button" tabIndex={0} onClick={() => p.inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") p.inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={p.dropFile}>{p.reading ? <><span className="sheet-upload-icon animate-pulse-soft"><FileText /></span><strong>Leyendo tu experiencia…</strong><span>{p.uploadedName}</span></> : p.uploadedName ? <><span className="sheet-upload-icon"><Check /></span><strong>{p.uploadedName}</strong><span>Completamos tu perfil con estos datos</span></> : <><span className="sheet-upload-icon"><Upload /></span><strong>Subí tu CV</strong><span>PDF o DOCX · arrastrá o elegí un archivo</span></>}</div><Button type="button" variant="ghost" className="mt-3 w-full text-muted-foreground" onClick={p.skipCv}>Continuar sin CV</Button></>;
+    case 2: return <><p className="sheet-copy">Subí tu CV y completamos gran parte del perfil por vos.</p><input ref={p.inputRef} className="hidden" type="file" accept=".pdf,.docx" onChange={(event) => p.acceptFile(event.target.files?.[0])} /><div className="sheet-upload" role="button" tabIndex={0} onClick={() => p.inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") p.inputRef.current?.click(); }} onDragOver={(event) => event.preventDefault()} onDrop={p.dropFile}>{p.reading ? <><span className="sheet-upload-icon animate-pulse-soft"><FileText /></span><strong>Leyendo y guardando tu CV…</strong><span>{p.uploadedName}</span></> : p.uploadedName ? <><span className="sheet-upload-icon"><Check /></span><strong>{p.uploadedName}</strong><span>Completamos tu perfil con estos datos</span></> : <><span className="sheet-upload-icon"><Upload /></span><strong>Subí tu CV</strong><span>PDF o DOCX · arrastrá o elegí un archivo</span></>}</div>{p.cvError && <p className="mt-3 text-sm text-caution">{p.cvError}</p>}<Button type="button" variant="ghost" className="mt-3 w-full text-muted-foreground" onClick={p.skipCv}>Continuar sin CV</Button></>;
     case 3: return <><CvNote show={p.cvParsed} /><div className="sheet-field-grid"><Field label="Nombre"><Input value={p.cvParsed ? (p.name || p.profile.firstName) : p.name} placeholder="Sofía" onChange={(event) => p.setName(event.target.value)} /></Field><Field label="Apellido"><Input value={p.profile.lastName} placeholder="Fernández" onChange={(event) => p.updateProfile("lastName", event.target.value)} /></Field><Field label="Email"><Input type="email" value={p.profile.email} placeholder="tu@email.com" onChange={(event) => p.updateProfile("email", event.target.value)} /></Field><Field label="WhatsApp"><Input value={p.profile.phone} placeholder="+54 9 11 ..." onChange={(event) => p.updateProfile("phone", event.target.value)} /></Field><Field label="País"><SelectLike options={["Argentina", "México", "Colombia", "Chile", "Uruguay"]} value={p.profile.country} onChange={(value) => p.updateProfile("country", value)} /></Field><Field label="Ciudad"><Input value={p.profile.city || p.searchPreferences.location} placeholder="Buenos Aires" onChange={(event) => p.updateProfile("city", event.target.value)} /></Field></div></>;
     case 4: return <><p className="sheet-copy">{p.cvParsed ? "Confirmá que los datos extraídos de tu CV sean correctos. Podés editar todo." : "Contanos tu experiencia más reciente."}</p><CvNote show={p.cvParsed} /><div className="sheet-experience"><div className="sheet-field-grid"><Field label="Empresa"><Input value={p.profile.company} placeholder="Empresa" onChange={(event) => p.updateProfile("company", event.target.value)} /></Field><Field label="Puesto"><Input value={p.profile.role} placeholder="Puesto" onChange={(event) => p.updateProfile("role", event.target.value)} /></Field><Field label="Fecha de inicio"><Input value={p.profile.start} placeholder="Mar 2023" onChange={(event) => p.updateProfile("start", event.target.value)} /></Field><Field label="Fecha de fin"><Input value={p.profile.end} placeholder="Actualidad" onChange={(event) => p.updateProfile("end", event.target.value)} /></Field></div><Field label="Descripción"><Textarea value={p.profile.description} placeholder="Qué hacías en el puesto" onChange={(event) => p.updateProfile("description", event.target.value)} /></Field><Field label="Logros"><Textarea value={p.profile.achievements} placeholder="Un resultado concreto" onChange={(event) => p.updateProfile("achievements", event.target.value)} /></Field></div><AddButton>Agregar experiencia</AddButton></>;
     case 5: return <><CvNote show={p.cvParsed} /><div className="sheet-field-grid"><Field label="Institución"><Input value={p.profile.institution} placeholder="Universidad" onChange={(event) => p.updateProfile("institution", event.target.value)} /></Field><Field label="Carrera o título"><Input value={p.profile.degree} placeholder="Licenciatura" onChange={(event) => p.updateProfile("degree", event.target.value)} /></Field><Field label="Área"><Input value={p.profile.area} placeholder="Administración" onChange={(event) => p.updateProfile("area", event.target.value)} /></Field><Field label="Fechas"><Input value={p.profile.studyDates} placeholder="2018 — 2022" onChange={(event) => p.updateProfile("studyDates", event.target.value)} /></Field></div><AddButton>Agregar estudio</AddButton></>;
@@ -163,11 +327,15 @@ function renderStep(step: number, p: StepProps): ReactNode {
     case 7: return <><div className="sheet-field-grid"><Field label="Idioma"><SelectLike options={["Español", "Inglés", "Portugués"]} value={p.profile.language} onChange={(value) => p.updateProfile("language", value)} /></Field><Field label="Nivel"><SelectLike options={["Básico", "Intermedio", "Avanzado", "Profesional", "Nativo"]} value={p.profile.level} onChange={(value) => p.updateProfile("level", value)} /></Field></div><AddButton>Agregar idioma</AddButton></>;
     case 8: return <><Input className="mb-4" placeholder="Buscar un puesto" />{chips("roles", ["Growth Manager", "Growth Analyst", "Product Marketing", "Business Analyst"])}<ToggleRow label="También mostrar puestos similares" /></>;
     case 9: return <><SectionLabel>Modalidad</SectionLabel>{chips("mode", ["Remoto", "Híbrido", "Presencial"])}<SectionLabel>Tipo de trabajo</SectionLabel>{chips("employment", ["Full-time", "Part-time", "Contractor", "Freelance"])}</>;
-    case 10: return <><Field label="Ciudad o país"><Input defaultValue={p.searchPreferences.location || "Buenos Aires, Argentina"} /></Field><ToggleRow label="¿Trabajarías remoto para empresas de otros países?" /><SectionLabel>¿Te mudarías por una buena oportunidad?</SectionLabel>{chips("relocate", ["Sí", "No", "Depende"])}</>;
-    case 11: return <><div className="sheet-field-grid sheet-field-grid-3"><Field label="Moneda"><SelectLike options={["USD", "ARS", "MXN", "BRL"]} /></Field><Field label="Mínimo esperado"><Input inputMode="numeric" defaultValue="3200" /></Field><Field label="Período"><SelectLike options={["Mensual", "Anual"]} /></Field></div><label className="mt-5 flex items-center gap-3 text-sm"><Checkbox /> No quiero filtrar por salario</label></>;
+    case 10: return <><Field label="Ciudad o país"><Input value={p.searchPreferences.location} onChange={(event) => updateSearch("location", event.target.value)} placeholder="Buenos Aires, Argentina" /></Field><ToggleRow label="¿Trabajarías remoto para empresas de otros países?" checked={p.internationalRemote} onCheckedChange={p.setInternationalRemote} /><SectionLabel>¿Te mudarías por una buena oportunidad?</SectionLabel>{chips("relocate", ["Sí", "No", "Depende"])}</>;
+    case 11: return <><div className="sheet-field-grid sheet-field-grid-3"><Field label="Moneda"><SelectLike options={["USD", "ARS", "MXN", "BRL"]} value={p.salaryCurrency} onChange={p.setSalaryCurrency} /></Field><Field label="Mínimo esperado"><Input inputMode="numeric" value={p.minimumSalary} disabled={p.skipSalary} placeholder="3200" onChange={(event) => p.setMinimumSalary(event.target.value.replace(/[^0-9.]/g, ""))} /></Field><Field label="Período"><SelectLike options={["Mensual", "Anual"]} value={p.salaryPeriod} onChange={p.setSalaryPeriod} /></Field></div><label className="mt-5 flex items-center gap-3 text-sm"><Checkbox checked={p.skipSalary} onCheckedChange={(checked) => p.setSkipSalary(checked === true)} /> No quiero filtrar por salario</label></>;
     case 12: return <>{chips("seniority", ["Entry level", "Junior", "Semi Senior", "Senior", "Lead", "Manager", "Director"])}<p className="sheet-help">Podés elegir niveles adyacentes.</p></>;
-    case 13: return <><p className="sheet-copy">Estas respuestas salen directamente de vos. Nunca inferimos tu situación migratoria.</p><Question title="¿Tenés autorización para trabajar en Estados Unidos?" /><Question title="¿Necesitarías sponsorship?" /></>;
-    case 14: return <><SectionLabel>Industrias que te gustan</SectionLabel>{chips("industry", industries.slice(0, 6))}<SectionLabel>Tamaño de empresa</SectionLabel>{chips("size", ["Startup", "Pequeña", "Mediana", "Grande"])}<SectionLabel>Condiciones que querés evitar</SectionLabel>{chips("dealbreakers", ["No trabajos a comisión", "No presencial", "No fines de semana", "No relocation", "No roles sin pago"])}<div className="mt-5 space-y-3">{["La información que proporcioné es verdadera.", "Aplica puede reformular mi CV, pero nunca inventar experiencia, estudios o habilidades."].map((text, index) => <label key={text} className="sheet-consent"><Checkbox checked={p.consents[index] ?? false} onCheckedChange={() => { const next = [...p.consents]; next[index] = !next[index]; p.setConsents(next); }} /><span>{text}</span></label>)}</div></>;
+    case 13: return <><p className="sheet-copy">Estas respuestas salen directamente de vos. Nunca inferimos tu situación migratoria.</p><Question title="¿Tenés autorización para trabajar en Estados Unidos?" value={p.sensitiveAnswers.workAuthorization} onChange={(value) => p.setSensitiveAnswers({ ...p.sensitiveAnswers, workAuthorization: value })} /><Question title="¿Necesitarías sponsorship?" value={p.sensitiveAnswers.sponsorship} onChange={(value) => p.setSensitiveAnswers({ ...p.sensitiveAnswers, sponsorship: value })} /></>;
+    case 14: return <><SectionLabel>Industrias que te gustan</SectionLabel>{chips("industry", industries.slice(0, 6))}<SectionLabel>Tamaño de empresa</SectionLabel>{chips("size", ["Startup", "Pequeña", "Mediana", "Grande"])}<SectionLabel>Condiciones que querés evitar</SectionLabel>{chips("dealbreakers", ["No trabajos a comisión", "No presencial", "No fines de semana", "No relocation", "No roles sin pago"])}<div className="mt-5 space-y-3">{[
+      "La información que proporcioné es verdadera.",
+      "Aplica puede reformular mi CV, pero nunca inventar experiencia, estudios o habilidades.",
+      "Autorizo a Aplica a enviar las postulaciones que yo seleccione usando mi perfil y CV.",
+    ].map((text, index) => <label key={text} className="sheet-consent"><Checkbox checked={p.consents[index] ?? false} onCheckedChange={() => { const next = [...p.consents]; next[index] = !next[index]; p.setConsents(next); }} /><span>{text}</span></label>)}</div></>;
     default: return null;
   }
 }
@@ -179,10 +347,10 @@ function SelectLike({ options, value, onChange }: { options: string[]; value?: s
   const current = value ?? "";
   return <select className="sheet-select" value={current} onChange={(event) => onChange?.(event.target.value)}>{!current && <option value="">Seleccioná una opción</option>}{options.map((option) => <option key={option}>{option}</option>)}</select>;
 }
-function ToggleRow({ label }: { label: string }) { return <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-border pt-5"><span className="min-w-0 text-sm">{label}</span><Switch className="shrink-0" defaultChecked /></div>; }
-function Question({ title }: { title: string }) { return <div className="mb-5"><p className="mb-3 text-sm font-medium">{title}</p><div className="grid grid-cols-2 gap-2"><Choice selected onClick={() => undefined}>Sí</Choice><Choice selected={false} onClick={() => undefined}>No</Choice></div></div>; }
+function ToggleRow({ label, checked = true, onCheckedChange }: { label: string; checked?: boolean; onCheckedChange?: (value: boolean) => void }) { return <div className="mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-border pt-5"><span className="min-w-0 text-sm">{label}</span><Switch className="shrink-0" checked={checked} onCheckedChange={onCheckedChange} /></div>; }
+function Question({ title, value, onChange }: { title: string; value: boolean | null; onChange: (value: boolean) => void }) { return <div className="mb-5"><p className="mb-3 text-sm font-medium">{title}</p><div className="grid grid-cols-2 gap-2"><Choice selected={value === true} onClick={() => onChange(true)}>Sí</Choice><Choice selected={value === false} onClick={() => onChange(false)}>No</Choice></div></div>; }
 
 function Matching({ count, stage, done, onDone }: { count: number; stage: number; done: boolean; onDone: () => void }) {
   const status = ["Analizando tu perfil", "Encontrando puestos relevantes", "Comparando requisitos", "Ordenando tus mejores matches", "Listo"];
-  return <div className="matching-card"><div className="matching-orbit"><span>{done ? <Check /> : count}</span></div>{done ? <><p className="sheet-kicker">Búsqueda completa</p><h2>Encontramos 127 trabajos para vos.</h2><p className="sheet-subtitle">Ordenados según qué tan bien coinciden con tu experiencia y preferencias.</p><Button className="home-primary mt-8 h-12 px-7" onClick={onDone}>Ver trabajos <ArrowRight /></Button></> : <><h2>Buscando oportunidades para vos</h2><div className="matching-count">{count}</div><p className="sheet-subtitle">oportunidades</p><p className="matching-status">{status[stage]}</p></>}</div>;
+  return <div className="matching-card"><div className="matching-orbit"><span>{done ? <Check /> : count}</span></div>{done ? <><p className="sheet-kicker">Búsqueda completa</p><h2>{count === 1 ? "Encontramos 1 trabajo para vos." : `Encontramos ${count} trabajos para vos.`}</h2><p className="sheet-subtitle">{count > 0 ? "Ordenados según qué tan bien coinciden con tu experiencia y preferencias." : "Todavía no hay vacantes Auto Apply que superen tu match mínimo. Podés ajustar tus preferencias cuando quieras."}</p><Button className="home-primary mt-8 h-12 px-7" onClick={onDone}>Ver trabajos <ArrowRight /></Button></> : <><h2>Buscando oportunidades para vos</h2><div className="matching-count">{count}</div><p className="sheet-subtitle">oportunidades</p><p className="matching-status">{status[stage]}</p></>}</div>;
 }
