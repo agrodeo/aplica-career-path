@@ -74,7 +74,7 @@ function phaseContent(phase: number): ReactNode {
         <div className="demo-search-icon"><Search /></div>
         <div className="demo-centered">
           <h2>Buscando trabajos para vos...</h2>
-          <SearchCounter duration={phaseDurations[2]} />
+          <SearchCounter duration={phaseDurations[2] ?? 2200} />
           <p>oportunidades encontradas</p>
         </div>
       </>
