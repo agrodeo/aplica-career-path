@@ -92,6 +92,12 @@ function parseMonthDate(value: string): string | null {
   const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return raw;
 
+  const yearMonth = raw.match(/^((?:19|20)\d{2})-(\d{2})$/);
+  if (yearMonth) {
+    const month = Math.max(1, Math.min(12, Number(yearMonth[2])));
+    return `${yearMonth[1]}-${String(month).padStart(2, "0")}-01`;
+  }
+
   const yearOnly = raw.match(/^(19|20)\d{2}$/);
   if (yearOnly) return `${raw}-01-01`;
 
@@ -544,30 +550,29 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     if (deleteExperiencesError) throw new Error(deleteExperiencesError.message);
 
     const normalizedExperiences = data.experiences
-      .map((experience, index) => {
-        if (!experience.company.trim() || !experience.title.trim()) return null;
+      .flatMap((experience, index) => {
+        if (!experience.company.trim() || !experience.title.trim()) return [];
         const endText = experience.end.trim();
-        return {
-          user_id: userId,
-          company: clean(experience.company, 220),
-          title: clean(experience.title, 220),
-          start_date: parseMonthDate(experience.start),
-          end_date: parseMonthDate(experience.end),
-          is_current: /actual|presente|present|current|hoy/i.test(endText),
-          description: clean(experience.description, 5000) || null,
-          achievements: experience.achievements
-            .split(/\n|;/)
-            .map((achievement) => clean(achievement, 1000))
-            .filter(Boolean)
-            .slice(0, 20),
-          source: data.baseResumePath ? "cv_parse" : "manual",
-          verified_by_user: true,
-          sort_order: index,
-        };
+        return [
+          {
+            user_id: userId,
+            company: clean(experience.company, 220),
+            title: clean(experience.title, 220),
+            start_date: parseMonthDate(experience.start),
+            end_date: parseMonthDate(experience.end),
+            is_current: /actual|presente|present|current|hoy/i.test(endText),
+            description: clean(experience.description, 5000) || null,
+            achievements: experience.achievements
+              .split(/\n|;/)
+              .map((achievement) => clean(achievement, 1000))
+              .filter(Boolean)
+              .slice(0, 20),
+            source: data.baseResumePath ? "cv_parse" : "manual",
+            verified_by_user: true,
+            sort_order: index,
+          },
+        ];
       })
-      .filter((experience): experience is NonNullable<typeof experience> =>
-        Boolean(experience),
-      )
       .slice(0, 30);
 
     const savedExperiences: Array<{ id: string; sortOrder: number }> = [];
