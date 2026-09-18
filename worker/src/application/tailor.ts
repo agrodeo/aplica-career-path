@@ -4,11 +4,12 @@ import type { JobRecord, MasterProfile, ResumeFact } from "../adapters/types.js"
 
 export interface TailoredExperience {
   experienceId: string;
-  bullets: string[];
+  bullets: Array<{ text: string; sourceFactIds: string[] }>;
 }
 
 export interface TailoredResumeCopy {
   summary: string;
+  summarySourceFactIds: string[];
   experiences: TailoredExperience[];
   model: string | null;
 }
@@ -286,11 +287,12 @@ function validateTailoring(
   const experiences: TailoredExperience[] = [];
   for (const experience of raw.experiences ?? []) {
     if (!experienceIds.has(experience.experienceId)) return null;
-    const bullets: string[] = [];
+    const bullets: Array<{ text: string; sourceFactIds: string[] }> = [];
     for (const bullet of experience.bullets ?? []) {
       const text = bullet.text.trim();
-      if (!validateSentence(text, bullet.sourceFactIds ?? [])) return null;
-      bullets.push(text);
+      const sourceFactIds = bullet.sourceFactIds ?? [];
+      if (!validateSentence(text, sourceFactIds)) return null;
+      bullets.push({ text, sourceFactIds });
     }
     experiences.push({
       experienceId: experience.experienceId,
@@ -300,6 +302,7 @@ function validateTailoring(
 
   return {
     summary,
+    summarySourceFactIds: summaryIds,
     experiences,
   };
 }
