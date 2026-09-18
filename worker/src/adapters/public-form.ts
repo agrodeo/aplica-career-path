@@ -63,7 +63,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const form = page.locator(options.formSelector).first();
       const formExists = (await form.count()) > 0;
-      const fields = formExists ? await readFields(page, options.formSelector) : [];
+      const fields = formExists
+        ? await readFields(page, options.formSelector, url)
+        : [];
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
@@ -320,7 +322,11 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
   }
 }
 
-async function readFields(page: Page, formSelector: string): Promise<InspectedField[]> {
+async function readFields(
+  page: Page,
+  formSelector: string,
+  applicationUrl: string,
+): Promise<InspectedField[]> {
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
     if (!form) return [];
@@ -415,7 +421,7 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
     return {
       selector: field.selector,
       label: field.label,
-      answerKey: answerKeyFor(field.label),
+      answerKey: answerKeyFor(field.label, applicationUrl),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
