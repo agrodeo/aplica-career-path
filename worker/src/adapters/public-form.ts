@@ -74,7 +74,14 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
-      const unknownRequiredFields = fields.filter((f) => f.required && !f.canonicalKey).map((f) => f.label);
+      const unknownRequiredFields = fields
+        .filter(
+          (f) =>
+            f.required &&
+            !f.canonicalKey &&
+            !(f.demographic && f.options && findDeclineOption(f.options)),
+        )
+        .map((f) => f.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
