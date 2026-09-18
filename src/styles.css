@@ -331,7 +331,14 @@
 .demo-job strong, .demo-queue-row strong { font-size: 14px; font-weight: 650; }
 .demo-job small, .demo-queue-row small { margin-top: 5px; color: var(--muted-foreground); font-size: 10px; }
 .demo-job b { color: var(--home-accent); font-size: 12px; font-weight: 650; }
-...
+.demo-resume-lines { display: grid; margin-top: 38px; gap: 12px; }
+.demo-resume-lines span { height: 10px; border-radius: 2px; background: color-mix(in oklab, var(--foreground) 10%, transparent); transform-origin: left; animation: demo-line 820ms cubic-bezier(.16,.84,.28,1) both; }
+.demo-resume-lines span:nth-child(1) { width: 92%; animation-delay: 120ms; }
+.demo-resume-lines span:nth-child(2) { width: 70%; animation-delay: 260ms; }
+.demo-resume-lines span:nth-child(3) { width: 82%; animation-delay: 400ms; }
+.demo-checklist { display: grid; margin-top: 42px; gap: 14px; }
+.demo-checklist p { display: flex; opacity: 0; align-items: center; gap: 9px; color: color-mix(in oklab, var(--foreground) 73%, transparent); font-size: 12px; animation: demo-item-in 520ms calc(580ms + var(--demo-order) * 210ms) cubic-bezier(.16,.84,.28,1) forwards; }
+.demo-checklist svg { color: var(--home-accent); animation: demo-check-pop 420ms calc(620ms + var(--demo-order) * 210ms) cubic-bezier(.2,1.5,.4,1) both; }
 .demo-queue-row { opacity: 1; }
 .demo-queue-row b { display: flex; align-items: center; gap: 5px; color: var(--home-accent); font-size: 11px; font-weight: 650; }
 .demo-queue-row.is-done, .demo-queue-row.is-applying { animation: demo-card-in 620ms calc(120ms + var(--demo-order) * 560ms) cubic-bezier(.16,.84,.28,1) both; }
