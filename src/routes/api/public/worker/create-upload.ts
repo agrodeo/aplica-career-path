@@ -15,15 +15,20 @@ export const Route = createFileRoute("/api/public/worker/create-upload")({
         if (auth) return auth;
         const body = (await request.json().catch(() => ({}))) as { application_attempt_id?: string; type?: string; content_type?: string; worker_id?: string };
         const attemptId = body.application_attempt_id ?? "";
+        const workerId = (body.worker_id ?? "").slice(0, 64);
         const kind = body.type;
-        if (!attemptId || (kind !== "resume" && kind !== "evidence")) return jsonResponse({ error: "invalid_request" }, 400);
+        if (!attemptId || !workerId || (kind !== "resume" && kind !== "evidence")) {
+          return jsonResponse({ error: "invalid_request" }, 400);
+        }
 
         const expectedContentType = kind === "resume" ? "application/pdf" : "image/png";
         if (body.content_type && body.content_type !== expectedContentType) return jsonResponse({ error: "unsupported_content_type", expected: expectedContentType }, 400);
 
         const db = workerDb();
-        const owned = await loadOwnedAttempt(db, attemptId, body.worker_id);
-        if (!owned) return jsonResponse({ error: "not_owned" }, 403);
+        const owned = await loadOwnedAttempt(db, attemptId, workerId);
+        if (!owned || !owned.queueId || owned.workerId !== workerId) {
+          return jsonResponse({ error: "not_owned" }, 403);
+        }
 
         const bucket = kind === "resume" ? RESUME_BUCKET : EVIDENCE_BUCKET;
         const storagePath = kind === "resume" ? `${owned.userId}/${owned.jobId}-${owned.attemptId}.pdf` : `${owned.userId}/${owned.attemptId}.png`;
