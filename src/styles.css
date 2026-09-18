@@ -350,11 +350,18 @@
 .demo-final > strong { color: var(--home-accent); font-size: 82px; font-weight: 690; line-height: .9; }
 .demo-final h2 { margin-top: 13px; }
 .demo-final p { margin-top: 10px; color: var(--muted-foreground); font-size: 14px; }
-@keyframes demo-frame-in { from { opacity: 0; transform: translateY(7px); } }
+@keyframes demo-frame-in { from { opacity: 0; transform: translateY(16px) scale(.988); filter: blur(7px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+@keyframes demo-frame-out { from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } to { opacity: 0; transform: translateY(-14px) scale(.99); filter: blur(6px); } }
 @keyframes demo-file-in { from { opacity: 0; transform: translateY(-30px); } }
-@keyframes demo-item-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes demo-item-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes demo-item-pop { from { opacity: 0; transform: translateY(10px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes demo-card-in { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes demo-check-pop { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes demo-line { from { opacity: 0; transform: scaleX(.45) translateY(6px); } to { opacity: 1; transform: scaleX(1) translateY(0); } }
 @keyframes demo-progress { to { width: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .product-demo-frame, .product-demo-frame.is-exiting, .demo-signals span, .demo-job, .demo-queue-row, .demo-checklist p, .demo-checklist svg, .demo-resume-lines span, .demo-delay-late, .demo-file { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}
 .onboarding-sheet-flow { display: flex; min-height: 570px; flex-direction: column; }
 .sheet-intro h2, .sheet-step h2, .matching-card h2 { margin-top: 11px; font-size: 36px; font-weight: 650; line-height: 1.08; letter-spacing: -1px; }
 .sheet-kicker { color: var(--home-accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
