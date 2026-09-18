@@ -365,6 +365,9 @@ type RealJob = {
   salaryMax: number | null;
   salaryCurrency: string | null;
   publishedAt: string | null;
+  sourceUpdatedAt: string | null;
+  lastVerifiedAt: string | null;
+  sourceLastSyncedAt: string | null;
   adapter: string | null;
   matchScore: number | null;
   hardRequirementsMet: boolean;
@@ -445,6 +448,11 @@ function RealJobRow({
             {formatSalary(job) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {formatSalary(job)}
+              </p>
+            )}
+            {job.sourceLastSyncedAt && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Inventario {formatFreshness(job.sourceLastSyncedAt)} · formulario verificado {formatFreshness(job.lastVerifiedAt)}
               </p>
             )}
 
@@ -686,6 +694,19 @@ function QuestionInput({
       )}
     </label>
   );
+}
+
+function formatFreshness(value: string | null) {
+  if (!value) return "sin verificar";
+  const diff = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "actualizado recientemente";
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 2) return "actualizado recién";
+  if (minutes < 60) return `actualizado hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `actualizado hace ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `actualizado hace ${days} d`;
 }
 
 function initials(company: string) {
