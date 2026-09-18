@@ -403,6 +403,7 @@
 .coverage-wall:hover .coverage-track { animation-play-state: paused; }
 .coverage-group { display: flex; align-items: center; gap: clamp(42px, 4.8vw, 76px); padding-right: clamp(42px, 4.8vw, 76px); }
 .coverage-logo { color: color-mix(in oklab, var(--foreground) 52%, transparent); font-size: clamp(21px, 1.75vw, 28px); font-weight: 680; line-height: 1; white-space: nowrap; filter: grayscale(1); }
+.coverage-logo-img { height: clamp(22px, 1.9vw, 30px); width: auto; mix-blend-mode: multiply; opacity: .55; filter: grayscale(1); }
 .coverage-disclaimer { max-width: 760px; margin: 17px auto 0; padding-inline: 24px; color: color-mix(in oklab, var(--foreground) 38%, transparent); font-size: 9px; line-height: 1.5; }
 @keyframes coverage-left { to { transform: translateX(-25%); } }
 @keyframes sheet-change { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
