@@ -14,14 +14,14 @@ export type RichOnboardingPayload = {
     city: string;
     currentTitle: string;
   };
-  experience: {
+  experiences: Array<{
     company: string;
     title: string;
     start: string;
     end: string;
     description: string;
     achievements: string;
-  } | null;
+  }>;
   education: {
     institution: string;
     degree: string;
@@ -203,9 +203,7 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
         .from("experiences")
         .select("*")
         .eq("user_id", userId)
-        .order("sort_order")
-        .limit(1)
-        .maybeSingle(),
+        .order("sort_order", { ascending: true }),
       supabase
         .from("educations")
         .select("*")
@@ -271,17 +269,29 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
         linkedin: profile.data?.linkedin_url ?? "",
         portfolio: profile.data?.portfolio_url ?? "",
       },
-      experience: experience.data
+      experiences: (experience.data ?? []).map((item) => ({
+        company: item.company,
+        title: item.title,
+        start: item.start_date ?? "",
+        end: item.is_current ? "Actualidad" : item.end_date ?? "",
+        description: item.description ?? "",
+        achievements: Array.isArray(item.achievements)
+          ? (item.achievements as string[]).join("\n")
+          : "",
+      })),
+      // Transitional convenience for older UI code; always points to the
+      // highest-priority experience.
+      experience: experience.data?.[0]
         ? {
-            company: experience.data.company,
-            title: experience.data.title,
-            start: experience.data.start_date ?? "",
-            end: experience.data.is_current
+            company: experience.data[0].company,
+            title: experience.data[0].title,
+            start: experience.data[0].start_date ?? "",
+            end: experience.data[0].is_current
               ? "Actualidad"
-              : experience.data.end_date ?? "",
-            description: experience.data.description ?? "",
-            achievements: Array.isArray(experience.data.achievements)
-              ? (experience.data.achievements as string[]).join("\n")
+              : experience.data[0].end_date ?? "",
+            description: experience.data[0].description ?? "",
+            achievements: Array.isArray(experience.data[0].achievements)
+              ? (experience.data[0].achievements as string[]).join("\n")
               : "",
           }
         : null,
@@ -366,7 +376,7 @@ export const getOnboardingSeed = createServerFn({ method: "GET" })
 function factRows(
   userId: string,
   data: RichOnboardingPayload,
-  primaryExperienceId: string | null,
+  savedExperiences: Array<{ id: string; sortOrder: number }>,
 ) {
   const rows: Array<{
     user_id: string;
@@ -409,14 +419,14 @@ function factRows(
       responsibility,
       "experience",
       true,
-      primaryExperienceId,
+      savedExperiences[0]?.id ?? null,
     );
   }
   for (const result of data.careerContext.results) {
-    add("achievement", result, "results", true, primaryExperienceId);
+    add("achievement", result, "results", true, savedExperiences[0]?.id ?? null);
   }
   for (const tool of data.careerContext.tools) {
-    add("tool", tool, "tools", true, primaryExperienceId);
+    add("tool", tool, "tools", true, savedExperiences[0]?.id ?? null);
   }
 
   // Explicit skills are globally usable resume facts, but not tied to one job.
@@ -433,24 +443,20 @@ function factRows(
     add("differentiator", differentiator, "positioning", false, null);
   }
 
-  if (data.experience) {
+  data.experiences.forEach((experience, index) => {
+    const sourceRef =
+      savedExperiences.find((saved) => saved.sortOrder === index)?.id ?? null;
     add(
       "experience_description",
-      data.experience.description,
+      experience.description,
       "experience",
       true,
-      primaryExperienceId,
+      sourceRef,
     );
-    for (const achievement of data.experience.achievements.split(/\n|;/)) {
-      add(
-        "achievement",
-        achievement,
-        "experience",
-        true,
-        primaryExperienceId,
-      );
+    for (const achievement of experience.achievements.split(/\n|;/)) {
+      add("achievement", achievement, "experience", true, sourceRef);
     }
-  }
+  });
 
   // Project/challenge/career-goal stories stay available to application answers
   // but are not resume claims unless we later ask the user to bind them to an
@@ -487,7 +493,6 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const [
       { data: existingProfile },
-      { data: existingExperience },
       { data: existingEducation },
       { data: existingLanguages },
     ] = await Promise.all([
@@ -495,13 +500,6 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         .from("profiles")
         .select("master_profile_version")
         .eq("user_id", userId)
-        .maybeSingle(),
-      supabase
-        .from("experiences")
-        .select("id")
-        .eq("user_id", userId)
-        .order("sort_order", { ascending: true })
-        .limit(1)
         .maybeSingle(),
       supabase
         .from("educations")
@@ -539,41 +537,48 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     );
     if (profileError) throw new Error(profileError.message);
 
-    let primaryExperienceId = existingExperience?.id ?? null;
-    if (data.experience?.company.trim() && data.experience.title.trim()) {
-      const endText = data.experience.end.trim();
-      const experiencePayload = {
-        company: clean(data.experience.company, 220),
-        title: clean(data.experience.title, 220),
-        start_date: parseMonthDate(data.experience.start),
-        end_date: parseMonthDate(data.experience.end),
-        is_current: /actual|presente|present|current|hoy/i.test(endText),
-        description: clean(data.experience.description, 5000) || null,
-        achievements: data.experience.achievements
-          .split(/\n|;/)
-          .map((achievement) => clean(achievement, 1000))
-          .filter(Boolean)
-          .slice(0, 12),
-        source: data.baseResumePath ? "cv_parse" : "manual",
-        verified_by_user: true,
-        sort_order: 0,
-      };
+    const { error: deleteExperiencesError } = await supabase
+      .from("experiences")
+      .delete()
+      .eq("user_id", userId);
+    if (deleteExperiencesError) throw new Error(deleteExperiencesError.message);
 
-      if (existingExperience) {
-        const { error } = await supabase
-          .from("experiences")
-          .update(experiencePayload)
-          .eq("id", existingExperience.id)
-          .eq("user_id", userId);
-        if (error) throw new Error(error.message);
-      } else {
-        const { data: inserted, error } = await supabase
-          .from("experiences")
-          .insert({ user_id: userId, ...experiencePayload })
-          .select("id")
-          .single();
-        if (error || !inserted) throw new Error(error?.message ?? "No pudimos guardar la experiencia.");
-        primaryExperienceId = inserted.id;
+    const normalizedExperiences = data.experiences
+      .map((experience, index) => {
+        if (!experience.company.trim() || !experience.title.trim()) return null;
+        const endText = experience.end.trim();
+        return {
+          user_id: userId,
+          company: clean(experience.company, 220),
+          title: clean(experience.title, 220),
+          start_date: parseMonthDate(experience.start),
+          end_date: parseMonthDate(experience.end),
+          is_current: /actual|presente|present|current|hoy/i.test(endText),
+          description: clean(experience.description, 5000) || null,
+          achievements: experience.achievements
+            .split(/\n|;/)
+            .map((achievement) => clean(achievement, 1000))
+            .filter(Boolean)
+            .slice(0, 20),
+          source: data.baseResumePath ? "cv_parse" : "manual",
+          verified_by_user: true,
+          sort_order: index,
+        };
+      })
+      .filter((experience): experience is NonNullable<typeof experience> =>
+        Boolean(experience),
+      )
+      .slice(0, 30);
+
+    const savedExperiences: Array<{ id: string; sortOrder: number }> = [];
+    if (normalizedExperiences.length) {
+      const { data: inserted, error } = await supabase
+        .from("experiences")
+        .insert(normalizedExperiences)
+        .select("id, sort_order");
+      if (error) throw new Error(error.message);
+      for (const row of inserted ?? []) {
+        savedExperiences.push({ id: row.id, sortOrder: row.sort_order });
       }
     }
 
@@ -787,7 +792,7 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
       .eq("source_type", "onboarding");
     if (deleteFactsError) throw new Error(deleteFactsError.message);
 
-    const facts = factRows(userId, data, primaryExperienceId);
+    const facts = factRows(userId, data, savedExperiences);
     if (facts.length) {
       const { error } = await supabase.from("fact_ledger").insert(facts);
       if (error) throw new Error(error.message);
