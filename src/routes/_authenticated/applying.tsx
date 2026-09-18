@@ -8,7 +8,7 @@ import { getBatchProgress } from "@/lib/auto-apply.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/applying")({
-  validateSearch: (search: Record<string, unknown>) => ({ batch: typeof search.batch === "string" ? search.batch : "" }),
+  validateSearch: (search: Record<string, unknown>) => ({ batch: typeof search["batch"] === "string" ? (search["batch"] as string) : "" }),
   head: () => ({
     meta: [
       { title: "Aplicando por vos — aplica" },
