@@ -13,7 +13,9 @@ import {
   Check,
   FileText,
   Loader2,
+  Plus,
   Sparkles,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ import { Choice } from "./aplica";
 import { OnboardingShell } from "./onboarding-shell";
 import { industries, skills } from "@/lib/aplica-data";
 import { refreshJobMatches } from "@/lib/auto-apply.functions";
+import { extractStructuredCv } from "@/lib/cv-extract.functions";
 import {
   getOnboardingSeed,
   saveOnboardingDraft,
@@ -87,6 +90,17 @@ type Profile = {
   level: string;
 };
 
+type ExperienceDraft = {
+  company: string;
+  title: string;
+  start: string;
+  end: string;
+  description: string;
+  achievements: string;
+  location: string;
+  confidence: number | null;
+};
+
 type CareerContextState = {
   responsibilities: string[];
   tools: string[];
@@ -132,6 +146,17 @@ const emptyProfile: Profile = {
   language: "Español",
   level: "Nativo",
 };
+
+const emptyExperience = (): ExperienceDraft => ({
+  company: "",
+  title: "",
+  start: "",
+  end: "",
+  description: "",
+  achievements: "",
+  location: "",
+  confidence: null,
+});
 
 const emptyCareerContext: CareerContextState = {
   responsibilities: [],
@@ -226,6 +251,7 @@ export function OnboardingFlow() {
     relocate: [],
   });
   const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [experiences, setExperiences] = useState<ExperienceDraft[]>([]);
   const [careerContext, setCareerContext] =
     useState<CareerContextState>(emptyCareerContext);
   const [writing, setWriting] = useState<WritingState>({
@@ -266,6 +292,7 @@ export function OnboardingFlow() {
   const persistDraft = useServerFn(saveOnboardingDraft);
   const fetchOnboardingSeed = useServerFn(getOnboardingSeed);
   const calculateMatches = useServerFn(refreshJobMatches);
+  const structuredCvExtract = useServerFn(extractStructuredCv);
 
   const toggle = (group: string, value: string) =>
     setSelected((current) => ({
@@ -297,6 +324,7 @@ export function OnboardingFlow() {
     searchPreferences,
     selected,
     profile,
+    experiences,
     careerContext,
     writing,
     sensitiveAnswers,
@@ -362,17 +390,33 @@ export function OnboardingFlow() {
             linkedin: profile.linkedin,
             portfolio: profile.portfolio,
           },
-          experience:
-            profile.company.trim() && profile.role.trim()
-              ? {
-                  company: profile.company,
-                  title: profile.role,
-                  start: profile.start,
-                  end: profile.end,
-                  description: profile.description,
-                  achievements: profile.achievements,
-                }
-              : null,
+          experiences:
+            experiences.length > 0
+              ? experiences
+                  .filter(
+                    (experience) =>
+                      experience.company.trim() && experience.title.trim(),
+                  )
+                  .map((experience) => ({
+                    company: experience.company,
+                    title: experience.title,
+                    start: experience.start,
+                    end: experience.end,
+                    description: experience.description,
+                    achievements: experience.achievements,
+                  }))
+              : profile.company.trim() && profile.role.trim()
+                ? [
+                    {
+                      company: profile.company,
+                      title: profile.role,
+                      start: profile.start,
+                      end: profile.end,
+                      description: profile.description,
+                      achievements: profile.achievements,
+                    },
+                  ]
+                : [],
           education: profile.institution.trim()
             ? {
                 institution: profile.institution,
@@ -429,6 +473,57 @@ export function OnboardingFlow() {
 
   const updateProfile = (key: keyof Profile, value: string) =>
     setProfile((current) => ({ ...current, [key]: value }));
+
+  const syncPrimaryExperienceToProfile = (items: ExperienceDraft[]) => {
+    const primary = items[0];
+    if (!primary) return;
+    setProfile((current) => ({
+      ...current,
+      company: primary.company,
+      role: primary.title,
+      start: primary.start,
+      end: primary.end,
+      description: primary.description,
+      achievements: primary.achievements,
+    }));
+  };
+
+  const updateExperience = (
+    index: number,
+    key: keyof ExperienceDraft,
+    value: string,
+  ) => {
+    setExperiences((current) => {
+      const next = current.map((experience, position) =>
+        position === index ? { ...experience, [key]: value } : experience,
+      );
+      if (index === 0) {
+        const primary = next[0];
+        if (primary) {
+          setProfile((profileState) => ({
+            ...profileState,
+            company: primary.company,
+            role: primary.title,
+            start: primary.start,
+            end: primary.end,
+            description: primary.description,
+            achievements: primary.achievements,
+          }));
+        }
+      }
+      return next;
+    });
+  };
+
+  const addExperience = () =>
+    setExperiences((current) => [...current, emptyExperience()]);
+
+  const removeExperience = (index: number) =>
+    setExperiences((current) => {
+      const next = current.filter((_, position) => position !== index);
+      if (index === 0) syncPrimaryExperienceToProfile(next);
+      return next;
+    });
 
   const acceptFile = (file?: File) => {
     if (!file || reading) return;
