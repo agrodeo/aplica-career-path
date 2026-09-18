@@ -534,7 +534,21 @@ export function OnboardingFlow() {
   const removeExperience = (index: number) =>
     setExperiences((current) => {
       const next = current.filter((_, position) => position !== index);
-      if (index === 0) syncPrimaryExperienceToProfile(next);
+      if (index === 0) {
+        if (next.length) {
+          syncPrimaryExperienceToProfile(next);
+        } else {
+          setProfile((profileState) => ({
+            ...profileState,
+            company: "",
+            role: "",
+            start: "",
+            end: "",
+            description: "",
+            achievements: "",
+          }));
+        }
+      }
       return next;
     });
 
