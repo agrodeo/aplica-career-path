@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const wisps = Array.from({ length: 12 }, (_, index) => index);
+const wisps = Array.from({ length: 8 }, (_, index) => index);
 
 export function OpportunityField() {
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -59,12 +59,8 @@ export function OpportunityField() {
       </div>
 
       <div className="atmosphere-depth atmosphere-depth-near">
-        <span className="atmosphere-signal atmosphere-signal-primary">
-          <b>94%</b><i />
-        </span>
-        <span className="atmosphere-signal atmosphere-signal-secondary">
-          <b>Marketing</b><i />
-        </span>
+        <span className="atmosphere-word atmosphere-word-score">94%</span>
+        <span className="atmosphere-word atmosphere-word-marketing">Marketing</span>
       </div>
     </div>
   );
