@@ -164,11 +164,14 @@ export async function processApplication(item: QueueItem): Promise<void> {
         answers,
         resumePath: resume.localPath,
         page,
-        dryRun: config.DRY_RUN,
+        dryRun: config.DRY_RUN || item.test_mode,
       });
 
       if (submission.dryRun) {
-        log.info("dry run completed successfully before final submit");
+        log.info(
+          { testMode: item.test_mode, workerDryRun: config.DRY_RUN },
+          "dry run completed successfully before final submit",
+        );
         await reportFailure(item.queue_id, {
           errorCode: "DRY_RUN_COMPLETE",
           errorMessage:
