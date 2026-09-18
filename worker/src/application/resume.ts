@@ -5,10 +5,13 @@ import { createUpload, saveResumeVariant, uploadToGrant } from "../api.js";
 import { withIsolatedPage } from "../browser/context.js";
 import { ApplicationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
-import type { JobRecord, MasterProfile } from "../adapters/types.js";
+import { tailorResumeCopy } from "./tailor.js";
+import type { JobRecord, MasterProfile, ResumeFact } from "../adapters/types.js";
 
 interface StructuredResume {
   professionalSummary: string;
+  professionalSummarySourceFactIds: string[];
+  generationModel: string | null;
   experience: {
     experienceId: string;
     company: string;
@@ -16,6 +19,7 @@ interface StructuredResume {
     startDate: string | null;
     endDate: string | null;
     bullets: string[];
+    bulletSourceFactIds: string[][];
   }[];
   education: {
     educationId: string;
@@ -44,7 +48,7 @@ export async function getOrCreateResume(
   profile: MasterProfile,
   applicationAttemptId: string,
 ): Promise<ResumeArtifact> {
-  const structured = buildStructuredResume(job, profile);
+  const structured = await buildStructuredResume(job, profile);
   const validation = validateAgainstProfile(structured, profile);
   if (!validation.passed) {
     throw new ApplicationError(
@@ -74,6 +78,7 @@ export async function getOrCreateResume(
       bullets: e.bullets,
     })),
     html,
+    generation_model: structured.generationModel,
     validation_status: "passed",
     validation_issues: [],
     master_profile_version: profile.masterProfileVersion,
@@ -88,46 +93,114 @@ export async function getOrCreateResume(
   };
 }
 
-function buildStructuredResume(job: JobRecord, profile: MasterProfile): StructuredResume {
+async function buildStructuredResume(
+  job: JobRecord,
+  profile: MasterProfile,
+): Promise<StructuredResume> {
   const jobText = `${job.title} ${job.description}`.toLowerCase();
-  const relevantSkills = profile.skills.filter((s) =>
-    jobText.includes(s.name.toLowerCase()),
+  const relevantSkills = profile.skills.filter((skill) =>
+    jobText.includes(skill.name.toLowerCase()),
   );
   const skills = (relevantSkills.length
     ? relevantSkills
     : profile.skills.slice(0, 8)
-  ).map((s) => s.name);
+  ).map((skill) => skill.name);
 
-  const experience = [...profile.experience]
+  const baseExperience = [...profile.experience]
     .sort((a, b) => {
-      const score = (exp: (typeof profile.experience)[number]) =>
-        (jobText.includes(exp.title.toLowerCase()) ? 2 : 0) +
-        (exp.isCurrent ? 1 : 0);
+      const score = (experience: (typeof profile.experience)[number]) =>
+        (jobText.includes(experience.title.toLowerCase()) ? 2 : 0) +
+        (experience.isCurrent ? 1 : 0);
       const diff = score(b) - score(a);
       return diff !== 0
         ? diff
         : (b.startDate ?? "").localeCompare(a.startDate ?? "");
     })
-    .map((exp) => ({
-      experienceId: exp.id,
-      company: exp.company,
-      title: exp.title,
-      startDate: exp.startDate,
-      endDate: exp.endDate,
-      bullets: [...exp.achievements, ...splitSentences(exp.description)]
+    .map((experience) => ({
+      experienceId: experience.id,
+      company: experience.company,
+      title: experience.title,
+      startDate: experience.startDate,
+      endDate: experience.endDate,
+      bullets: [
+        ...experience.achievements,
+        ...splitSentences(experience.description),
+      ]
         .filter(Boolean)
         .slice(0, 4),
+      bulletSourceFactIds: [] as string[][],
     }));
 
+  const tailored = await tailorResumeCopy(job, profile);
+  const tailoredByExperience = new Map(
+    tailored?.experiences.map((experience) => [
+      experience.experienceId,
+      experience.bullets,
+    ]) ?? [],
+  );
+
+  const experience = baseExperience.map((base) => {
+    const generated = tailoredByExperience.get(base.experienceId);
+    if (!generated?.length) {
+      return {
+        ...base,
+        bulletSourceFactIds: base.bullets.map(() => []),
+      };
+    }
+
+    const candidateFacts = profile.facts.filter(
+      (fact) =>
+        fact.userConfirmed &&
+        fact.allowedForResume &&
+        (!fact.sourceRef || fact.sourceRef === base.experienceId),
+    );
+    const sourceIds = generated.map((bullet) =>
+      candidateFacts
+        .filter((fact) => factClaimSupportsText(fact.claim, bullet))
+        .map((fact) => fact.id),
+    );
+
+    // tailorResumeCopy already validated explicit source IDs before returning.
+    // Reconstruct provenance by selecting the verified facts that overlap the
+    // final wording; if that cannot be done safely, keep deterministic bullets.
+    if (sourceIds.some((ids) => ids.length === 0)) {
+      return {
+        ...base,
+        bulletSourceFactIds: base.bullets.map(() => []),
+      };
+    }
+
+    return {
+      ...base,
+      bullets: generated,
+      bulletSourceFactIds: sourceIds,
+    };
+  });
+
+  const summary =
+    tailored?.summary?.trim() ||
+    profile.identity.professionalSummary ||
+    profile.identity.currentTitle;
+
   return {
-    professionalSummary:
-      profile.identity.professionalSummary || profile.identity.currentTitle,
+    professionalSummary: summary,
+    professionalSummarySourceFactIds: tailored
+      ? profile.facts
+          .filter(
+            (fact) =>
+              fact.userConfirmed &&
+              fact.allowedForResume &&
+              factClaimSupportsText(fact.claim, summary),
+          )
+          .map((fact) => fact.id)
+      : [],
+    generationModel: tailored?.model ?? null,
     experience,
-    education: profile.education.map((e) => ({
-      educationId: e.id,
-      institution: e.institution,
-      degree: e.degree,
-      field: e.field,
+    education: profile.education.map((education) => ({
+      educationId: education.id,
+      institution: education.institution,
+      degree: education.degree,
+      field: education.field,
     })),
     skills,
     languages: profile.languages,
@@ -161,8 +234,22 @@ function validateAgainstProfile(
         .map((value) => value.trim())
         .filter(Boolean),
     );
-    for (const bullet of exp.bullets) {
-      if (!sourceBullets.has(bullet)) {
+    for (const [index, bullet] of exp.bullets.entries()) {
+      if (sourceBullets.has(bullet)) continue;
+
+      const factIds = exp.bulletSourceFactIds[index] ?? [];
+      const facts = factIds
+        .map((id) => profile.facts.find((fact) => fact.id === id))
+        .filter((fact): fact is ResumeFact => Boolean(fact));
+
+      if (
+        !factIds.length ||
+        facts.length !== factIds.length ||
+        facts.some(
+          (fact) => !fact.userConfirmed || !fact.allowedForResume,
+        ) ||
+        !factBackedSentenceIsSafe(bullet, facts)
+      ) {
         issues.push(`unsupported bullet: ${bullet.slice(0, 60)}`);
       }
     }
@@ -180,6 +267,37 @@ function validateAgainstProfile(
   }
 
   return { passed: issues.length === 0, issues };
+}
+
+function factBackedSentenceIsSafe(
+  text: string,
+  facts: ResumeFact[],
+) {
+  const supported = facts.map((fact) => fact.claim).join(" ");
+  const supportedNumbers = new Set(numericTokens(supported));
+  return numericTokens(text).every((number) => supportedNumbers.has(number));
+}
+
+function factClaimSupportsText(claim: string, text: string) {
+  const claimWords = new Set(
+    claim
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}%]+/u)
+      .filter((word) => word.length >= 4),
+  );
+  if (!claimWords.size) return false;
+  const textWords = new Set(
+    text
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}%]+/u)
+      .filter((word) => word.length >= 4),
+  );
+  const overlap = [...claimWords].filter((word) => textWords.has(word)).length;
+  return overlap >= Math.min(2, claimWords.size);
+}
+
+function numericTokens(value: string) {
+  return value.match(/\b\d+(?:[.,]\d+)?%?\b/g) ?? [];
 }
 
 function splitSentences(text: string) {
