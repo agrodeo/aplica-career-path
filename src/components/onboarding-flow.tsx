@@ -34,15 +34,6 @@ const emptyProfile: Profile = {
   institution: "", degree: "", area: "", studyDates: "", language: "Español", level: "Nativo",
 };
 
-const parsedProfile: Profile = {
-  firstName: "Sofía", lastName: "Fernández", email: "sofia@email.com", phone: "+54 9 11 4567 8901",
-  country: "Argentina", city: "Buenos Aires",
-  company: "Naranja X", role: "Growth Analyst", start: "Mar 2023", end: "Actualidad",
-  description: "Análisis y optimización de campañas de adquisición digital.",
-  achievements: "Reduje el costo de adquisición con experimentos de segmentación.",
-  institution: "Universidad de Buenos Aires", degree: "Licenciatura", area: "Administración",
-  studyDates: "2018 — 2022", language: "Español", level: "Nativo",
-};
 
 export function OnboardingFlow() {
   const navigate = useNavigate();
@@ -77,20 +68,26 @@ export function OnboardingFlow() {
     if (!file || reading) return;
     setUploadedName(file.name);
     setReading(true);
-    window.setTimeout(() => {
+    void (async () => {
+      let fields: Partial<Profile> = {};
+      let foundSkills: string[] = [];
+      try {
+        const { parseCvFile } = await import("@/lib/cv-parse");
+        const result = await parseCvFile(file);
+        fields = result.fields as Partial<Profile>;
+        foundSkills = result.skills;
+      } catch {
+        fields = {};
+      }
+      const merged: Profile = { ...emptyProfile, ...fields };
       setReading(false);
-      setProfile(parsedProfile);
-      setCvParsed(true);
-      if (!name) setName(parsedProfile.firstName);
-      setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || parsedProfile.city });
-      setSelected((current) => ({
-        ...current,
-        skills: ["Marketing", "Excel", "SQL", "Meta Ads"],
-        seniority: ["Semi Senior"],
-        industry: ["Tecnología", "Finanzas"],
-      }));
+      setProfile(merged);
+      setCvParsed(Object.values(fields).some((value) => typeof value === "string" && value.trim().length > 0));
+      if (merged.firstName) setName(merged.firstName);
+      if (merged.city) setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || merged.city });
+      if (foundSkills.length) setSelected((current) => ({ ...current, skills: foundSkills }));
       setOnboardingStep(3);
-    }, 1300);
+    })();
   };
   const skipCv = () => {
     setProfile(emptyProfile);
