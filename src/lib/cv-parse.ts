@@ -46,28 +46,93 @@ const dateRange = /((?:ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|jan|apr|a
 
 async function extractPdf(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  const workerUrl = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+  const workerUrl = (
+    await import("pdfjs-dist/build/pdf.worker.min.mjs?url")
+  ).default;
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data }).promise;
   const pages: string[] = [];
-  for (let index = 1; index <= Math.min(pdf.numPages, 8); index += 1) {
+
+  for (let index = 1; index <= Math.min(pdf.numPages, 12); index += 1) {
     const page = await pdf.getPage(index);
     const content = await page.getTextContent();
-    let line = "";
-    let lastY: number | null = null;
-    const lines: string[] = [];
-    for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
-      if (typeof item.str !== "string") continue;
-      const y = item.transform?.[5] ?? null;
-      if (lastY !== null && y !== null && Math.abs(y - lastY) > 3) { lines.push(line.trim()); line = ""; }
-      line += item.str + " ";
-      lastY = y;
+    const items = (
+      content.items as Array<{
+        str?: string;
+        transform?: number[];
+        width?: number;
+        height?: number;
+      }>
+    )
+      .filter(
+        (item): item is {
+          str: string;
+          transform: number[];
+          width?: number;
+          height?: number;
+        } =>
+          typeof item.str === "string" &&
+          item.str.trim().length > 0 &&
+          Array.isArray(item.transform),
+      )
+      .map((item) => ({
+        text: item.str.trim(),
+        x: item.transform[4] ?? 0,
+        y: item.transform[5] ?? 0,
+        width: item.width ?? 0,
+      }));
+
+    // PDF text streams are often stored in drawing order rather than visual
+    // reading order. Reconstruct rows by Y coordinate first and then order
+    // fragments from left to right. This is dramatically safer for Canva and
+    // two-column resume templates than trusting content.items order.
+    const rows: Array<{
+      y: number;
+      items: Array<{ text: string; x: number; width: number }>;
+    }> = [];
+
+    for (const item of [...items].sort((a, b) => b.y - a.y || a.x - b.x)) {
+      const row = rows.find((candidate) => Math.abs(candidate.y - item.y) <= 3);
+      if (row) {
+        row.items.push({ text: item.text, x: item.x, width: item.width });
+      } else {
+        rows.push({
+          y: item.y,
+          items: [{ text: item.text, x: item.x, width: item.width }],
+        });
+      }
     }
-    lines.push(line.trim());
-    pages.push(lines.join("\n"));
+
+    rows.sort((a, b) => b.y - a.y);
+    const lines = rows
+      .map((row) => {
+        const fragments = row.items.sort((a, b) => a.x - b.x);
+        let previousEnd: number | null = null;
+        let line = "";
+        for (const fragment of fragments) {
+          if (
+            previousEnd !== null &&
+            fragment.x - previousEnd > 90 &&
+            line.trim()
+          ) {
+            // A large visual gap usually means a column boundary or separate
+            // field. Preserve that boundary for the structured extractor.
+            line += " | ";
+          } else if (line && !line.endsWith(" ")) {
+            line += " ";
+          }
+          line += fragment.text;
+          previousEnd = fragment.x + Math.max(fragment.width, 1);
+        }
+        return line.trim();
+      })
+      .filter(Boolean);
+
+    pages.push(`=== PAGE ${index} ===\n${lines.join("\n")}`);
   }
-  return pages.join("\n");
+
+  return pages.join("\n\n");
 }
 
 async function extractDocx(file: File): Promise<string> {
