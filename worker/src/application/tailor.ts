@@ -178,6 +178,7 @@ async function callModel(
     "You MAY improve wording, clarity, ordering, action verbs, concision and emphasis.",
     "You MUST NOT invent any employer, title, date, credential, skill, tool, responsibility, achievement, number, metric, language, education or result.",
     "Every generated bullet must be fully supported by the cited sourceFactIds.",
+    "For an experience bullet, cite only facts whose sourceRef equals that experience id. A global skill is not proof it was used at a specific employer.",
     "The summary may synthesize multiple verified facts, but must cite every fact it relies on.",
     "Do not claim causality, leadership, ownership, scale, seniority or expertise unless a cited fact explicitly supports it.",
     "Do not introduce any number that does not appear verbatim in the cited fact claims.",
