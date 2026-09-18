@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getAutoApplyOverview,
   listAutoApplyJobs,
+  refreshJobMatches,
   startAutoApplyBatch,
 } from "@/lib/auto-apply.functions";
 import { cn } from "@/lib/utils";
@@ -38,12 +39,16 @@ export const Route = createFileRoute("/jobs")({
 function JobsPage() {
   const navigate = useNavigate();
   const fetchJobs = useServerFn(listAutoApplyJobs);
+  const refreshMatches = useServerFn(refreshJobMatches);
   const fetchOverview = useServerFn(getAutoApplyOverview);
   const startBatch = useServerFn(startAutoApplyBatch);
 
   const jobsQuery = useQuery({
     queryKey: ["auto-apply-jobs"],
-    queryFn: () => fetchJobs(),
+    queryFn: async () => {
+      await refreshMatches();
+      return fetchJobs();
+    },
   });
   const overviewQuery = useQuery({
     queryKey: ["auto-apply-overview"],
