@@ -107,7 +107,11 @@ export function parseCvText(raw: string): CvResult {
     const degreeLine = around.find((line) => degreeWords.test(line));
     if (degreeLine) fields.degree = degreeLine.replace(/\s*[|·–-]\s*.*$/, "").trim();
     const range = around.join(" ").match(dateRange);
-    if (range) fields.studyDates = `${range[1].trim()} — ${/actualidad|presente|present|current/i.test(range[2]) ? "Actualidad" : range[2].trim()}`;
+    if (range) {
+      const from = (range[1] ?? "").trim();
+      const to = (range[2] ?? "").trim();
+      fields.studyDates = `${from} — ${/actualidad|presente|present|current/i.test(to) ? "Actualidad" : to}`;
+    }
   }
 
   if (/español|spanish|castellano/i.test(text)) { fields.language = "Español"; fields.level = "Nativo"; }
