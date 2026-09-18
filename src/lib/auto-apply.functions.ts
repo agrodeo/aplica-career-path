@@ -373,6 +373,90 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
     };
   });
 
+export const getAutoApplyJob = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { jobId: string }) => {
+    const jobId = data.jobId.trim();
+    if (!/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("Trabajo inválido.");
+    return { jobId };
+  })
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const [
+      { data: job },
+      { data: match },
+      { data: attempts },
+      { data: queue },
+    ] = await Promise.all([
+      supabase
+        .from("jobs")
+        .select(
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
+        )
+        .eq("id", data.jobId)
+        .eq("auto_apply_eligible", true)
+        .eq("is_active", true)
+        .maybeSingle(),
+      supabase
+        .from("job_matches")
+        .select("match_score,hard_requirements_met,explanation")
+        .eq("user_id", userId)
+        .eq("job_id", data.jobId)
+        .maybeSingle(),
+      supabase
+        .from("application_attempts")
+        .select("status,verified_at,queued_at")
+        .eq("user_id", userId)
+        .eq("job_id", data.jobId)
+        .order("queued_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("application_queue")
+        .select("status")
+        .eq("user_id", userId)
+        .eq("job_id", data.jobId)
+        .maybeSingle(),
+    ]);
+
+    if (!job) return null;
+
+    const readiness = await applicationReadiness(supabase, userId, [
+      { id: job.id, application_schema_id: job.application_schema_id },
+    ]);
+    const missingQuestions = readiness.get(job.id) ?? [];
+    const latestAttempt = attempts?.[0] ?? null;
+
+    return {
+      id: job.id,
+      title: job.title,
+      description: job.description ?? "",
+      company: job.companies?.name ?? "",
+      companyWebsite: job.companies?.website ?? null,
+      logoUrl: job.companies?.logo_url ?? null,
+      location: job.location,
+      country: job.country,
+      remoteType: job.remote_type,
+      employmentType: job.employment_type,
+      seniority: job.seniority,
+      salaryMin: job.salary_min,
+      salaryMax: job.salary_max,
+      salaryCurrency: job.salary_currency,
+      publishedAt: job.published_at,
+      adapter: job.auto_apply_adapter,
+      matchScore: match ? Number(match.match_score) : null,
+      hardRequirementsMet: match?.hard_requirements_met ?? false,
+      explanation: match?.explanation ?? null,
+      missingQuestions,
+      readyForUser: missingQuestions.length === 0,
+      applicationStatus:
+        latestAttempt?.status ??
+        queue?.status ??
+        null,
+      verifiedAt: latestAttempt?.verified_at ?? null,
+    };
+  });
+
 export const refreshJobMatches = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
