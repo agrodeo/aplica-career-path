@@ -158,5 +158,9 @@ export async function uploadToGrant(grant: UploadGrant, bytes: Buffer): Promise<
 }
 
 export async function saveResumeVariant(payload: Record<string, unknown>): Promise<{ id: string }> {
-  return postJson<{ id: string }>("/api/public/worker/resume-variant", payload);
+  const config = loadConfig();
+  return postJson<{ id: string }>("/api/public/worker/resume-variant", {
+    ...payload,
+    worker_id: config.WORKER_ID,
+  });
 }
