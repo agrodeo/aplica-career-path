@@ -124,6 +124,22 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           continue;
         }
 
+        if (field.type === "checkbox") {
+          const storedCheckbox = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (
+            !storedCheckbox ||
+            storedCheckbox.answerType !== "boolean" ||
+            storedCheckbox.booleanValue !== true
+          ) {
+            missingProfileAnswers.push(field.label);
+            continue;
+          }
+        }
+
         // MVP only generates/uploads the resume. Required extra documents are
         // a capability gap of the adapter, not a profile gap.
         if (field.type === "file") {
