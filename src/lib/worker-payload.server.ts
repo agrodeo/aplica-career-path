@@ -8,7 +8,22 @@ import type { WorkerDb } from "./worker-api.server";
 export async function buildApplicationPayload(db: WorkerDb, queue: { id: string; user_id: string; job_id: string; attempt_id: string; batch_id: string | null; attempts: number }) {
   const userId = queue.user_id;
 
-  const [job, profile, experiences, educations, skills, languages, answers, preferences, consent, subscription, credits] = await Promise.all([
+  const [
+    job,
+    profile,
+    experiences,
+    educations,
+    skills,
+    languages,
+    answers,
+    preferences,
+    consent,
+    subscription,
+    credits,
+    careerContext,
+    writingPreferences,
+    facts,
+  ] = await Promise.all([
     db
       .from("jobs")
       .select(
@@ -26,6 +41,14 @@ export async function buildApplicationPayload(db: WorkerDb, queue: { id: string;
     db.from("auto_apply_consents").select("authorized, authorized_at, terms_version, revoked_at").eq("user_id", userId).maybeSingle(),
     db.from("subscriptions").select("plan_code, status, current_period_start, current_period_end").eq("user_id", userId).maybeSingle(),
     db.from("application_credits").select("granted, consumed, period_start, period_end").eq("user_id", userId).order("period_start", { ascending: false }).limit(1),
+    db.from("career_contexts").select("*").eq("user_id", userId).maybeSingle(),
+    db.from("writing_preferences").select("*").eq("user_id", userId).maybeSingle(),
+    db
+      .from("fact_ledger")
+      .select("id,fact_type,claim,source_type,source_ref,user_confirmed,allowed_for_resume,confidence")
+      .eq("user_id", userId)
+      .eq("user_confirmed", true)
+      .eq("allowed_for_resume", true),
   ]);
 
   const jobRow = job.data;
@@ -92,6 +115,37 @@ export async function buildApplicationPayload(db: WorkerDb, queue: { id: string;
       skills: (skills.data ?? []).map((s) => ({ id: s.id, name: s.name })),
       languages: (languages.data ?? []).map((l) => ({ language: l.language, level: l.level })),
       links: { linkedin: profileRow.linkedin_url ?? "", portfolio: profileRow.portfolio_url ?? "" },
+      careerContext: {
+        preferredTasks: careerContext.data?.preferred_tasks ?? [],
+        avoidTasks: careerContext.data?.avoid_tasks ?? [],
+        strengths: careerContext.data?.strengths ?? [],
+        differentiators: careerContext.data?.differentiators ?? [],
+        tools: careerContext.data?.tools ?? [],
+        responsibilities: careerContext.data?.responsibilities ?? [],
+        results: careerContext.data?.results ?? [],
+        proudProject: careerContext.data?.proud_project ?? "",
+        challengeStory: careerContext.data?.challenge_story ?? "",
+        careerGoal: careerContext.data?.career_goal ?? "",
+        targetEnvironment: careerContext.data?.target_environment ?? "",
+        availability: careerContext.data?.availability ?? "",
+        travelPreference: careerContext.data?.travel_preference ?? "",
+      },
+      writingPreferences: {
+        voice: writingPreferences.data?.voice ?? "balanced",
+        emphasis: writingPreferences.data?.emphasis ?? [],
+        deEmphasis: writingPreferences.data?.de_emphasis ?? [],
+        summaryStyle: writingPreferences.data?.summary_style ?? "concise",
+      },
+      facts: (facts.data ?? []).map((fact) => ({
+        id: fact.id,
+        factType: fact.fact_type,
+        claim: fact.claim,
+        sourceType: fact.source_type,
+        sourceRef: fact.source_ref,
+        userConfirmed: fact.user_confirmed,
+        allowedForResume: fact.allowed_for_resume,
+        confidence: Number(fact.confidence),
+      })),
     },
     verified_answers: (answers.data ?? []).map((a) => ({
       canonicalKey: a.canonical_key,
