@@ -94,7 +94,16 @@ function Applications() {
   );
 }
 
-type ApplicationItem = Awaited<ReturnType<ReturnType<typeof useServerFn<typeof listMyApplications>>>>[number];
+type ApplicationItem = {
+  id: string;
+  status: string;
+  title: string;
+  company: string;
+  adapter: string | null;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  reference: string | null;
+};
 
 function ApplicationRow({ application }: { application: ApplicationItem }) {
   const [open, setOpen] = useState(false);
