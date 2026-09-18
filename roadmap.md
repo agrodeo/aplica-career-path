@@ -11,4 +11,4 @@
 - [x] Fijar y reforzar la red, con pulsos de luz activados por el cursor
 - [x] Rediseñar únicamente la portada como buscador premium con campo de oportunidades
 - [x] Refinar la portada con una atmósfera abstracta continua sin tarjetas
-- [ ] Refinar composición, buscador y profundidad atmosférica de la portada
+- [x] Refinar composición, buscador y profundidad atmosférica de la portada
