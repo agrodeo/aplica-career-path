@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
 function words(value: string) {
   return new Set(
@@ -40,6 +42,211 @@ function includesLoose(haystack: string | null, needle: string) {
 }
 
 
+type StoredApplicationField = {
+  label?: string;
+  answerKey?: string;
+  canonicalKey?: string | null;
+  type?: string;
+  required?: boolean;
+  options?: Array<{ label?: string; value?: string }>;
+  demographic?: boolean;
+};
+
+export type MissingApplicationQuestion = {
+  answerKey: string;
+  label: string;
+  fieldType: string;
+  answerType: "boolean" | "text" | "numeric";
+  options: Array<{ label: string; value: string }>;
+};
+
+type JobWithSchema = {
+  id: string;
+  application_schema_id: string | null;
+};
+
+function hasDeclineOption(options: StoredApplicationField["options"]) {
+  return (options ?? []).some((option) =>
+    /decline|prefer not|do not wish|no deseo|prefiero no/i.test(
+      option.label ?? "",
+    ),
+  );
+}
+
+function isBooleanOptions(options: StoredApplicationField["options"]) {
+  const labels = (options ?? [])
+    .flatMap((option) => [option.label ?? "", option.value ?? ""])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const hasYes = labels.some((value) => /^(yes|sí|si|true)$/.test(value));
+  const hasNo = labels.some((value) => /^(no|false)$/.test(value));
+  return hasYes && hasNo;
+}
+
+function questionType(field: StoredApplicationField): MissingApplicationQuestion["answerType"] {
+  if (field.type === "checkbox") return "boolean";
+  if (field.type === "radio" && isBooleanOptions(field.options)) return "boolean";
+  if (field.canonicalKey === "years_experience") return "numeric";
+  return "text";
+}
+
+async function applicationReadiness(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  jobs: JobWithSchema[],
+): Promise<Map<string, MissingApplicationQuestion[]>> {
+  const result = new Map<string, MissingApplicationQuestion[]>();
+  for (const job of jobs) result.set(job.id, []);
+  if (!jobs.length) return result;
+
+  const schemaIds = jobs
+    .map((job) => job.application_schema_id)
+    .filter((id): id is string => Boolean(id));
+
+  const [
+    { data: profile },
+    { data: experiences },
+    { data: answers },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "first_name,last_name,email,phone,city,country,linkedin_url,portfolio_url,current_title,professional_summary,base_resume_path",
+      )
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("experiences")
+      .select("company,title")
+      .eq("user_id", userId)
+      .limit(5),
+    supabase
+      .from("application_answers")
+      .select(
+        "canonical_key,answer_type,boolean_value,text_value,numeric_value,user_confirmed",
+      )
+      .eq("user_id", userId)
+      .eq("user_confirmed", true),
+  ]);
+
+  const confirmed = new Set((answers ?? []).map((answer) => answer.canonical_key));
+  const currentExperience = experiences?.[0] ?? null;
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: schemas, error: schemaError } = schemaIds.length
+    ? await supabaseAdmin
+        .from("application_schemas")
+        .select("id,job_id,fields,valid")
+        .in("id", schemaIds)
+    : { data: [], error: null };
+
+  if (schemaError) throw new Error(schemaError.message);
+
+  const schemaById = new Map(
+    (schemas ?? []).map((schema) => [schema.id, schema]),
+  );
+
+  const coveredCanonical = (key: string): boolean => {
+    switch (key) {
+      case "first_name":
+        return Boolean(profile?.first_name);
+      case "last_name":
+        return Boolean(profile?.last_name);
+      case "full_name":
+        return Boolean(profile?.first_name && profile?.last_name);
+      case "email":
+        return Boolean(profile?.email);
+      case "phone":
+        return Boolean(profile?.phone);
+      case "location":
+        return Boolean(profile?.city || profile?.country);
+      case "country":
+        return Boolean(profile?.country);
+      case "linkedin":
+        return Boolean(profile?.linkedin_url);
+      case "portfolio":
+      case "website":
+        return Boolean(profile?.portfolio_url);
+      case "current_company":
+        return Boolean(currentExperience?.company);
+      case "current_title":
+        return Boolean(profile?.current_title || currentExperience?.title);
+      case "years_experience":
+        return Boolean(experiences?.length);
+      case "resume":
+        return Boolean(
+          profile?.first_name &&
+            profile?.last_name &&
+            (profile?.current_title || experiences?.length || profile?.base_resume_path),
+        );
+      case "cover_letter":
+        return Boolean(profile?.professional_summary || experiences?.length);
+      default:
+        return confirmed.has(key);
+    }
+  };
+
+  for (const job of jobs) {
+    const missing: MissingApplicationQuestion[] = [];
+    const schema = job.application_schema_id
+      ? schemaById.get(job.application_schema_id)
+      : null;
+
+    // Structurally eligible jobs should always have a current schema. If the
+    // schema vanished, keep the job out of the ready bucket rather than guess.
+    if (!schema?.valid) {
+      missing.push({
+        answerKey: "system:application_schema",
+        label: "La vacante necesita volver a verificarse antes de aplicar.",
+        fieldType: "system",
+        answerType: "text",
+        options: [],
+      });
+      result.set(job.id, missing);
+      continue;
+    }
+
+    const fields = Array.isArray(schema.fields)
+      ? (schema.fields as unknown as StoredApplicationField[])
+      : [];
+
+    for (const field of fields) {
+      if (!field.required) continue;
+      if (field.demographic && hasDeclineOption(field.options)) continue;
+
+      const canonicalKey = field.canonicalKey ?? null;
+      const answerKey = (field.answerKey ?? canonicalKey ?? "").trim();
+      if (canonicalKey && coveredCanonical(canonicalKey)) continue;
+      if (!canonicalKey && answerKey && confirmed.has(answerKey)) continue;
+
+      // Required extra files and unknown controls are structural blockers and
+      // should already have prevented auto_apply_eligible=true.
+      if (field.type === "file" || field.type === "unknown") continue;
+      if (!answerKey) continue;
+
+      const options = (field.options ?? [])
+        .map((option) => ({
+          label: String(option.label ?? "").trim(),
+          value: String(option.value ?? "").trim(),
+        }))
+        .filter((option) => option.label && option.value);
+
+      missing.push({
+        answerKey,
+        label: (field.label ?? answerKey).replace(/\s*\*\s*$/, "").trim(),
+        fieldType: field.type ?? "text",
+        answerType: questionType(field),
+        options,
+      });
+    }
+
+    result.set(job.id, missing);
+  }
+
+  return result;
+}
+
+
 /**
  * Auto Apply inventory: only jobs a supported adapter can submit AND verify.
  * RLS already restricts the jobs table to auto_apply_eligible rows.
@@ -48,20 +255,30 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const [{ data: jobs }, { data: matches }, { data: preferences }] = await Promise.all([
-      supabase
-        .from("jobs")
-        .select("id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, company_id, companies(name, logo_url)")
-        .eq("auto_apply_eligible", true)
-        .eq("is_active", true)
-        .limit(500),
-      supabase.from("job_matches").select("*").eq("user_id", userId),
-      supabase.from("job_preferences").select("minimum_match_score").eq("user_id", userId).maybeSingle(),
-    ]);
+    const [{ data: jobs }, { data: matches }, { data: preferences }] =
+      await Promise.all([
+        supabase
+          .from("jobs")
+          .select(
+            "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
+          )
+          .eq("auto_apply_eligible", true)
+          .eq("is_active", true)
+          .limit(500),
+        supabase.from("job_matches").select("*").eq("user_id", userId),
+        supabase
+          .from("job_preferences")
+          .select("minimum_match_score")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ]);
 
     const minimum = Number(preferences?.minimum_match_score ?? 70);
-    const matchByJob = new Map((matches ?? []).map((match) => [match.job_id, match]));
-    const ready = (jobs ?? [])
+    const matchByJob = new Map(
+      (matches ?? []).map((match) => [match.job_id, match]),
+    );
+
+    const matched = (jobs ?? [])
       .map((job) => {
         const match = matchByJob.get(job.id);
         return {
@@ -78,15 +295,49 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           salaryCurrency: job.salary_currency,
           publishedAt: job.published_at,
           adapter: job.auto_apply_adapter,
+          applicationSchemaId: job.application_schema_id,
           matchScore: match ? Number(match.match_score) : null,
           hardRequirementsMet: match?.hard_requirements_met ?? false,
           explanation: match?.explanation ?? null,
         };
       })
-      .filter((job) => job.hardRequirementsMet && job.matchScore !== null && job.matchScore >= minimum)
+      .filter(
+        (job) =>
+          job.hardRequirementsMet &&
+          job.matchScore !== null &&
+          job.matchScore >= minimum,
+      )
       .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
-    return { readyCount: ready.length, minimumMatchScore: minimum, jobs: ready };
+    const readiness = await applicationReadiness(
+      supabase,
+      userId,
+      matched.map((job) => ({
+        id: job.id,
+        application_schema_id: job.applicationSchemaId,
+      })),
+    );
+
+    const ready = matched.map((job) => {
+      const missingQuestions = readiness.get(job.id) ?? [];
+      const actionableMissingQuestions = missingQuestions.filter(
+        (question) => !question.answerKey.startsWith("system:"),
+      );
+      return {
+        ...job,
+        missingQuestions,
+        readyForUser: missingQuestions.length === 0,
+        needsUserAnswers: actionableMissingQuestions.length > 0,
+      };
+    });
+
+    return {
+      matchedCount: ready.length,
+      readyCount: ready.filter((job) => job.readyForUser).length,
+      needsAnswersCount: ready.filter((job) => job.needsUserAnswers).length,
+      minimumMatchScore: minimum,
+      jobs: ready,
+    };
   });
 
 export const refreshJobMatches = createServerFn({ method: "POST" })
@@ -264,34 +515,197 @@ export const getAutoApplyOverview = createServerFn({ method: "GET" })
 export const startAutoApplyBatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { jobIds: string[] }) => {
-    if (!Array.isArray(data.jobIds) || data.jobIds.length === 0) throw new Error("Seleccioná al menos un trabajo.");
-    return { jobIds: data.jobIds.slice(0, 500) };
+    if (!Array.isArray(data.jobIds) || data.jobIds.length === 0) {
+      throw new Error("Seleccioná al menos un trabajo.");
+    }
+    return { jobIds: [...new Set(data.jobIds)].slice(0, 500) };
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: consent } = await supabase.from("auto_apply_consents").select("authorized, revoked_at").eq("user_id", userId).maybeSingle();
-    if (!consent?.authorized || consent.revoked_at) return { status: "consent_required" as const, batchId: null, results: {} };
+    const [{ data: consent }, { data: subscription }, { data: selectedJobs }] =
+      await Promise.all([
+        supabase
+          .from("auto_apply_consents")
+          .select("authorized, revoked_at")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        supabase
+          .from("subscriptions")
+          .select("status, current_period_start, current_period_end, plans(weekly_application_limit)")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        supabase
+          .from("jobs")
+          .select("id, application_schema_id")
+          .in("id", data.jobIds)
+          .eq("auto_apply_eligible", true)
+          .eq("is_active", true),
+      ]);
 
-    const { data: subscription } = await supabase.from("subscriptions").select("status, plans(weekly_application_limit)").eq("user_id", userId).maybeSingle();
-    if (subscription?.status !== "active") return { status: "subscription_required" as const, batchId: null, results: {} };
+    if (!consent?.authorized || consent.revoked_at) {
+      return {
+        status: "consent_required" as const,
+        batchId: null,
+        results: {},
+      };
+    }
+
+    if (subscription?.status !== "active") {
+      return {
+        status: "subscription_required" as const,
+        batchId: null,
+        results: {},
+      };
+    }
+
+    const jobs = selectedJobs ?? [];
+    const allowedIds = new Set(jobs.map((job) => job.id));
+    const unavailable = data.jobIds.filter((jobId) => !allowedIds.has(jobId));
+    if (unavailable.length) {
+      return {
+        status: "jobs_unavailable" as const,
+        batchId: null,
+        results: { unavailable: unavailable.length },
+      };
+    }
+
+    const readiness = await applicationReadiness(supabase, userId, jobs);
+    const missingAnswers = jobs.filter(
+      (job) => (readiness.get(job.id) ?? []).length > 0,
+    );
+    if (missingAnswers.length) {
+      return {
+        status: "answers_required" as const,
+        batchId: null,
+        results: { answers_required: missingAnswers.length },
+      };
+    }
+
+    const minimumMatch = await supabase
+      .from("job_preferences")
+      .select("minimum_match_score")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const minimum = Number(minimumMatch.data?.minimum_match_score ?? 70);
+    const { data: selectedMatches } = await supabase
+      .from("job_matches")
+      .select("job_id, match_score, hard_requirements_met")
+      .eq("user_id", userId)
+      .in("job_id", data.jobIds);
+
+    const qualifiedIds = new Set(
+      (selectedMatches ?? [])
+        .filter(
+          (match) =>
+            match.hard_requirements_met &&
+            Number(match.match_score) >= minimum,
+        )
+        .map((match) => match.job_id),
+    );
+    if (qualifiedIds.size !== data.jobIds.length) {
+      return {
+        status: "jobs_unavailable" as const,
+        batchId: null,
+        results: { below_match_threshold: data.jobIds.length - qualifiedIds.size },
+      };
+    }
+
+    const weeklyLimit =
+      subscription.plans?.weekly_application_limit ?? null;
+    if (weeklyLimit != null) {
+      const now = new Date();
+      const periodStart =
+        subscription.current_period_start ??
+        new Date(
+          Date.UTC(
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate() - ((now.getUTCDay() + 6) % 7),
+          ),
+        ).toISOString();
+      const periodEnd =
+        subscription.current_period_end ??
+        new Date(new Date(periodStart).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      const [{ data: credits }, { count: outstanding }] = await Promise.all([
+        supabase
+          .from("application_credits")
+          .select("consumed")
+          .eq("user_id", userId)
+          .gte("period_start", periodStart.slice(0, 10))
+          .lte("period_start", periodEnd.slice(0, 10)),
+        supabase
+          .from("application_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("queued_at", periodStart)
+          .lt("queued_at", periodEnd)
+          .in("status", [
+            "queued",
+            "preparing",
+            "resume_generating",
+            "ready",
+            "submitting",
+            "submitted_unverified",
+            "failed_retryable",
+          ]),
+      ]);
+
+      const consumed = (credits ?? []).reduce(
+        (total, row) => total + (row.consumed ?? 0),
+        0,
+      );
+      const remaining = Math.max(
+        weeklyLimit - consumed - (outstanding ?? 0),
+        0,
+      );
+
+      if (data.jobIds.length > remaining) {
+        return {
+          status: "limit_exceeded" as const,
+          batchId: null,
+          results: {
+            requested: data.jobIds.length,
+            remaining,
+            weekly_limit: weeklyLimit,
+          },
+        };
+      }
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: batch, error: batchError } = await supabaseAdmin
       .from("application_batches")
-      .insert({ user_id: userId, total_selected: data.jobIds.length, status: "open" })
+      .insert({
+        user_id: userId,
+        total_selected: data.jobIds.length,
+        status: "open",
+      })
       .select("id")
       .single();
     if (batchError) throw new Error(batchError.message);
 
     const results: Record<string, number> = {};
     for (const jobId of data.jobIds) {
-      const { data: outcome } = await supabaseAdmin.rpc("enqueue_application", { _user_id: userId, _job_id: jobId, _batch_id: batch.id, _priority: 100 });
+      const { data: outcome } = await supabaseAdmin.rpc(
+        "enqueue_application",
+        {
+          _user_id: userId,
+          _job_id: jobId,
+          _batch_id: batch.id,
+          _priority: 100,
+        },
+      );
       const key = (outcome as string) ?? "error";
       results[key] = (results[key] ?? 0) + 1;
     }
 
-    return { status: "queued" as const, batchId: batch.id, results };
+    return {
+      status: "queued" as const,
+      batchId: batch.id,
+      results,
+    };
   });
 
 export const getBatchProgress = createServerFn({ method: "GET" })
