@@ -49,10 +49,12 @@ export function OnboardingFlow() {
   const { onboardingStep, setOnboardingStep, completeOnboarding, name, setName, searchPreferences, setSearchPreferences } = useAplica();
   const step = Math.min(TOTAL, Math.max(1, onboardingStep));
   const [selected, setSelected] = useState<Answers>({
-    skills: ["Marketing", "Excel", "SQL", "Meta Ads"], roles: [searchPreferences.role || "Growth Manager"],
-    mode: [searchPreferences.mode || "Remoto"], employment: ["Full-time"], seniority: ["Semi Senior", "Senior"],
-    industry: ["Tecnología", "Finanzas"], size: ["Startup", "Empresa mediana"], avoid: [], dealbreakers: ["No presencial"],
+    skills: [], roles: [searchPreferences.role || "Growth Manager"],
+    mode: [searchPreferences.mode || "Remoto"], employment: ["Full-time"], seniority: [],
+    industry: [], size: [], avoid: [], dealbreakers: [],
   });
+  const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [cvParsed, setCvParsed] = useState(false);
   const [uploadedName, setUploadedName] = useState("");
   const [reading, setReading] = useState(false);
   const [consents, setConsents] = useState([false, false]);
