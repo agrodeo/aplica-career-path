@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      adapter_inspections: {
+        Row: {
+          adapter: string | null
+          ats_type: string | null
+          auto_apply_eligible: boolean | null
+          captcha_detected: boolean | null
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          locked_at: string | null
+          login_required: boolean | null
+          mapped_fields: Json
+          mode: string
+          reason: string | null
+          requested_by: string
+          required_fields: Json
+          status: string
+          unknown_fields: Json
+          url: string
+          worker_id: string | null
+        }
+        Insert: {
+          adapter?: string | null
+          ats_type?: string | null
+          auto_apply_eligible?: boolean | null
+          captcha_detected?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          locked_at?: string | null
+          login_required?: boolean | null
+          mapped_fields?: Json
+          mode?: string
+          reason?: string | null
+          requested_by: string
+          required_fields?: Json
+          status?: string
+          unknown_fields?: Json
+          url: string
+          worker_id?: string | null
+        }
+        Update: {
+          adapter?: string | null
+          ats_type?: string | null
+          auto_apply_eligible?: boolean | null
+          captcha_detected?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          locked_at?: string | null
+          login_required?: boolean | null
+          mapped_fields?: Json
+          mode?: string
+          reason?: string | null
+          requested_by?: string
+          required_fields?: Json
+          status?: string
+          unknown_fields?: Json
+          url?: string
+          worker_id?: string | null
+        }
+        Relationships: []
+      }
       adapter_registry: {
         Row: {
           adapter: string
@@ -120,6 +189,8 @@ export type Database = {
           submission_reference: string | null
           submitted_at: string | null
           user_id: string
+          verification_type: string | null
+          verification_value: string | null
           verified_at: string | null
         }
         Insert: {
@@ -140,6 +211,8 @@ export type Database = {
           submission_reference?: string | null
           submitted_at?: string | null
           user_id: string
+          verification_type?: string | null
+          verification_value?: string | null
           verified_at?: string | null
         }
         Update: {
@@ -160,6 +233,8 @@ export type Database = {
           submission_reference?: string | null
           submitted_at?: string | null
           user_id?: string
+          verification_type?: string | null
+          verification_value?: string | null
           verified_at?: string | null
         }
         Relationships: [
@@ -355,38 +430,47 @@ export type Database = {
       application_schemas: {
         Row: {
           adapter: string
+          captcha_detected: boolean
           fields: Json
           id: string
           job_id: string | null
           last_verified_at: string | null
+          login_required: boolean
           required_fields: Json
           schema_version: string
           supports_auto_submit: boolean
           supports_file_upload: boolean
+          unknown_required_fields: Json
           valid: boolean
         }
         Insert: {
           adapter: string
+          captcha_detected?: boolean
           fields?: Json
           id?: string
           job_id?: string | null
           last_verified_at?: string | null
+          login_required?: boolean
           required_fields?: Json
           schema_version?: string
           supports_auto_submit?: boolean
           supports_file_upload?: boolean
+          unknown_required_fields?: Json
           valid?: boolean
         }
         Update: {
           adapter?: string
+          captcha_detected?: boolean
           fields?: Json
           id?: string
           job_id?: string | null
           last_verified_at?: string | null
+          login_required?: boolean
           required_fields?: Json
           schema_version?: string
           supports_auto_submit?: boolean
           supports_file_upload?: boolean
+          unknown_required_fields?: Json
           valid?: boolean
         }
         Relationships: [
@@ -784,6 +868,7 @@ export type Database = {
           employment_type: string | null
           external_job_id: string
           id: string
+          ineligibility_reason: string | null
           is_active: boolean
           last_verified_at: string | null
           location: string | null
@@ -795,6 +880,7 @@ export type Database = {
           salary_min: number | null
           seniority: string | null
           source_id: string | null
+          submission_mechanism: string
           title: string
         }
         Insert: {
@@ -810,6 +896,7 @@ export type Database = {
           employment_type?: string | null
           external_job_id: string
           id?: string
+          ineligibility_reason?: string | null
           is_active?: boolean
           last_verified_at?: string | null
           location?: string | null
@@ -821,6 +908,7 @@ export type Database = {
           salary_min?: number | null
           seniority?: string | null
           source_id?: string | null
+          submission_mechanism?: string
           title: string
         }
         Update: {
@@ -836,6 +924,7 @@ export type Database = {
           employment_type?: string | null
           external_job_id?: string
           id?: string
+          ineligibility_reason?: string | null
           is_active?: boolean
           last_verified_at?: string | null
           location?: string | null
@@ -847,6 +936,7 @@ export type Database = {
           salary_min?: number | null
           seniority?: string | null
           source_id?: string | null
+          submission_mechanism?: string
           title?: string
         }
         Relationships: [
@@ -942,6 +1032,7 @@ export type Database = {
           id: string
           last_name: string | null
           linkedin_url: string | null
+          master_profile_version: number
           phone: string | null
           portfolio_url: string | null
           professional_summary: string | null
@@ -960,6 +1051,7 @@ export type Database = {
           id?: string
           last_name?: string | null
           linkedin_url?: string | null
+          master_profile_version?: number
           phone?: string | null
           portfolio_url?: string | null
           professional_summary?: string | null
@@ -978,6 +1070,7 @@ export type Database = {
           id?: string
           last_name?: string | null
           linkedin_url?: string | null
+          master_profile_version?: number
           phone?: string | null
           portfolio_url?: string | null
           professional_summary?: string | null
@@ -996,6 +1089,7 @@ export type Database = {
           html: string | null
           id: string
           job_id: string | null
+          master_profile_version: number
           pdf_path: string | null
           professional_summary: string | null
           selected_experience_ids: string[]
@@ -1013,6 +1107,7 @@ export type Database = {
           html?: string | null
           id?: string
           job_id?: string | null
+          master_profile_version?: number
           pdf_path?: string | null
           professional_summary?: string | null
           selected_experience_ids?: string[]
@@ -1030,6 +1125,7 @@ export type Database = {
           html?: string | null
           id?: string
           job_id?: string | null
+          master_profile_version?: number
           pdf_path?: string | null
           professional_summary?: string | null
           selected_experience_ids?: string[]
@@ -1168,6 +1264,37 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "application_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_inspection: {
+        Args: { _limit?: number; _worker_id: string }
+        Returns: {
+          adapter: string | null
+          ats_type: string | null
+          auto_apply_eligible: boolean | null
+          captcha_detected: boolean | null
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          locked_at: string | null
+          login_required: boolean | null
+          mapped_fields: Json
+          mode: string
+          reason: string | null
+          requested_by: string
+          required_fields: Json
+          status: string
+          unknown_fields: Json
+          url: string
+          worker_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "adapter_inspections"
           isOneToOne: false
           isSetofReturn: true
         }
