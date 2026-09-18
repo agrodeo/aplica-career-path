@@ -82,12 +82,17 @@ export function parseCvText(raw: string): CvResult {
 
   const roleIndex = lines.findIndex((line) => line.length <= 60 && roleWords.test(line) && !/@/.test(line));
   if (roleIndex >= 0) {
-    fields.role = lines[roleIndex].replace(/\s*[|·–-]\s*.*$/, "").trim();
+    fields.role = (lines[roleIndex] ?? "").replace(/\s*[|·–-]\s*.*$/, "").trim();
     const context = lines.slice(roleIndex, roleIndex + 5);
     const companyLine = context.slice(1).find((line) => line.length <= 60 && !dateRange.test(line) && !/@|\d{4}/.test(line));
     if (companyLine) fields.company = companyLine.replace(/^(en|at)\s+/i, "").trim();
     const range = context.join(" ").match(dateRange);
-    if (range) { fields.start = range[1].trim(); fields.end = /actualidad|presente|present|current|hoy/i.test(range[2]) ? "Actualidad" : range[2].trim(); }
+    if (range) {
+      const from = (range[1] ?? "").trim();
+      const to = (range[2] ?? "").trim();
+      fields.start = from;
+      fields.end = /actualidad|presente|present|current|hoy/i.test(to) ? "Actualidad" : to;
+    }
     const description = lines.slice(roleIndex + 1, roleIndex + 8).find((line) => line.length > 60);
     if (description) fields.description = description;
     const achievement = lines.slice(roleIndex + 1, roleIndex + 12).find((line) => line.length > 40 && /\d+\s*%|aument|reduj|redu|creci|logr|increment|ahorr/i.test(line));
