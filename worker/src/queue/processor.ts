@@ -5,6 +5,7 @@ import {
   prepareAnswers,
   validateGeneratedAnswer,
 } from "../application/answers.js";
+import { improveNarrativeAnswers } from "../application/narrative.js";
 import { getOrCreateResume } from "../application/resume.js";
 import {
   ApplicationError,
@@ -133,7 +134,12 @@ export async function processApplication(item: QueueItem): Promise<void> {
         item.application_attempt_id,
       );
 
-      const answers = prepareAnswers(schema, profile, job);
+      const deterministicAnswers = prepareAnswers(schema, profile, job);
+      const answers = await improveNarrativeAnswers(
+        deterministicAnswers,
+        profile,
+        job,
+      );
       for (const answer of answers.filter((a) => a.source === "generated")) {
         const validation = validateGeneratedAnswer(
           String(answer.value),
