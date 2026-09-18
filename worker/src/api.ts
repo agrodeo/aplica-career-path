@@ -7,6 +7,7 @@ export interface ClaimedApplication {
   queue_id: string;
   attempt_number: number;
   batch_id: string | null;
+  test_mode: boolean;
   job: {
     id: string;
     title: string;
