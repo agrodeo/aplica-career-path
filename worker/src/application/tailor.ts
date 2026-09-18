@@ -311,6 +311,21 @@ function validateTailoring(
       const text = bullet.text.trim();
       const sourceFactIds = bullet.sourceFactIds ?? [];
       if (!validateSentence(text, sourceFactIds)) return null;
+
+      // A globally confirmed skill can support a summary/skills section, but
+      // it cannot be turned into "I used X at Employer Y" unless the user tied
+      // that fact to this exact experience.
+      const bulletFacts = sourceFactIds
+        .map((id) => factById.get(id))
+        .filter((fact): fact is ResumeFact => Boolean(fact));
+      if (
+        bulletFacts.some(
+          (fact) => fact.sourceRef !== experience.experienceId,
+        )
+      ) {
+        return null;
+      }
+
       bullets.push({ text, sourceFactIds });
     }
     experiences.push({
