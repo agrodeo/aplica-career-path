@@ -104,3 +104,31 @@ Transient failures:
 
 Other terminal failures:
 `SUBMISSION_REJECTED`, `VERIFICATION_FAILED`.
+
+
+## Fact-grounded AI tailoring
+
+The worker can optionally improve resume wording per job without inventing facts.
+
+Set both:
+
+```env
+OPENAI_API_KEY=...
+RESUME_LLM_MODEL=...
+```
+
+If either variable is missing, Aplica keeps the deterministic resume copy.
+
+When enabled, the worker sends only the target job, writing preferences and
+confirmed FactLedger claims needed for tailoring. Requests use `store: false`.
+The model must return structured copy with explicit FactLedger IDs for every
+generated sentence. Deterministic validators reject generated copy when it:
+
+- cites an unknown or unconfirmed fact,
+- uses a fact that is not allowed for resumes,
+- introduces a numeric claim that is absent from its cited facts,
+- changes an employer, title or date,
+- fails provenance validation for any bullet or summary.
+
+Rejected AI output never blocks the application: the worker falls back to the
+truthful deterministic resume.
