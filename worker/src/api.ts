@@ -95,15 +95,27 @@ export async function claimInspections(limit = 1): Promise<InspectionItem[]> {
 }
 
 export async function reportStatus(queueId: string, status: string): Promise<void> {
-  await postJson(`/api/public/worker/jobs/${queueId}/status`, { status });
+  const config = loadConfig();
+  await postJson(`/api/public/worker/jobs/${queueId}/status`, {
+    status,
+    worker_id: config.WORKER_ID,
+  });
 }
 
 export async function reportSubmission(queueId: string, payload: Record<string, unknown>): Promise<void> {
-  await postJson(`/api/public/worker/jobs/${queueId}/submission`, payload);
+  const config = loadConfig();
+  await postJson(`/api/public/worker/jobs/${queueId}/submission`, {
+    ...payload,
+    worker_id: config.WORKER_ID,
+  });
 }
 
 export async function reportFailure(queueId: string, payload: Record<string, unknown>): Promise<void> {
-  await postJson(`/api/public/worker/jobs/${queueId}/failure`, payload);
+  const config = loadConfig();
+  await postJson(`/api/public/worker/jobs/${queueId}/failure`, {
+    ...payload,
+    worker_id: config.WORKER_ID,
+  });
 }
 
 export async function reportInspection(inspectionId: string, payload: Record<string, unknown>): Promise<void> {
