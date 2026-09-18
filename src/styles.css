@@ -408,7 +408,8 @@
 .coverage-wall {
   width: 100%;
   margin-top: 24px;
-  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 10%, black 24%, black 76%, rgba(0,0,0,.4) 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 10%, black 24%, black 76%, rgba(0,0,0,.4) 90%, transparent);
 }
 .coverage-marquee { overflow: hidden; padding-block: 11px; }
 .coverage-track { display: flex; width: max-content; will-change: transform; animation: coverage-left 46s linear infinite; }
@@ -524,7 +525,7 @@
   .onboarding-trust { position: relative; bottom: auto; left: auto; flex-direction: column; transform: none; gap: 6px; padding: 0 20px 28px; text-align: center; }
   .coverage-section { min-height: 250px; padding: 34px 0 24px; }
   .coverage-heading h2 { max-width: 340px; font-size: 23px; }
-  .coverage-wall { margin-top: 25px; mask-image: linear-gradient(to right, transparent, black 13%, black 87%, transparent); }
+  .coverage-wall { margin-top: 25px; mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 16%, black 32%, black 68%, rgba(0,0,0,.4) 84%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 16%, black 32%, black 68%, rgba(0,0,0,.4) 84%, transparent); }
   .coverage-marquee { padding-block: 11px; }
   .coverage-group { gap: 38px; padding-right: 38px; }
   .coverage-logo { font-size: 20px; }
