@@ -15,6 +15,8 @@ const schema = z.object({
   OPENAI_API_KEY: z.string().min(20).optional(),
   RESUME_LLM_MODEL: z.string().min(1).optional(),
   RESUME_LLM_VERIFIER_MODEL: z.string().min(1).optional(),
+  APPLICATION_LLM_MODEL: z.string().min(1).optional(),
+  APPLICATION_LLM_VERIFIER_MODEL: z.string().min(1).optional(),
 });
 
 export type WorkerConfig = z.infer<typeof schema>;
