@@ -115,9 +115,13 @@ function phaseContent(phase: number): ReactNode {
       <>
         <div className="demo-heading"><span className="demo-eyebrow">Cola de postulaciones</span><h2>Aplicando por vos</h2></div>
         <div className="demo-queue">
-          <div className="demo-queue-row is-done"><span><strong>Growth Manager</strong><small>CV adaptado</small></span><b><Check /> Aplicado</b></div>
-          <div className="demo-queue-row is-done demo-queue-second"><span><strong>Growth Associate</strong><small>CV adaptado</small></span><b><Check /> Aplicado</b></div>
-          <div className="demo-queue-row is-applying"><span><strong>Marketing Manager</strong><small>Preparando postulación</small></span><b>Aplicando...</b></div>
+          {demoJobs.map((job, index) => (
+            <div className={index < 2 ? "demo-queue-row is-done" : "demo-queue-row is-applying"} style={{ "--demo-order": index } as CSSProperties} key={job.role}>
+              <img className="demo-job-logo" src={job.logo} alt={job.company} />
+              <span><strong>{job.role}</strong><small>{index < 2 ? "CV adaptado" : "Preparando postulación"}</small></span>
+              <b>{index < 2 ? <><Check /> Aplicado</> : "Aplicando..."}</b>
+            </div>
+          ))}
         </div>
       </>
     );
