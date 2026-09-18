@@ -318,7 +318,7 @@ export function validateGeneratedAnswer(answer: string, profile: MasterProfile, 
 
   const unsupportedClaims: string[] = [];
 
-  for (const match of answer.matchAll(/\b\d+(?:[.,]\d+)?%?\b/g)) {
+  for (const match of answer.matchAll(/\d+(?:[.,]\d+)?%?/g)) {
     if (!allowed.includes(match[0].toLowerCase())) unsupportedClaims.push(match[0]);
   }
   for (const match of answer.matchAll(/\b[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]{2,}(?:\s+[A-ZÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ]{2,})*/g)) {
