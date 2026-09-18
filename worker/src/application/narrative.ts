@@ -369,10 +369,11 @@ async function rewriteAnswers(
 
   const parsed = JSON.parse(text) as { answers?: RewrittenAnswer[] };
   const returned = parsed.answers ?? [];
-  const expected = new Set(
+  const expected = new Set<string>(
     requested
       .map((answer) => answer.answerKey)
-      .filter((key): key is string => Boolean(key)),
+      .filter(Boolean)
+      .map((key) => String(key)),
   );
 
   return returned.filter(
