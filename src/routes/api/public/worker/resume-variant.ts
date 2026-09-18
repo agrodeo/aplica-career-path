@@ -35,13 +35,16 @@ export const Route = createFileRoute("/api/public/worker/resume-variant")({
         };
 
         const attemptId = body.application_attempt_id ?? "";
-        if (!attemptId || body.validation_status !== "passed" || !body.pdf_path) {
+        const workerId = (body.worker_id ?? "").slice(0, 64);
+        if (!attemptId || !workerId || body.validation_status !== "passed" || !body.pdf_path) {
           return jsonResponse({ error: "invalid_request" }, 400);
         }
 
         const db = workerDb();
-        const owned = await loadOwnedAttempt(db, attemptId, body.worker_id);
-        if (!owned || !owned.queueId) return jsonResponse({ error: "not_owned" }, 403);
+        const owned = await loadOwnedAttempt(db, attemptId, workerId);
+        if (!owned || !owned.queueId || owned.workerId !== workerId) {
+          return jsonResponse({ error: "not_owned" }, 403);
+        }
 
         const { data: profile } = await db
           .from("profiles")
