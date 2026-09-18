@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
 import { prepareAnswers } from "../application/answers.js";
@@ -171,6 +174,55 @@ test("country is mapped from the profile to the ATS option value", async () => {
     });
     const country = answers.find((answer) => answer.field.canonicalKey === "country");
     assert.equal(country?.value, "AR");
+  } finally {
+    await page.close();
+  }
+});
+
+test("dry run fills verified fields and stops before final submit", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(baseUrl, page);
+    const profile = withSponsorship();
+    const job = {
+      id: "job",
+      title: "Growth Analyst",
+      description: "",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    };
+    const answers = prepareAnswers(schema, profile, job);
+
+    const dir = await mkdtemp(join(tmpdir(), "aplica-test-"));
+    const resumePath = join(dir, "resume.pdf");
+    await writeFile(resumePath, Buffer.from("%PDF-1.4\n% test resume"));
+
+    const result = await adapter.submit({
+      job,
+      profile,
+      schema,
+      answers,
+      resumePath,
+      page,
+      dryRun: true,
+    });
+
+    assert.equal(result.dryRun, true);
+    assert.equal(result.submitted, false);
+    assert.equal(await page.locator("#first_name").inputValue(), "Sofia");
+    assert.equal(await page.locator("#last_name").inputValue(), "Fernandez");
+    assert.equal(await page.locator("#email").inputValue(), "sofia@example.com");
+    assert.equal(await page.locator("#country").inputValue(), "AR");
+    assert.equal(
+      await page.locator('input[name="sponsorship"]:checked').inputValue(),
+      "no",
+    );
+    const uploadedFiles = await page.locator("#resume").evaluate(
+      (input) => (input as HTMLInputElement).files?.length ?? 0,
+    );
+    assert.equal(uploadedFiles, 1);
   } finally {
     await page.close();
   }
