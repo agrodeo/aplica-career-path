@@ -282,7 +282,9 @@ function validateTailoring(
 
   const summary = raw.summary?.text?.trim() ?? "";
   const summaryIds = raw.summary?.sourceFactIds ?? [];
-  if (summary && !validateSentence(summary, summaryIds)) return null;
+  if (!summary || !summaryIds.length || !validateSentence(summary, summaryIds)) {
+    return null;
+  }
 
   const experiences: TailoredExperience[] = [];
   for (const experience of raw.experiences ?? []) {
