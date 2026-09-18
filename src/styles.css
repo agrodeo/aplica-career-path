@@ -206,11 +206,11 @@
   position: relative;
   isolation: isolate;
   background: linear-gradient(180deg,
-    oklch(0.872 0.092 252) 0%,
-    oklch(0.912 0.068 251) 26%,
-    oklch(0.947 0.042 250) 52%,
-    oklch(0.972 0.02 250) 78%,
-    oklch(0.986 0.008 250) 100%);
+    oklch(0.79 0.128 252) 0%,
+    oklch(0.862 0.096 251) 24%,
+    oklch(0.922 0.058 250) 48%,
+    oklch(0.965 0.028 250) 74%,
+    oklch(0.992 0.006 250) 100%);
 }
 .home-continuum::before {
   content: "";
