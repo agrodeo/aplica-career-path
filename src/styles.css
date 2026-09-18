@@ -408,7 +408,8 @@
 .coverage-wall {
   width: 100%;
   margin-top: 24px;
-  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 10%, black 24%, black 76%, rgba(0,0,0,.4) 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, rgba(0,0,0,.4) 10%, black 24%, black 76%, rgba(0,0,0,.4) 90%, transparent);
 }
 .coverage-marquee { overflow: hidden; padding-block: 11px; }
 .coverage-track { display: flex; width: max-content; will-change: transform; animation: coverage-left 46s linear infinite; }
