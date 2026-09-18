@@ -313,10 +313,44 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
         }
 
         let label = "";
-        if (id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
+
+        // Radio inputs often have per-option labels ("Yes"/"No"). The
+        // canonical question lives on the group legend/aria label, so resolve
+        // that first or we'd lose questions such as sponsorship.
+        if (inputType === "radio") {
+          const fieldset = el.closest("fieldset");
+          label = fieldset?.querySelector(":scope > legend")?.textContent?.trim() ?? "";
+          if (!label) {
+            const group = el.closest('[role="radiogroup"]');
+            const labelledBy = group?.getAttribute("aria-labelledby");
+            if (labelledBy) {
+              label =
+                document.getElementById(labelledBy)?.textContent?.trim() ?? "";
+            }
+            if (!label) label = group?.getAttribute("aria-label") ?? "";
+          }
+        }
+
+        if (!label && id) {
+          label =
+            document
+              .querySelector(`label[for="${CSS.escape(id)}"]`)
+              ?.textContent?.trim() ?? "";
+        }
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
-        if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
-        if (!label) label = el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? name;
+        if (!label) {
+          label =
+            el
+              .closest("div,fieldset")
+              ?.querySelector("label,legend")
+              ?.textContent?.trim() ?? "";
+        }
+        if (!label) {
+          label =
+            el.getAttribute("aria-label") ??
+            el.getAttribute("placeholder") ??
+            name;
+        }
 
         const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /\*/.test(label);
 
