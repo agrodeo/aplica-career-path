@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, type Browser } from "playwright";
-import { prepareAnswers } from "../application/answers.js";
+import {
+  prepareAnswers,
+  validateGeneratedAnswer,
+} from "../application/answers.js";
 import { createPublicFormAdapter } from "./public-form.js";
 import type { MasterProfile } from "./types.js";
 
@@ -134,6 +137,7 @@ before(async () => {
     const unsupported = request.url?.includes("unsupported");
     const cover = request.url?.includes("cover");
     const checkbox = request.url?.includes("checkbox");
+    const narrative = request.url?.includes("narrative");
 
     const extra = custom
       ? '<label for="moon">Favorite moon *</label><select id="moon" required><option value="">Select</option><option value="europa">Europa</option><option value="titan">Titan</option></select>'
@@ -143,7 +147,9 @@ before(async () => {
           ? '<label for="cover">Cover Letter *</label><input id="cover" type="file" required />'
           : checkbox
             ? '<label><input id="privacy" type="checkbox" required /> I agree to the privacy notice *</label>'
-            : "";
+            : narrative
+              ? '<label for="motivation">Why are you interested in this role? *</label><textarea id="motivation" required></textarea><label for="challenge">Tell us about a challenge you faced *</label><textarea id="challenge" required></textarea>'
+              : "";
 
     response.writeHead(200, { "content-type": "text/html" });
     response.end(html(extra));
@@ -411,4 +417,95 @@ test("required extra file is unsupported until we intentionally generate it", as
   } finally {
     await page.close();
   }
+});
+
+
+test("common narrative questions use confirmed career context instead of becoming custom gaps", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(`${baseUrl}/narrative`, page);
+    const motivation = schema.fields.find(
+      (field) => field.canonicalKey === "motivation",
+    );
+    const challenge = schema.fields.find(
+      (field) => field.canonicalKey === "challenge_story",
+    );
+    assert.ok(motivation);
+    assert.ok(challenge);
+
+    const base = withSponsorship();
+    const profile: MasterProfile = {
+      ...base,
+      careerContext: {
+        ...base.careerContext,
+        careerGoal: "Trabajar en productos con crecimiento medible",
+        preferredTasks: ["Analizar adquisición"],
+        challengeStory:
+          "Detecté una caída en conversión, revisé el funnel y corregí el seguimiento de eventos.",
+      },
+    };
+
+    const eligibility = await adapter.canSubmit(schema, profile);
+    assert.equal(eligibility.eligible, true);
+
+    const answers = prepareAnswers(schema, profile, {
+      id: "job",
+      title: "Growth Analyst",
+      description: "Analizar adquisición y experimentos de crecimiento.",
+      company: "Example",
+      location: "Buenos Aires",
+      applicationUrl: baseUrl,
+      atsType: "test",
+    });
+
+    assert.equal(
+      answers.find((answer) => answer.field.canonicalKey === "challenge_story")
+        ?.value,
+      profile.careerContext.challengeStory,
+    );
+    assert.equal(
+      answers.find((answer) => answer.field.canonicalKey === "motivation")
+        ?.source,
+      "generated",
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test("generated answer validator accepts confirmed context and rejects invented metrics", () => {
+  const profile: MasterProfile = {
+    ...withSponsorship(),
+    careerContext: {
+      ...withSponsorship().careerContext,
+      results: ["Aumenté la conversión 12%"],
+      careerGoal: "Seguir trabajando en crecimiento de producto",
+    },
+  };
+  const job = {
+    id: "job",
+    title: "Growth Analyst",
+    description: "Buscamos alguien para analizar adquisición.",
+    company: "Example",
+    location: "Buenos Aires",
+    applicationUrl: baseUrl,
+    atsType: "test",
+  };
+
+  assert.equal(
+    validateGeneratedAnswer(
+      "Entre mis resultados confirmados está: Aumenté la conversión 12%.",
+      profile,
+      job,
+    ).valid,
+    true,
+  );
+
+  const invalid = validateGeneratedAnswer(
+    "Aumenté la conversión 90%.",
+    profile,
+    job,
+  );
+  assert.equal(invalid.valid, false);
+  assert.ok(invalid.unsupportedClaims.includes("90%"));
 });
