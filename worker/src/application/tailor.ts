@@ -111,10 +111,27 @@ export async function tailorResumeCopy(
     if (!validated) {
       logger.warn(
         { jobId: job.id, model: config.RESUME_LLM_MODEL },
-        "resume LLM output rejected by fact validator",
+        "resume LLM output rejected by deterministic fact validator",
       );
       return null;
     }
+
+    const verifierModel =
+      config.RESUME_LLM_VERIFIER_MODEL ?? config.RESUME_LLM_MODEL;
+    const entailed = await verifySemanticEntailment(
+      config.OPENAI_API_KEY,
+      verifierModel,
+      validated,
+      allowedFacts,
+    );
+    if (!entailed) {
+      logger.warn(
+        { jobId: job.id, model: verifierModel },
+        "resume LLM output rejected by semantic fact verifier",
+      );
+      return null;
+    }
+
     return {
       ...validated,
       model: config.RESUME_LLM_MODEL,
@@ -307,6 +324,135 @@ function validateTailoring(
     summarySourceFactIds: summaryIds,
     experiences,
   };
+}
+
+async function verifySemanticEntailment(
+  apiKey: string,
+  model: string,
+  copy: Omit<TailoredResumeCopy, "model">,
+  facts: ResumeFact[],
+): Promise<boolean> {
+  const factById = new Map(facts.map((fact) => [fact.id, fact.claim]));
+  const statements: Array<{
+    id: string;
+    text: string;
+    evidence: string[];
+  }> = [
+    {
+      id: "summary",
+      text: copy.summary,
+      evidence: copy.summarySourceFactIds
+        .map((id) => factById.get(id))
+        .filter((claim): claim is string => Boolean(claim)),
+    },
+  ];
+
+  for (const experience of copy.experiences) {
+    experience.bullets.forEach((bullet, index) => {
+      statements.push({
+        id: `${experience.experienceId}:${index}`,
+        text: bullet.text,
+        evidence: bullet.sourceFactIds
+          .map((id) => factById.get(id))
+          .filter((claim): claim is string => Boolean(claim)),
+      });
+    });
+  }
+
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    required: ["checks"],
+    properties: {
+      checks: {
+        type: "array",
+        minItems: statements.length,
+        maxItems: statements.length,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "supported"],
+          properties: {
+            id: { type: "string" },
+            supported: { type: "boolean" },
+          },
+        },
+      },
+    },
+  } as const;
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      store: false,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: [
+                "You are a strict factual entailment verifier for resume copy.",
+                "For each statement, supported=true only when every material claim is directly entailed by its evidence.",
+                "Reject added scope, leadership, ownership, causality, expertise, tools, responsibilities, seniority, scale, metrics, outcomes or skills not explicitly present in the evidence.",
+                "Stylistic paraphrase is allowed only when meaning is preserved.",
+                "When uncertain, set supported=false.",
+                "Return one check for every supplied id and do not omit any.",
+              ].join("\n"),
+            },
+          ],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify({ statements }),
+            },
+          ],
+        },
+      ],
+      text: {
+        verbosity: "low",
+        format: {
+          type: "json_schema",
+          name: "resume_fact_entailment",
+          strict: true,
+          schema,
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+
+  if (!response.ok) return false;
+  const json = (await response.json()) as {
+    output?: Array<{
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+  const text = json.output
+    ?.flatMap((item) => item.content ?? [])
+    .find((item) => item.type === "output_text")?.text;
+  if (!text) return false;
+
+  const parsed = JSON.parse(text) as {
+    checks?: Array<{ id?: string; supported?: boolean }>;
+  };
+  const checks = parsed.checks ?? [];
+  if (checks.length !== statements.length) return false;
+
+  const checkById = new Map(
+    checks.map((check) => [check.id ?? "", check.supported === true]),
+  );
+  return statements.every(
+    (statement) => checkById.get(statement.id) === true,
+  );
 }
 
 function numericTokens(value: string) {
