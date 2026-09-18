@@ -300,7 +300,8 @@
 .demo-progress span { height: 2px; overflow: hidden; border-radius: 2px; background: color-mix(in oklab, var(--foreground) 8%, transparent); }
 .demo-progress span::after { content: ""; display: block; width: 0; height: 100%; background: var(--home-accent); }
 .demo-progress .is-complete::after { width: 100%; }
-.demo-progress .is-active::after { animation: demo-progress 1.5s linear both; }
+.demo-progress .is-active::after { animation: demo-progress var(--demo-phase-duration, 1.8s) cubic-bezier(.3,.05,.3,1) both; }
+.product-demo-frame.is-exiting .demo-progress .is-active::after { animation-play-state: paused; }
 .demo-heading h2, .demo-centered h2, .demo-final h2 { margin-top: 9px; font-size: 29px; font-weight: 670; line-height: 1.12; letter-spacing: -.6px; }
 .demo-eyebrow { color: var(--home-accent); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 .demo-upload { position: relative; display: flex; min-height: 245px; margin-top: 35px; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed color-mix(in oklab, var(--home-accent) 30%, var(--border)); border-radius: 8px; background: color-mix(in oklab, var(--home-backdrop) 42%, var(--background)); color: var(--muted-foreground); }
