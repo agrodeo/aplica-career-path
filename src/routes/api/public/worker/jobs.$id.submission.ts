@@ -40,6 +40,23 @@ export const Route = createFileRoute("/api/public/worker/jobs/$id/submission")({
         const owned = await loadOwnedQueue(db, params.id, workerId);
         if (!owned) return jsonResponse({ error: "not_owned" }, 403);
 
+        if (owned.testMode) {
+          await audit(
+            db,
+            {
+              userId: owned.userId,
+              jobId: owned.jobId,
+              attemptId: owned.attemptId,
+            },
+            "test_submission_refused",
+            { reason: "admin_dry_run" },
+          );
+          return jsonResponse(
+            { error: "test_mode_cannot_verify_or_consume_credit" },
+            409,
+          );
+        }
+
         if (
           body.verified !== true ||
           !body.verificationSignal ||

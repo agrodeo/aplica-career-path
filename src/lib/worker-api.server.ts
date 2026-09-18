@@ -78,6 +78,7 @@ export interface OwnedAttempt {
   workerId: string | null;
   status: string;
   attemptStatus: string;
+  testMode: boolean;
 }
 
 export interface OwnedQueue {
@@ -89,6 +90,7 @@ export interface OwnedQueue {
   attempts: number;
   workerId: string | null;
   status: string;
+  testMode: boolean;
 }
 
 /** Resolves a queue row only when it is currently owned by the caller. */
@@ -100,7 +102,7 @@ export async function loadOwnedQueue(
   if (!queueId || !workerId) return null;
   const { data: queue } = await db
     .from("application_queue")
-    .select("id, user_id, job_id, batch_id, attempts, worker_id, status, attempt_id")
+    .select("id, user_id, job_id, batch_id, attempts, worker_id, status, attempt_id, test_mode")
     .eq("id", queueId)
     .eq("worker_id", workerId)
     .maybeSingle();
@@ -115,6 +117,7 @@ export async function loadOwnedQueue(
     attempts: queue.attempts ?? 0,
     workerId: queue.worker_id ?? null,
     status: queue.status,
+    testMode: queue.test_mode === true,
   };
 }
 
@@ -126,10 +129,14 @@ export async function loadOwnedAttempt(db: WorkerDb, attemptId: string, workerId
   if (!attemptId) return null;
   const { data: queue } = await db
     .from("application_queue")
-    .select("id, user_id, job_id, batch_id, attempts, worker_id, status, attempt_id")
+    .select("id, user_id, job_id, batch_id, attempts, worker_id, status, attempt_id, test_mode")
     .eq("attempt_id", attemptId)
     .maybeSingle();
-  const { data: attempt } = await db.from("application_attempts").select("id, user_id, job_id, batch_id, status").eq("id", attemptId).maybeSingle();
+  const { data: attempt } = await db
+    .from("application_attempts")
+    .select("id, user_id, job_id, batch_id, status, test_mode")
+    .eq("id", attemptId)
+    .maybeSingle();
   if (!attempt) return null;
   if (workerId && queue && queue.worker_id && queue.worker_id !== workerId) return null;
 
@@ -143,6 +150,7 @@ export async function loadOwnedAttempt(db: WorkerDb, attemptId: string, workerId
     workerId: queue?.worker_id ?? null,
     status: queue?.status ?? "gone",
     attemptStatus: attempt.status,
+    testMode: queue?.test_mode === true || attempt.test_mode === true,
   };
 }
 

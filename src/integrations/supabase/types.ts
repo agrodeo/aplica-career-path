@@ -172,6 +172,7 @@ export type Database = {
       }
       application_attempts: {
         Row: {
+          test_mode: boolean
           adapter: string | null
           adapter_version: string | null
           attempt_number: number
@@ -194,6 +195,7 @@ export type Database = {
           verified_at: string | null
         }
         Insert: {
+          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -216,6 +218,7 @@ export type Database = {
           verified_at?: string | null
         }
         Update: {
+          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -362,6 +365,7 @@ export type Database = {
       }
       application_queue: {
         Row: {
+          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
@@ -376,6 +380,7 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
+          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -390,6 +395,7 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
+          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -1395,6 +1401,7 @@ export type Database = {
       claim_application: {
         Args: { _limit?: number; _worker_id: string }
         Returns: {
+          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
@@ -1470,6 +1477,10 @@ export type Database = {
           _queue_id: string
           _status?: string
         }
+        Returns: string
+      }
+      enqueue_admin_dry_run: {
+        Args: { _job_id: string; _user_id: string }
         Returns: string
       }
       has_role: {

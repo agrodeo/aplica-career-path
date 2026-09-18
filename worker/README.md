@@ -171,3 +171,28 @@ If the writer, verifier or validation fails, Aplica keeps the deterministic
 answer. Job-description requirements may be referenced as facts about the job,
 but they may never be converted into candidate qualifications without a
 confirmed candidate source. Requests use `store: false`.
+
+
+## Railway dry-run deployment
+
+The repository now includes a root `railway.json` that builds
+`worker/Dockerfile` as a long-running Railway worker. Configure the service
+with the variables in `worker/.env.example`.
+
+For the first real end-to-end test, keep:
+
+```env
+WORKER_MODE=development
+DRY_RUN=true
+MAX_CONCURRENCY=1
+```
+
+The admin panel also supports **profile-aware dry runs**. Those queue items are
+stored with `test_mode=true`; the worker forces `dryRun=true` for them even
+if a later deployment is running with `DRY_RUN=false`. The backend and
+database both refuse to mark a test-mode queue item as verified or consume a
+credit.
+
+A successful dry run ends with `DRY_RUN_COMPLETE`: the browser loaded the
+real form, generated the job-specific CV, mapped and filled every supported
+field, and intentionally stopped before the final submit.
