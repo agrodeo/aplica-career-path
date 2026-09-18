@@ -258,14 +258,14 @@
   display: grid;
   min-height: calc(100svh - 136px);
   max-width: 1500px;
-  grid-template-columns: minmax(0, 1fr) minmax(540px, 570px);
+  grid-template-columns: minmax(0, 1fr) minmax(540px, 560px);
   align-items: center;
   gap: clamp(48px, 5vw, 88px);
   margin-inline: auto;
   padding: 0 clamp(40px, 6vw, 96px) 54px;
 }
 .onboarding-promise { max-width: 740px; padding-bottom: 6px; }
-.onboarding-promise h1 { max-width: 700px; font-size: clamp(60px, 5.2vw, 74px); font-weight: 700; line-height: .98; letter-spacing: -2.5px; }
+.onboarding-promise h1 { max-width: 700px; font-size: clamp(58px, 5vw, 72px); font-weight: 700; line-height: .98; letter-spacing: -2.5px; }
 .onboarding-promise h1 span { color: var(--home-accent); }
 .onboarding-promise > p { max-width: 460px; margin-top: 30px; color: color-mix(in oklab, var(--foreground) 62%, transparent); font-size: 18px; line-height: 1.5; }
 .onboarding-promise > .home-primary { width: 330px; height: 66px; margin-top: 34px; border-radius: 12px; font-size: 19px; box-shadow: 0 16px 34px -16px color-mix(in oklab, var(--home-accent) 78%, transparent); }
