@@ -34,15 +34,6 @@ const emptyProfile: Profile = {
   institution: "", degree: "", area: "", studyDates: "", language: "Español", level: "Nativo",
 };
 
-const parsedProfile: Profile = {
-  firstName: "Sofía", lastName: "Fernández", email: "sofia@email.com", phone: "+54 9 11 4567 8901",
-  country: "Argentina", city: "Buenos Aires",
-  company: "Naranja X", role: "Growth Analyst", start: "Mar 2023", end: "Actualidad",
-  description: "Análisis y optimización de campañas de adquisición digital.",
-  achievements: "Reduje el costo de adquisición con experimentos de segmentación.",
-  institution: "Universidad de Buenos Aires", degree: "Licenciatura", area: "Administración",
-  studyDates: "2018 — 2022", language: "Español", level: "Nativo",
-};
 
 export function OnboardingFlow() {
   const navigate = useNavigate();
