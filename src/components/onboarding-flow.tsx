@@ -746,6 +746,22 @@ export function OnboardingFlow() {
           level: seed.languages[0]?.level ?? current.level,
         }));
 
+        if (seed.experiences?.length) {
+          const seededExperiences: ExperienceDraft[] = seed.experiences.map(
+            (experience) => ({
+              company: experience.company,
+              title: experience.title,
+              start: experience.start,
+              end: experience.end,
+              description: experience.description,
+              achievements: experience.achievements,
+              location: "",
+              confidence: null,
+            }),
+          );
+          setExperiences(seededExperiences);
+        }
+
         setCareerContext({
           responsibilities: seed.careerContext.responsibilities,
           tools: seed.careerContext.tools,
@@ -830,6 +846,15 @@ export function OnboardingFlow() {
               ...current,
               ...(state["profile"] as Partial<Profile>),
             }));
+          }
+          if (Array.isArray(state["experiences"])) {
+            const draftExperiences = state["experiences"]
+              .filter(isRecord)
+              .map((experience) => ({
+                ...emptyExperience(),
+                ...(experience as Partial<ExperienceDraft>),
+              }));
+            setExperiences(draftExperiences);
           }
           if (isRecord(state["careerContext"])) {
             setCareerContext((current) => ({
@@ -965,6 +990,10 @@ export function OnboardingFlow() {
                 dropFile,
                 profile,
                 updateProfile,
+                experiences,
+                updateExperience,
+                addExperience,
+                removeExperience,
                 cvParsed,
                 skipCv,
                 careerContext,
@@ -1048,6 +1077,14 @@ type StepProps = {
   dropFile: (event: DragEvent<HTMLDivElement>) => void;
   profile: Profile;
   updateProfile: (key: keyof Profile, value: string) => void;
+  experiences: ExperienceDraft[];
+  updateExperience: (
+    index: number,
+    key: keyof ExperienceDraft,
+    value: string,
+  ) => void;
+  addExperience: () => void;
+  removeExperience: (index: number) => void;
   cvParsed: boolean;
   skipCv: () => void;
   careerContext: CareerContextState;
@@ -1311,51 +1348,160 @@ function renderStep(step: number, p: StepProps): ReactNode {
 
     case 4:
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <CvNote show={p.cvParsed} />
-          <div className="sheet-field-grid">
-            <Field label="Empresa">
-              <Input
-                value={p.profile.company}
-                onChange={(event) =>
-                  p.updateProfile("company", event.target.value)
-                }
-              />
-            </Field>
-            <Field label="Puesto">
-              <Input
-                value={p.profile.role}
-                onChange={(event) => p.updateProfile("role", event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="sheet-field-grid">
-            <Field label="Desde">
-              <Input
-                value={p.profile.start}
-                onChange={(event) =>
-                  p.updateProfile("start", event.target.value)
-                }
-                placeholder="03/2025"
-              />
-            </Field>
-            <Field label="Hasta">
-              <Input
-                value={p.profile.end}
-                onChange={(event) => p.updateProfile("end", event.target.value)}
-                placeholder="Actualidad"
-              />
-            </Field>
-          </div>
-          <Field label="Qué dice hoy tu CV">
-            <Textarea
-              value={p.profile.description}
-              onChange={(event) =>
-                p.updateProfile("description", event.target.value)
-              }
-              placeholder="Contanos brevemente qué hacías."
-            />
-          </Field>
+          <p className="sheet-copy">
+            Separamos cada empleo del CV. Revisalos antes de seguir: una vez que
+            confirmás esta pantalla, estas experiencias pasan a ser hechos que
+            Aplica puede usar para matching y CVs.
+          </p>
+
+          {(p.experiences.length ? p.experiences : [emptyExperience()]).map(
+            (experience, index) => (
+              <div
+                key={index}
+                className="rounded-xl border border-border bg-surface p-4"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      Experiencia {index + 1}
+                    </p>
+                    {experience.confidence != null && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Confianza de extracción:{" "}
+                        {Math.round(experience.confidence * 100)}%
+                      </p>
+                    )}
+                  </div>
+                  {p.experiences.length > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => p.removeExperience(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Quitar
+                    </Button>
+                  )}
+                </div>
+
+                <div className="sheet-field-grid">
+                  <Field label="Empresa">
+                    <Input
+                      value={experience.company}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "company",
+                              event.target.value,
+                            )
+                          : p.updateProfile("company", event.target.value)
+                      }
+                    />
+                  </Field>
+                  <Field label="Puesto">
+                    <Input
+                      value={experience.title}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "title",
+                              event.target.value,
+                            )
+                          : p.updateProfile("role", event.target.value)
+                      }
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-4 sheet-field-grid">
+                  <Field label="Desde">
+                    <Input
+                      value={experience.start}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "start",
+                              event.target.value,
+                            )
+                          : p.updateProfile("start", event.target.value)
+                      }
+                      placeholder="2025-03"
+                    />
+                  </Field>
+                  <Field label="Hasta">
+                    <Input
+                      value={experience.end}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "end",
+                              event.target.value,
+                            )
+                          : p.updateProfile("end", event.target.value)
+                      }
+                      placeholder="Actualidad"
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-4">
+                  <Field label="Responsabilidades / descripción">
+                    <Textarea
+                      rows={4}
+                      value={experience.description}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "description",
+                              event.target.value,
+                            )
+                          : p.updateProfile(
+                              "description",
+                              event.target.value,
+                            )
+                      }
+                      placeholder="Qué hacías en este puesto."
+                    />
+                  </Field>
+                </div>
+
+                <div className="mt-4">
+                  <Field label="Logros detectados">
+                    <Textarea
+                      rows={4}
+                      value={experience.achievements}
+                      onChange={(event) =>
+                        p.experiences.length
+                          ? p.updateExperience(
+                              index,
+                              "achievements",
+                              event.target.value,
+                            )
+                          : p.updateProfile(
+                              "achievements",
+                              event.target.value,
+                            )
+                      }
+                      placeholder="Un logro por línea."
+                    />
+                  </Field>
+                </div>
+              </div>
+            ),
+          )}
+
+          <Button type="button" variant="outline" onClick={p.addExperience}>
+            <Plus className="h-4 w-4" />
+            Agregar otra experiencia
+          </Button>
         </div>
       );
 
