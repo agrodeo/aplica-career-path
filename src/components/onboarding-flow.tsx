@@ -71,14 +71,32 @@ export function OnboardingFlow() {
   const back = () => setOnboardingStep(Math.max(1, step - 1));
   const finish = () => { completeOnboarding(); setMatching(true); };
 
+  const updateProfile = (key: keyof Profile, value: string) => setProfile((current) => ({ ...current, [key]: value }));
+
   const acceptFile = (file?: File) => {
     if (!file || reading) return;
     setUploadedName(file.name);
     setReading(true);
     window.setTimeout(() => {
       setReading(false);
+      setProfile(parsedProfile);
+      setCvParsed(true);
+      if (!name) setName(parsedProfile.firstName);
+      setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || parsedProfile.city });
+      setSelected((current) => ({
+        ...current,
+        skills: ["Marketing", "Excel", "SQL", "Meta Ads"],
+        seniority: ["Semi Senior"],
+        industry: ["Tecnología", "Finanzas"],
+      }));
       setOnboardingStep(3);
     }, 1300);
+  };
+  const skipCv = () => {
+    setProfile(emptyProfile);
+    setCvParsed(false);
+    setUploadedName("");
+    setOnboardingStep(3);
   };
   const dropFile = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
