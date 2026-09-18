@@ -301,6 +301,23 @@ test("custom required select is a user answer gap, not a global adapter blocker"
   }
 });
 
+test("custom answers are scoped to the application URL", async () => {
+  const first = await browser.newPage();
+  const second = await browser.newPage();
+  try {
+    const schemaA = await adapter.inspect(`${baseUrl}/custom?a=1`, first);
+    const schemaB = await adapter.inspect(`${baseUrl}/custom?a=2`, second);
+    const fieldA = schemaA.fields.find((field) => /favorite moon/i.test(field.label));
+    const fieldB = schemaB.fields.find((field) => /favorite moon/i.test(field.label));
+    assert.ok(fieldA);
+    assert.ok(fieldB);
+    assert.notEqual(fieldA.answerKey, fieldB.answerKey);
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+
 test("required checkbox must be explicitly accepted, not merely answered", async () => {
   const page = await browser.newPage();
   try {
