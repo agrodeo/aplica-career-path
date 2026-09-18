@@ -227,11 +227,36 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
   })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("master_profile_version")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const [
+      { data: existingProfile },
+      { data: existingExperience },
+      { data: existingEducation },
+      { data: existingLanguages },
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("master_profile_version")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("experiences")
+        .select("id")
+        .eq("user_id", userId)
+        .order("sort_order", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("educations")
+        .select("id")
+        .eq("user_id", userId)
+        .order("start_date", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("languages")
+        .select("id, language")
+        .eq("user_id", userId),
+    ]);
     const nextVersion = (existingProfile?.master_profile_version ?? 0) + 1;
 
     const identity = data.identity;
@@ -253,16 +278,9 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
     );
     if (profileError) throw new Error(profileError.message);
 
-    const { error: deleteExperienceError } = await supabase
-      .from("experiences")
-      .delete()
-      .eq("user_id", userId);
-    if (deleteExperienceError) throw new Error(deleteExperienceError.message);
-
     if (data.experience?.company.trim() && data.experience.title.trim()) {
       const endText = data.experience.end.trim();
-      const { error } = await supabase.from("experiences").insert({
-        user_id: userId,
+      const experiencePayload = {
         company: clean(data.experience.company, 220),
         title: clean(data.experience.title, 220),
         start_date: parseMonthDate(data.experience.start),
@@ -277,20 +295,23 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         source: data.baseResumePath ? "cv_parse" : "manual",
         verified_by_user: true,
         sort_order: 0,
-      });
+      };
+
+      const { error } = existingExperience
+        ? await supabase
+            .from("experiences")
+            .update(experiencePayload)
+            .eq("id", existingExperience.id)
+            .eq("user_id", userId)
+        : await supabase
+            .from("experiences")
+            .insert({ user_id: userId, ...experiencePayload });
       if (error) throw new Error(error.message);
     }
 
-    const { error: deleteEducationError } = await supabase
-      .from("educations")
-      .delete()
-      .eq("user_id", userId);
-    if (deleteEducationError) throw new Error(deleteEducationError.message);
-
     if (data.education?.institution.trim()) {
       const range = parseStudyRange(data.education.studyDates);
-      const { error } = await supabase.from("educations").insert({
-        user_id: userId,
+      const educationPayload = {
         institution: clean(data.education.institution, 260),
         degree: clean(data.education.degree, 260) || null,
         field: clean(data.education.field, 260) || null,
@@ -298,7 +319,17 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
         end_date: range.endDate,
         is_current: range.isCurrent,
         verified_by_user: true,
-      });
+      };
+
+      const { error } = existingEducation
+        ? await supabase
+            .from("educations")
+            .update(educationPayload)
+            .eq("id", existingEducation.id)
+            .eq("user_id", userId)
+        : await supabase
+            .from("educations")
+            .insert({ user_id: userId, ...educationPayload });
       if (error) throw new Error(error.message);
     }
 
@@ -328,19 +359,25 @@ export const saveOnboardingProfile = createServerFn({ method: "POST" })
       )
       .slice(0, 12);
 
-    const { error: deleteLanguagesError } = await supabase
-      .from("languages")
-      .delete()
-      .eq("user_id", userId);
-    if (deleteLanguagesError) throw new Error(deleteLanguagesError.message);
-    if (uniqueLanguages.length) {
-      const { error } = await supabase.from("languages").insert(
-        uniqueLanguages.map((language) => ({
-          user_id: userId,
-          language: clean(language.language, 120),
-          level: clean(language.level, 80),
-        })),
+    for (const language of uniqueLanguages) {
+      const existing = (existingLanguages ?? []).find(
+        (row) =>
+          row.language.trim().toLowerCase() ===
+          language.language.trim().toLowerCase(),
       );
+      const payload = {
+        language: clean(language.language, 120),
+        level: clean(language.level, 80),
+      };
+      const { error } = existing
+        ? await supabase
+            .from("languages")
+            .update(payload)
+            .eq("id", existing.id)
+            .eq("user_id", userId)
+        : await supabase
+            .from("languages")
+            .insert({ user_id: userId, ...payload });
       if (error) throw new Error(error.message);
     }
 
