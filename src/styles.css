@@ -317,7 +317,7 @@
 .demo-confirm svg, .demo-checklist svg, .demo-queue-row b svg { width: 15px; height: 15px; }
 .demo-delay-late { opacity: 0; animation: demo-item-in 480ms 1050ms cubic-bezier(.16,.84,.28,1) forwards; }
 .demo-signals { display: flex; max-width: 410px; margin-top: 48px; flex-wrap: wrap; gap: 11px; }
-.demo-signals span { opacity: 0; border: 1px solid color-mix(in oklab, var(--foreground) 9%, transparent); border-radius: 999px; padding: 10px 15px; background: color-mix(in oklab, var(--home-backdrop) 54%, var(--background)); font-size: 13px; font-weight: 550; animation: demo-item-in 250ms calc(120ms + var(--demo-order) * 105ms) ease-out forwards; }
+.demo-signals span { opacity: 0; border: 1px solid color-mix(in oklab, var(--foreground) 9%, transparent); border-radius: 999px; padding: 10px 15px; background: color-mix(in oklab, var(--home-backdrop) 54%, var(--background)); font-size: 13px; font-weight: 550; animation: demo-item-pop 520ms calc(140ms + var(--demo-order) * 95ms) cubic-bezier(.16,.84,.28,1) forwards; }
 .demo-search-icon { display: grid; width: 54px; height: 54px; margin: 46px auto 22px; place-items: center; border-radius: 50%; background: var(--home-accent-soft); color: var(--home-accent); }
 .demo-search-icon svg { width: 22px; }
 .demo-centered { text-align: center; }
