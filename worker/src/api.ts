@@ -33,7 +33,7 @@ export interface InspectionItem {
   id: string;
   url: string;
   mode: "inspect" | "dry_run";
-  requested_by: string;
+  requested_by: string | null;
 }
 
 interface UploadGrant {
