@@ -77,20 +77,26 @@ export function OnboardingFlow() {
     if (!file || reading) return;
     setUploadedName(file.name);
     setReading(true);
-    window.setTimeout(() => {
+    void (async () => {
+      let fields: Partial<Profile> = {};
+      let foundSkills: string[] = [];
+      try {
+        const { parseCvFile } = await import("@/lib/cv-parse");
+        const result = await parseCvFile(file);
+        fields = result.fields as Partial<Profile>;
+        foundSkills = result.skills;
+      } catch {
+        fields = {};
+      }
+      const merged: Profile = { ...emptyProfile, ...fields };
       setReading(false);
-      setProfile(parsedProfile);
+      setProfile(merged);
       setCvParsed(true);
-      if (!name) setName(parsedProfile.firstName);
-      setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || parsedProfile.city });
-      setSelected((current) => ({
-        ...current,
-        skills: ["Marketing", "Excel", "SQL", "Meta Ads"],
-        seniority: ["Semi Senior"],
-        industry: ["Tecnología", "Finanzas"],
-      }));
+      if (merged.firstName) setName(merged.firstName);
+      if (merged.city) setSearchPreferences({ ...searchPreferences, location: searchPreferences.location || merged.city });
+      if (foundSkills.length) setSelected((current) => ({ ...current, skills: foundSkills }));
       setOnboardingStep(3);
-    }, 1300);
+    })();
   };
   const skipCv = () => {
     setProfile(emptyProfile);
