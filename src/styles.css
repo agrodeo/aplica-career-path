@@ -325,7 +325,7 @@
 .demo-counter { display: block; margin-top: 35px; color: var(--home-accent); font-size: 74px; font-weight: 680; line-height: 1; font-variant-numeric: tabular-nums; }
 .demo-centered p { margin-top: 8px; color: var(--muted-foreground); font-size: 13px; }
 .demo-jobs, .demo-queue { display: grid; margin-top: 31px; gap: 10px; }
-.demo-job, .demo-queue-row { display: flex; min-height: 80px; opacity: 0; align-items: center; justify-content: space-between; border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); border-radius: 7px; padding: 15px 18px; animation: demo-item-in 280ms calc(120ms + var(--demo-order) * 220ms) ease-out forwards; }
+.demo-job, .demo-queue-row { display: flex; min-height: 80px; opacity: 0; align-items: center; justify-content: space-between; border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); border-radius: 7px; padding: 15px 18px; animation: demo-card-in 620ms calc(140ms + var(--demo-order) * 190ms) cubic-bezier(.16,.84,.28,1) forwards; }
 .demo-job > span, .demo-queue-row > span { display: flex; flex-direction: column; }
 .demo-job strong, .demo-queue-row strong { font-size: 14px; font-weight: 650; }
 .demo-job small, .demo-queue-row small { margin-top: 5px; color: var(--muted-foreground); font-size: 10px; }
