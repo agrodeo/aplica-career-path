@@ -69,3 +69,126 @@ export const amIAdmin = createServerFn({ method: "GET" })
     const { data } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
     return { isAdmin: data === true };
   });
+
+
+/**
+ * Returns a small list of real, structurally eligible jobs for the current
+ * admin's profile-aware dry-run console. No other user's profile is exposed.
+ */
+export const listAdminDryRunJobs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase as never, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data, error } = await supabaseAdmin
+      .from("jobs")
+      .select(
+        "id,title,location,ats_type,auto_apply_adapter,application_url,companies(name)",
+      )
+      .eq("auto_apply_eligible", true)
+      .eq("is_active", true)
+      .not("application_url", "is", null)
+      .order("last_verified_at", { ascending: false, nullsFirst: false })
+      .limit(60);
+
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).map((job) => ({
+      id: job.id,
+      title: job.title,
+      company: job.companies?.name ?? "",
+      location: job.location,
+      atsType: job.ats_type,
+      adapter: job.auto_apply_adapter,
+      applicationUrl: job.application_url,
+    }));
+  });
+
+/**
+ * Queues exactly one dry-run against the signed-in admin's own confirmed
+ * profile. It bypasses billing only because the database marks the queue item
+ * test_mode=true; both worker and backend refuse to turn it into a verified
+ * paid submission.
+ */
+export const queueAdminDryRun = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { jobId: string }) => {
+    const jobId = data.jobId.trim();
+    if (!/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error("Trabajo inválido.");
+    return { jobId };
+  })
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase as never, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const [{ data: profile }, { data: consent }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select("id,first_name,last_name,base_resume_path")
+        .eq("user_id", context.userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("auto_apply_consents")
+        .select("authorized,revoked_at")
+        .eq("user_id", context.userId)
+        .maybeSingle(),
+    ]);
+
+    if (!profile) {
+      throw new Error("Completá tu onboarding antes de correr un dry run.");
+    }
+    if (!profile.base_resume_path) {
+      throw new Error("Tu perfil necesita un CV base antes del dry run.");
+    }
+    if (!consent?.authorized || consent.revoked_at) {
+      throw new Error("Falta tu autorización de Auto Apply.");
+    }
+
+    const { data: queueId, error } = await supabaseAdmin.rpc(
+      "enqueue_admin_dry_run",
+      {
+        _user_id: context.userId,
+        _job_id: data.jobId,
+      },
+    );
+    if (error) throw new Error(error.message);
+
+    return {
+      queueId,
+      profile: [profile.first_name, profile.last_name]
+        .filter(Boolean)
+        .join(" "),
+    };
+  });
+
+export const listAdminDryRuns = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.supabase as never, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data, error } = await supabaseAdmin
+      .from("application_attempts")
+      .select(
+        "id,job_id,status,error_code,error_message,queued_at,started_at,created_at,jobs(title,companies(name))",
+      )
+      .eq("user_id", context.userId)
+      .eq("test_mode", true)
+      .order("queued_at", { ascending: false })
+      .limit(12);
+
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).map((attempt) => ({
+      id: attempt.id,
+      jobId: attempt.job_id,
+      title: attempt.jobs?.title ?? "",
+      company: attempt.jobs?.companies?.name ?? "",
+      status: attempt.status,
+      errorCode: attempt.error_code,
+      errorMessage: attempt.error_message,
+      queuedAt: attempt.queued_at,
+      startedAt: attempt.started_at,
+    }));
+  });
