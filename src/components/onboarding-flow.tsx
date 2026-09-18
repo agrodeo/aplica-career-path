@@ -125,7 +125,7 @@ export function OnboardingFlow() {
         <div key={step} className="sheet-step">
           <h2>{titles[step - 1]}</h2>
           <div className="sheet-step-body">
-            {renderStep(step, { selected, toggle, name, setName, searchPreferences, setSearchPreferences, reading, uploadedName, inputRef, acceptFile, dropFile, consents, setConsents })}
+            {renderStep(step, { selected, toggle, name, setName, searchPreferences, setSearchPreferences, reading, uploadedName, inputRef, acceptFile, dropFile, consents, setConsents, profile, updateProfile, cvParsed, skipCv })}
           </div>
         </div>
 
