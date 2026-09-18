@@ -49,7 +49,10 @@ function Index() {
             <div className="coverage-track">
               {[0, 1, 2, 3].map((copy) => (
                 <div className="coverage-group" aria-hidden={copy !== 0} key={copy}>
-                  {coveredCompanies.map((company) => <span className="coverage-logo" key={`${copy}-${company}`}>{company}</span>)}
+                  {coverageLogos.map((logo) => (
+                    <img className="coverage-logo-img" key={`${copy}-${logo.name}`} src={logo.src} alt={copy === 0 ? logo.name : ""} aria-hidden={copy !== 0} loading="eager" />
+                  ))}
+                  {otherCompanies.map((company) => <span className="coverage-logo" key={`${copy}-${company}`}>{company}</span>)}
                 </div>
               ))}
               </div>
