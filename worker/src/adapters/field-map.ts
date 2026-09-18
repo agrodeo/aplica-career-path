@@ -58,7 +58,7 @@ export function findDeclineOption(options: { label: string; value: string }[]) {
  * user once and safely reuse the explicitly confirmed answer for that exact
  * question on retries.
  */
-export function answerKeyFor(label: string): string {
+export function answerKeyFor(label: string, scope = ""): string {
   const canonical = canonicalKeyFor(label);
   if (canonical) return canonical;
 
@@ -70,9 +70,11 @@ export function answerKeyFor(label: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+  const scoped = `${scope.trim().toLowerCase()}|${normalized}`;
+
   let hash = 2166136261;
-  for (let index = 0; index < normalized.length; index += 1) {
-    hash ^= normalized.charCodeAt(index);
+  for (let index = 0; index < scoped.length; index += 1) {
+    hash ^= scoped.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
 
