@@ -103,30 +103,61 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
       if (!schema.supportsFileUpload) reasons.push("El formulario no acepta subir un CV.");
 
-      // Unknown required field → the job is unsupported. Never invent an answer.
-      const unanswerable: string[] = [...schema.unknownRequiredFields];
+      // Keep global schema blockers separate from user-specific missing data.
+      // A user missing sponsorship/phone/etc. must never remove the job from
+      // everybody else's inventory.
+      const unsupportedFields: string[] = [...schema.unknownRequiredFields];
+      const missingProfileAnswers: string[] = [];
+
       for (const field of schema.fields) {
         if (!field.required) continue;
 
-        // MVP only generates/uploads the resume. A required cover-letter or
-        // other file cannot silently pass eligibility.
-        if (field.type === "file") {
-          if (field.canonicalKey !== "resume") unanswerable.push(field.label);
+        if (field.demographic && field.options && findDeclineOption(field.options)) {
           continue;
         }
 
-        if (!field.canonicalKey || !canAnswer(field.canonicalKey, profile)) {
-          unanswerable.push(field.label);
+        // MVP only generates/uploads the resume. Required extra documents are
+        // a capability gap of the adapter, not a profile gap.
+        if (field.type === "file") {
+          if (field.canonicalKey !== "resume") unsupportedFields.push(field.label);
+          continue;
+        }
+
+        if (!field.canonicalKey) {
+          unsupportedFields.push(field.label);
+          continue;
+        }
+
+        if (!canAnswer(field.canonicalKey, profile)) {
+          missingProfileAnswers.push(field.label);
         }
       }
-      if (unanswerable.length || reasons.length) {
+
+      if (unsupportedFields.length || reasons.length) {
         return {
           eligible: false,
           failureCode: "UNSUPPORTED_FIELD",
-          reasons: [...reasons, ...(unanswerable.length ? [`Preguntas obligatorias sin respuesta verificada: ${unanswerable.join(", ")}`] : [])],
-          unknownRequiredFields: unanswerable,
+          reasons: [
+            ...reasons,
+            ...(unsupportedFields.length
+              ? [`Campos obligatorios no soportados: ${unsupportedFields.join(", ")}`]
+              : []),
+          ],
+          unknownRequiredFields: unsupportedFields,
         };
       }
+
+      if (missingProfileAnswers.length) {
+        return {
+          eligible: false,
+          failureCode: "PROFILE_INCOMPLETE",
+          reasons: [
+            `Faltan respuestas verificadas del usuario: ${missingProfileAnswers.join(", ")}`,
+          ],
+          unknownRequiredFields: missingProfileAnswers,
+        };
+      }
+
       return { eligible: true, reasons: [], unknownRequiredFields: [] };
     },
 
