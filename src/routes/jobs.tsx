@@ -1,12 +1,21 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUpDown, BriefcaseBusiness, Search, SlidersHorizontal } from "lucide-react";
+import {
+  ArrowUpDown,
+  BriefcaseBusiness,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MatchInfo, PageShell, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getAutoApplyOverview,
@@ -14,6 +23,7 @@ import {
   refreshJobMatches,
   startAutoApplyBatch,
 } from "@/lib/auto-apply.functions";
+import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/jobs")({
@@ -26,9 +36,15 @@ export const Route = createFileRoute("/jobs")({
   head: () => ({
     meta: [
       { title: "Trabajos para vos — aplica" },
-      { name: "description", content: "Oportunidades ordenadas según tu experiencia y preferencias." },
+      {
+        name: "description",
+        content: "Oportunidades ordenadas según tu experiencia y preferencias.",
+      },
       { property: "og:title", content: "Trabajos para vos — aplica" },
-      { property: "og:description", content: "Encontrá oportunidades que encajan con tu perfil." },
+      {
+        property: "og:description",
+        content: "Encontrá oportunidades que encajan con tu perfil.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -63,10 +79,17 @@ function JobsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!jobs.length) return;
+    if (!jobs.length) {
+      setSelected(new Set());
+      return;
+    }
+
+    const readyIds = new Set(
+      jobs.filter((job) => job.readyForUser).map((job) => job.id),
+    );
     setSelected((current) => {
-      if (current.size) return current;
-      return new Set(jobs.map((job) => job.id));
+      if (!current.size) return new Set(readyIds);
+      return new Set([...current].filter((id) => readyIds.has(id)));
     });
   }, [jobs]);
 
@@ -85,23 +108,53 @@ function JobsPage() {
   );
 
   const selectedIds = jobs
-    .filter((job) => selected.has(job.id))
+    .filter((job) => job.readyForUser && selected.has(job.id))
     .map((job) => job.id);
 
   const mutation = useMutation({
     mutationFn: () => startBatch({ data: { jobIds: selectedIds } }),
     onSuccess: async (result) => {
       setActionError(null);
+
       if (result.status === "subscription_required") {
         await navigate({ to: "/upgrade" });
         return;
       }
       if (result.status === "consent_required") {
-        setActionError("Necesitamos tu autorización de Auto Apply. Revisá el último paso de tu perfil.");
+        setActionError(
+          "Necesitamos tu autorización de Auto Apply. Revisá el último paso de tu perfil.",
+        );
+        return;
+      }
+      if (result.status === "answers_required") {
+        setActionError(
+          "Una de las vacantes cambió y ahora necesita una respuesta tuya. Actualizamos la lista.",
+        );
+        await jobsQuery.refetch();
+        return;
+      }
+      if (result.status === "jobs_unavailable") {
+        setActionError(
+          "Una o más vacantes dejaron de estar disponibles o ya no cumplen tu match mínimo.",
+        );
+        await jobsQuery.refetch();
+        return;
+      }
+      if (result.status === "limit_exceeded") {
+        const remaining =
+          typeof result.results["remaining"] === "number"
+            ? result.results["remaining"]
+            : 0;
+        setActionError(
+          `Tu plan tiene ${remaining} postulaciones disponibles en este período. Reducí la selección para continuar.`,
+        );
         return;
       }
       if (result.batchId) {
-        await navigate({ to: "/applying", search: { batch: result.batchId } });
+        await navigate({
+          to: "/applying",
+          search: { batch: result.batchId },
+        });
       }
     },
     onError: (error: Error) => setActionError(error.message),
@@ -119,13 +172,18 @@ function JobsPage() {
   const selectVisible = () => {
     setSelected((current) => {
       const next = new Set(current);
-      for (const job of filtered) next.add(job.id);
+      for (const job of filtered) {
+        if (job.readyForUser) next.add(job.id);
+      }
       return next;
     });
   };
 
   const loading = jobsQuery.isLoading || overviewQuery.isLoading;
   const serverMinimum = jobsQuery.data?.minimumMatchScore ?? 70;
+  const matchedCount = jobsQuery.data?.matchedCount ?? 0;
+  const readyCount = jobsQuery.data?.readyCount ?? 0;
+  const needsAnswersCount = jobsQuery.data?.needsAnswersCount ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -133,12 +191,21 @@ function JobsPage() {
       <PageShell className="pb-32">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
-            <p className="text-sm font-medium text-primary">Selección calculada con tu perfil real</p>
+            <p className="text-sm font-medium text-primary">
+              Selección calculada con tu perfil real
+            </p>
             <h1 className="mt-2 text-3xl font-medium tracking-normal md:text-[40px]">
-              {loading ? "Buscando trabajos…" : `${jobs.length} trabajos listos para aplicar`}
+              {loading
+                ? "Buscando trabajos…"
+                : `${readyCount} trabajos listos para aplicar`}
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              Sólo mostramos vacantes Auto Apply con match ≥ {serverMinimum}%. El porcentaje compara perfil y vacante; no estima tus chances de contratación.
+              {matchedCount} matches con puntaje ≥ {serverMinimum}%.
+              {needsAnswersCount > 0
+                ? ` ${needsAnswersCount} necesitan una respuesta tuya antes de poder enviarse.`
+                : ""}{" "}
+              El porcentaje compara perfil y vacante; no estima tus chances de
+              contratación.
             </p>
           </div>
           <MatchInfo />
@@ -154,7 +221,10 @@ function JobsPage() {
               placeholder="Puesto, empresa o ubicación"
             />
           </div>
-          <Button variant="outline" onClick={() => setMin(min === 70 ? 80 : 70)}>
+          <Button
+            variant="outline"
+            onClick={() => setMin(min === 70 ? 80 : 70)}
+          >
             <SlidersHorizontal />
             Match mínimo: {min}%
           </Button>
@@ -168,36 +238,67 @@ function JobsPage() {
           <div className="mt-7 flex items-center justify-between gap-4 rounded-lg bg-surface p-4">
             <div>
               <p className="text-sm font-medium">Elegí dónde querés aplicar</p>
-              <p className="mt-1 text-xs text-muted-foreground">Aplica sólo enviará las vacantes que queden seleccionadas.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Sólo podés seleccionar vacantes que ya tengan todas las
+                respuestas obligatorias.
+              </p>
             </div>
-            <Button variant="outline" size="sm" onClick={selectVisible}>Seleccionar visibles</Button>
+            <Button variant="outline" size="sm" onClick={selectVisible}>
+              Seleccionar listas
+            </Button>
           </div>
         )}
 
-        {actionError && <p className="mt-5 rounded-lg border border-destructive/20 p-4 text-sm text-destructive">{actionError}</p>}
-        {jobsQuery.error && <p className="mt-5 rounded-lg border border-destructive/20 p-4 text-sm text-destructive">No pudimos cargar tus trabajos: {jobsQuery.error.message}</p>}
+        {actionError && (
+          <p className="mt-5 rounded-lg border border-destructive/20 p-4 text-sm text-destructive">
+            {actionError}
+          </p>
+        )}
+        {jobsQuery.error && (
+          <p className="mt-5 rounded-lg border border-destructive/20 p-4 text-sm text-destructive">
+            No pudimos cargar tus trabajos: {jobsQuery.error.message}
+          </p>
+        )}
 
         <div className="mt-4">
           {loading ? (
-            <div className="py-24 text-center text-sm text-muted-foreground">Calculando tu selección…</div>
+            <div className="py-24 text-center text-sm text-muted-foreground">
+              Calculando tu selección…
+            </div>
           ) : filtered.length ? (
             filtered.map((job) => (
               <RealJobRow
                 key={job.id}
                 job={job}
-                selectable={subscribed}
+                selectable={subscribed && job.readyForUser}
                 selected={selected.has(job.id)}
                 onToggle={() => toggle(job.id)}
+                onAnswersSaved={async () => {
+                  setSelected((current) => new Set(current).add(job.id));
+                  await jobsQuery.refetch();
+                }}
               />
             ))
           ) : (
             <div className="py-24 text-center">
               <BriefcaseBusiness className="mx-auto h-8 w-8 text-muted-foreground" />
-              <h2 className="mt-5 text-xl font-medium">Todavía no hay suficientes trabajos que encajen con tus criterios.</h2>
+              <h2 className="mt-5 text-xl font-medium">
+                Todavía no hay suficientes trabajos que encajen con tus
+                criterios.
+              </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
-                Puede ser porque el inventario Auto Apply todavía es chico o porque tus filtros son estrictos. Nunca inventamos un número de oportunidades.
+                Puede ser porque el inventario Auto Apply todavía es chico o
+                porque tus filtros son estrictos. Nunca inventamos un número de
+                oportunidades.
               </p>
-              <Button className="mt-6" variant="outline" onClick={() => { setMin(70); setQuery(""); }}>
+              <Button
+                className="mt-6"
+                variant="outline"
+                onClick={() => {
+                  setMin(70);
+                  setQuery("");
+                }}
+              >
                 Mostrar todos los matches disponibles
               </Button>
             </div>
@@ -209,14 +310,20 @@ function JobsPage() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-5 py-3 md:px-8">
           <div>
             <p className="text-sm font-medium">
-              {subscribed ? selectedIds.length : jobs.length} trabajos {subscribed ? "seleccionados" : "listos para aplicar"}
+              {subscribed ? selectedIds.length : readyCount} trabajos{" "}
+              {subscribed ? "seleccionados" : "listos para aplicar"}
             </p>
             <p className="hidden text-xs text-muted-foreground sm:block">
               CV específico por puesto · respuestas verificadas
             </p>
           </div>
           <Button
-            disabled={loading || (subscribed && selectedIds.length === 0) || mutation.isPending}
+            disabled={
+              loading ||
+              readyCount === 0 ||
+              (subscribed && selectedIds.length === 0) ||
+              mutation.isPending
+            }
             onClick={() => {
               if (!subscribed) {
                 void navigate({ to: "/upgrade" });
@@ -229,13 +336,21 @@ function JobsPage() {
               ? "Preparando tanda…"
               : subscribed
                 ? `Aplicar a ${selectedIds.length}`
-                : `Aplicar a ${jobs.length} trabajos`}
+                : `Aplicar a ${readyCount} trabajos`}
           </Button>
         </div>
       </div>
     </div>
   );
 }
+
+type MissingQuestion = {
+  answerKey: string;
+  label: string;
+  fieldType: string;
+  answerType: "boolean" | "text" | "numeric";
+  options: Array<{ label: string; value: string }>;
+};
 
 type RealJob = {
   id: string;
@@ -254,6 +369,9 @@ type RealJob = {
   matchScore: number | null;
   hardRequirementsMet: boolean;
   explanation: unknown;
+  missingQuestions: MissingQuestion[];
+  readyForUser: boolean;
+  needsUserAnswers: boolean;
 };
 
 function RealJobRow({
@@ -261,70 +379,331 @@ function RealJobRow({
   selectable,
   selected,
   onToggle,
+  onAnswersSaved,
 }: {
   job: RealJob;
   selectable: boolean;
   selected: boolean;
   onToggle: () => void;
+  onAnswersSaved: () => Promise<void>;
 }) {
-  const explanation = (job.explanation ?? {}) as { matchedSkills?: unknown; note?: unknown };
+  const [questionsOpen, setQuestionsOpen] = useState(false);
+  const explanation = (job.explanation ?? {}) as {
+    matchedSkills?: unknown;
+    note?: unknown;
+  };
   const matchedSkills = Array.isArray(explanation.matchedSkills)
-    ? explanation.matchedSkills.filter((skill): skill is string => typeof skill === "string")
+    ? explanation.matchedSkills.filter(
+        (skill): skill is string => typeof skill === "string",
+      )
     : [];
+  const systemBlocked = job.missingQuestions.some((question) =>
+    question.answerKey.startsWith("system:"),
+  );
+  const questions = job.missingQuestions.filter(
+    (question) => !question.answerKey.startsWith("system:"),
+  );
 
   return (
-    <article className={cn("grid gap-4 border-t border-border py-6 first:border-t-0 md:grid-cols-[1fr_auto] md:gap-8", selectable && selected && "bg-selected -mx-3 rounded-lg px-3")}>
-      <div className="flex min-w-0 gap-4">
-        {selectable ? (
-          <Checkbox checked={selected} onCheckedChange={onToggle} aria-label={`Seleccionar ${job.title} en ${job.company}`} className="mt-2 h-5 w-5" />
-        ) : (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-xs font-semibold">
-            {initials(job.company)}
-          </div>
-        )}
-        <div className="min-w-0">
-          <h2 className="text-lg font-medium">{job.title}</h2>
-          <p className="mt-0.5 text-sm text-foreground">{job.company}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {[job.location, job.remoteType, job.employmentType].filter(Boolean).join(" · ") || "Ubicación no informada"}
-          </p>
-          {formatSalary(job) && <p className="mt-1 text-xs text-muted-foreground">{formatSalary(job)}</p>}
-          {matchedSkills.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
-              {matchedSkills.slice(0, 5).map((skill) => (
-                <span key={skill} className="text-xs text-muted-foreground">
-                  <span className="mr-1 text-success">✓</span>{skill}
-                </span>
-              ))}
+    <article
+      className={cn(
+        "border-t border-border py-6 first:border-t-0",
+        selectable && selected && "bg-selected -mx-3 rounded-lg px-3",
+      )}
+    >
+      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:gap-8">
+        <div className="flex min-w-0 gap-4">
+          {selectable ? (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={onToggle}
+              aria-label={`Seleccionar ${job.title} en ${job.company}`}
+              className="mt-2 h-5 w-5"
+            />
+          ) : (
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-xs font-semibold">
+              {initials(job.company)}
             </div>
           )}
+
+          <div className="min-w-0">
+            <h2 className="text-lg font-medium">{job.title}</h2>
+            <p className="mt-0.5 text-sm text-foreground">{job.company}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {[job.location, job.remoteType, job.employmentType]
+                .filter(Boolean)
+                .join(" · ") || "Ubicación no informada"}
+            </p>
+            {formatSalary(job) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatSalary(job)}
+              </p>
+            )}
+
+            {matchedSkills.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
+                {matchedSkills.slice(0, 5).map((skill) => (
+                  <span key={skill} className="text-xs text-muted-foreground">
+                    <span className="mr-1 text-success">✓</span>
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {job.readyForUser && (
+              <p className="mt-4 flex items-center gap-1.5 text-xs font-medium text-success">
+                <Check className="h-3.5 w-3.5" />
+                Lista para Auto Apply
+              </p>
+            )}
+
+            {!job.readyForUser && questions.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setQuestionsOpen((value) => !value)}
+              >
+                {questionsOpen ? <ChevronUp /> : <ChevronDown />}
+                {questions.length === 1
+                  ? "Responder 1 pregunta"
+                  : `Responder ${questions.length} preguntas`}
+              </Button>
+            )}
+
+            {systemBlocked && (
+              <p className="mt-4 text-xs text-caution">
+                Estamos volviendo a verificar el formulario antes de habilitar
+                esta postulación.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 pl-9 md:w-40 md:flex-col md:items-end md:justify-start md:pl-0">
+          <div className="text-right">
+            <div className="text-xl font-semibold text-primary">
+              {Math.round(job.matchScore ?? 0)}%{" "}
+              <span className="text-sm font-medium">match</span>
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              perfil ↔ vacante
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-4 pl-9 md:w-40 md:flex-col md:items-end md:justify-start md:pl-0">
-        <div className="text-right">
-          <div className="text-xl font-semibold text-primary">{Math.round(job.matchScore ?? 0)}% <span className="text-sm font-medium">match</span></div>
-          <div className="mt-0.5 text-xs text-muted-foreground">perfil ↔ vacante</div>
-        </div>
-      </div>
+      {questionsOpen && questions.length > 0 && (
+        <QuestionEditor
+          jobTitle={job.title}
+          company={job.company}
+          questions={questions}
+          onSaved={async () => {
+            setQuestionsOpen(false);
+            await onAnswersSaved();
+          }}
+        />
+      )}
     </article>
   );
 }
 
-function initials(company: string) {
-  return company
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "A";
+function QuestionEditor({
+  jobTitle,
+  company,
+  questions,
+  onSaved,
+}: {
+  jobTitle: string;
+  company: string;
+  questions: MissingQuestion[];
+  onSaved: () => Promise<void>;
+}) {
+  const saveAnswers = useServerFn(saveVerifiedApplicationAnswers);
+  const [values, setValues] = useState<Record<string, string | boolean>>({});
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const answers = questions.map((question) => {
+        const value = values[question.answerKey];
+        if (question.answerType === "boolean") {
+          if (typeof value !== "boolean") {
+            throw new Error(`Respondé: ${question.label}`);
+          }
+          return {
+            answerKey: question.answerKey,
+            answerType: "boolean" as const,
+            booleanValue: value,
+          };
+        }
+
+        const text = typeof value === "string" ? value.trim() : "";
+        if (!text) throw new Error(`Completá: ${question.label}`);
+
+        if (question.answerType === "numeric") {
+          const numericValue = Number(text);
+          if (!Number.isFinite(numericValue)) {
+            throw new Error(`Ingresá un número válido para: ${question.label}`);
+          }
+          return {
+            answerKey: question.answerKey,
+            answerType: "numeric" as const,
+            numericValue,
+          };
+        }
+
+        return {
+          answerKey: question.answerKey,
+          answerType: "text" as const,
+          textValue: text,
+        };
+      });
+
+      return saveAnswers({ data: { answers } });
+    },
+    onSuccess: async () => {
+      setValidationError(null);
+      await onSaved();
+    },
+    onError: (error: Error) => setValidationError(error.message),
+  });
+
+  return (
+    <div className="ml-0 mt-5 rounded-lg border border-border bg-surface p-4 md:ml-[60px]">
+      <p className="text-sm font-medium">
+        {company} necesita algunos datos para {jobTitle}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        Estas respuestas salen directamente de vos. Las guardamos sólo después
+        de que las confirmás y nunca inventamos una respuesta.
+      </p>
+
+      <div className="mt-5 space-y-5">
+        {questions.map((question) => (
+          <QuestionInput
+            key={question.answerKey}
+            question={question}
+            value={values[question.answerKey]}
+            onChange={(value) =>
+              setValues((current) => ({
+                ...current,
+                [question.answerKey]: value,
+              }))
+            }
+          />
+        ))}
+      </div>
+
+      {validationError && (
+        <p className="mt-4 text-sm text-destructive">{validationError}</p>
+      )}
+
+      <div className="mt-5 flex justify-end">
+        <Button
+          size="sm"
+          disabled={mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? "Guardando…" : "Guardar respuestas"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
-function formatSalary(job: { salaryMin: number | null; salaryMax: number | null; salaryCurrency: string | null }) {
+function QuestionInput({
+  question,
+  value,
+  onChange,
+}: {
+  question: MissingQuestion;
+  value: string | boolean | undefined;
+  onChange: (value: string | boolean) => void;
+}) {
+  const cleanOptions = question.options.filter(
+    (option) =>
+      option.value &&
+      !/^(select|choose|please select|seleccion)/i.test(option.label),
+  );
+
+  return (
+    <label className="block">
+      <span className="text-sm font-medium">{question.label}</span>
+
+      {question.answerType === "boolean" ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:max-w-xs">
+          <Button
+            type="button"
+            variant={value === true ? "default" : "outline"}
+            onClick={() => onChange(true)}
+          >
+            Sí
+          </Button>
+          <Button
+            type="button"
+            variant={value === false ? "default" : "outline"}
+            onClick={() => onChange(false)}
+          >
+            No
+          </Button>
+        </div>
+      ) : cleanOptions.length > 0 ? (
+        <select
+          className="sheet-select mt-2 w-full max-w-xl"
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">Seleccioná una opción</option>
+          {cleanOptions.map((option) => (
+            <option key={`${option.value}-${option.label}`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : question.fieldType === "textarea" ? (
+        <Textarea
+          className="mt-2 max-w-xl"
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <Input
+          className="mt-2 max-w-xl"
+          inputMode={question.answerType === "numeric" ? "numeric" : undefined}
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+    </label>
+  );
+}
+
+function initials(company: string) {
+  return (
+    company
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "A"
+  );
+}
+
+function formatSalary(job: {
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryCurrency: string | null;
+}) {
   if (job.salaryMin == null && job.salaryMax == null) return null;
   const range = [job.salaryMin, job.salaryMax]
     .filter((value): value is number => value != null)
-    .map((value) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(value))
+    .map((value) =>
+      new Intl.NumberFormat("es-AR", {
+        maximumFractionDigits: 0,
+      }).format(value),
+    )
     .join("–");
   return `${job.salaryCurrency ?? ""} ${range}`.trim();
 }
