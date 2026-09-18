@@ -8,6 +8,7 @@ export const CANONICAL_KEYS = [
   "email",
   "phone",
   "location",
+  "country",
   "linkedin",
   "portfolio",
   "website",
@@ -43,6 +44,8 @@ export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "radi
 export interface InspectedField {
   selector: string;
   label: string;
+  /** Stable key used to look up an explicit stored answer. */
+  answerKey: string;
   type: FieldType;
   required: boolean;
   options?: { label: string; value: string }[];
