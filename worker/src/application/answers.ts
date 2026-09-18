@@ -21,7 +21,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
 
     if (field.demographic) {
       const decline = field.options ? findDeclineOption(field.options) : null;
-      const stored = storedAnswer(profile, field.label);
+      const stored = storedAnswer(profile, field.answerKey);
       if (stored !== null) answers.push({ field, value: stored, source: "verified_answer" });
       else if (decline) answers.push({ field, value: decline.value, source: "decline" });
       else if (field.required) {
@@ -32,7 +32,17 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
 
     const value = resolveValue(field, profile, job);
     if (value !== null) {
-      answers.push({ field, value, source: field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey) ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
+      answers.push({
+        field,
+        value,
+        source:
+          !field.canonicalKey ||
+          (field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey))
+            ? "verified_answer"
+            : value === generatedInterest(profile, job)
+              ? "generated"
+              : "profile",
+      });
       continue;
     }
     if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Required question without a verified answer: ${field.label}`);
@@ -55,7 +65,13 @@ function resolveValue(
   job: JobRecord,
 ): string | boolean | null {
   const key = field.canonicalKey;
-  if (!key) return null;
+  if (!key) {
+    return normalizeForField(
+      field,
+      storedAnswer(profile, field.answerKey),
+      profile,
+    );
+  }
 
   // Sensitive: explicit stored answers only.
   if (SENSITIVE_KEYS.includes(key)) {
@@ -88,6 +104,9 @@ function resolveValue(
     case "location":
       value =
         [identity.city, identity.country].filter(Boolean).join(", ") || null;
+      break;
+    case "country":
+      value = identity.country || null;
       break;
     case "linkedin":
       value = profile.links.linkedin || null;
