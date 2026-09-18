@@ -1,13 +1,16 @@
 import { Check, FileText, Search } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import meliLogo from "@/assets/mercado-libre.png.asset.json";
+import rampLogo from "@/assets/ramp.png.asset.json";
+import canvaLogo from "@/assets/canva.png.asset.json";
 
 const phaseDurations = [1800, 1800, 2200, 2400, 2100, 2400, 2000];
 const exitDuration = 420;
 const profileSignals = ["Growth", "Marketing", "Buenos Aires", "Inglés", "Español", "Remoto"];
 const demoJobs = [
-  ["Growth Manager", "94% match"],
-  ["Growth Associate", "91% match"],
-  ["Marketing Manager", "88% match"],
+  { role: "Growth Manager", company: "Mercado Libre", logo: meliLogo.url, match: "94% match" },
+  { role: "Growth Associate", company: "Ramp", logo: rampLogo.url, match: "91% match" },
+  { role: "Marketing Manager", company: "Canva", logo: canvaLogo.url, match: "88% match" },
 ];
 
 function SearchCounter({ duration }: { duration: number }) {
@@ -85,7 +88,13 @@ function phaseContent(phase: number): ReactNode {
       <>
         <div className="demo-heading"><span className="demo-eyebrow">Mejores resultados</span><h2>Trabajos que encajan con vos</h2></div>
         <div className="demo-jobs">
-          {demoJobs.map(([role, match], index) => <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={role}><span><strong>{role}</strong><small>Buenos Aires · Remoto</small></span><b>{match}</b></div>)}
+          {demoJobs.map((job, index) => (
+            <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={job.role}>
+              <img className="demo-job-logo" src={job.logo} alt={job.company} />
+              <span><strong>{job.role}</strong><small>{job.company} · Remoto</small></span>
+              <b>{job.match}</b>
+            </div>
+          ))}
         </div>
       </>
     );
@@ -106,9 +115,13 @@ function phaseContent(phase: number): ReactNode {
       <>
         <div className="demo-heading"><span className="demo-eyebrow">Cola de postulaciones</span><h2>Aplicando por vos</h2></div>
         <div className="demo-queue">
-          <div className="demo-queue-row is-done"><span><strong>Growth Manager</strong><small>CV adaptado</small></span><b><Check /> Aplicado</b></div>
-          <div className="demo-queue-row is-done demo-queue-second"><span><strong>Growth Associate</strong><small>CV adaptado</small></span><b><Check /> Aplicado</b></div>
-          <div className="demo-queue-row is-applying"><span><strong>Marketing Manager</strong><small>Preparando postulación</small></span><b>Aplicando...</b></div>
+          {demoJobs.map((job, index) => (
+            <div className={index < 2 ? "demo-queue-row is-done" : "demo-queue-row is-applying"} style={{ "--demo-order": index } as CSSProperties} key={job.role}>
+              <img className="demo-job-logo" src={job.logo} alt={job.company} />
+              <span><strong>{job.role}</strong><small>{index < 2 ? "CV adaptado" : "Preparando postulación"}</small></span>
+              <b>{index < 2 ? <><Check /> Aplicado</> : "Aplicando..."}</b>
+            </div>
+          ))}
         </div>
       </>
     );
