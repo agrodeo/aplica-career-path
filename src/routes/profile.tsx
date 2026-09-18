@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight, FileText, ShieldCheck, Sparkles } from "lucide-react";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,6 +66,19 @@ function Profile() {
     ? `Desde ${data.preferences.salaryCurrency ?? ""} ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(data.preferences.minimumSalary)}${data.preferences.salaryPeriod ? ` / ${data.preferences.salaryPeriod.toLowerCase()}` : ""}`
     : "Sin filtro de salario";
 
+  const resumeFactCount = data.facts.length;
+  const resultCount = data.careerContext.results.length;
+  const toolCount = data.careerContext.tools.length;
+  const preferenceSignalCount =
+    data.careerContext.preferredTasks.length +
+    data.careerContext.avoidTasks.length;
+  const voice = {
+    direct: "Directo",
+    ambitious: "Ambicioso",
+    technical: "Técnico",
+    balanced: "Equilibrado",
+  }[data.writingPreferences.voice] ?? "Equilibrado";
+
   const sections = [
     ["Datos personales", [data.identity.email, data.identity.phone, [data.identity.city, data.identity.country].filter(Boolean).join(", ")].filter(Boolean).join(" · ") || "Incompleto"],
     ["CV base", data.baseResumePath ? filename(data.baseResumePath) : "No cargado"],
@@ -75,6 +88,10 @@ function Profile() {
     ["Idiomas", data.languages.length ? data.languages.map((language) => `${language.language} · ${language.level}`).join(" · ") : "Sin idiomas guardados"],
     ["Preferencias laborales", preferenceText || "Incompletas"],
     ["Salario", salaryText],
+    ["Career Profile", `${resumeFactCount} hechos utilizables en CV · ${resultCount} resultados · ${toolCount} herramientas`],
+    ["Qué querés hacer más", data.careerContext.preferredTasks.length ? data.careerContext.preferredTasks.slice(0, 4).join(", ") : "Todavía no definido"],
+    ["Qué preferís evitar", data.careerContext.avoidTasks.length ? data.careerContext.avoidTasks.slice(0, 4).join(", ") : "Todavía no definido"],
+    ["Cómo te presenta la IA", [voice, ...data.writingPreferences.emphasis.slice(0, 3)].filter(Boolean).join(" · ")],
     ["Autorización laboral", `${authorizationAnswers} de 2 respuestas guardadas`],
   ] as const;
 
@@ -90,7 +107,35 @@ function Profile() {
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-foreground font-medium text-background">{initials}</div>
         </div>
 
-        <div className="mt-10 border-t border-border">
+        <div className="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+          <ProfileStat label="Hechos confirmados" value={String(resumeFactCount)} />
+          <ProfileStat label="Resultados" value={String(resultCount)} />
+          <ProfileStat label="Herramientas" value={String(toolCount)} />
+          <ProfileStat label="Señales de preferencia" value={String(preferenceSignalCount)} />
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Contexto para adaptar cada CV
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Aplica puede cambiar redacción, orden y énfasis según la vacante usando este Career Profile.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-5">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              Sin inventar experiencia
+            </p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Los bullets generados sólo se aceptan cuando están respaldados por hechos confirmados de tu perfil.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-8 border-t border-border">
           {sections.map(([title, value]) => (
             <Link
               key={title}
@@ -120,6 +165,15 @@ function Profile() {
           <Link to="/settings">Privacidad y configuración</Link>
         </Button>
       </PageShell>
+    </div>
+  );
+}
+
+function ProfileStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-background p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-medium">{value}</p>
     </div>
   );
 }
