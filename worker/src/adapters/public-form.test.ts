@@ -111,6 +111,7 @@ before(async () => {
     const custom = request.url?.includes("custom");
     const unsupported = request.url?.includes("unsupported");
     const cover = request.url?.includes("cover");
+    const checkbox = request.url?.includes("checkbox");
 
     const extra = custom
       ? '<label for="moon">Favorite moon *</label><select id="moon" required><option value="">Select</option><option value="europa">Europa</option><option value="titan">Titan</option></select>'
@@ -118,7 +119,9 @@ before(async () => {
         ? '<label for="start">Exact availability date *</label><input id="start" type="date" required />'
         : cover
           ? '<label for="cover">Cover Letter *</label><input id="cover" type="file" required />'
-          : "";
+          : checkbox
+            ? '<label><input id="privacy" type="checkbox" required /> I agree to the privacy notice *</label>'
+            : "";
 
     response.writeHead(200, { "content-type": "text/html" });
     response.end(html(extra));
@@ -293,6 +296,53 @@ test("custom required select is a user answer gap, not a global adapter blocker"
     const customAnswer = answers.find((answer) => answer.field.answerKey === customField.answerKey);
     assert.equal(customAnswer?.value, "europa");
     assert.equal(customAnswer?.source, "verified_answer");
+  } finally {
+    await page.close();
+  }
+});
+
+test("required checkbox must be explicitly accepted, not merely answered", async () => {
+  const page = await browser.newPage();
+  try {
+    const schema = await adapter.inspect(`${baseUrl}/checkbox`, page);
+    const checkbox = schema.fields.find((field) => field.type === "checkbox");
+    assert.ok(checkbox);
+
+    const base = withSponsorship();
+    const declined: MasterProfile = {
+      ...base,
+      verifiedApplicationAnswers: [
+        ...base.verifiedApplicationAnswers,
+        {
+          canonicalKey: checkbox.answerKey,
+          answerType: "boolean",
+          booleanValue: false,
+          textValue: null,
+          numericValue: null,
+          userConfirmed: true,
+        },
+      ],
+    };
+    assert.equal(
+      (await adapter.canSubmit(schema, declined)).failureCode,
+      "PROFILE_INCOMPLETE",
+    );
+
+    const accepted: MasterProfile = {
+      ...base,
+      verifiedApplicationAnswers: [
+        ...base.verifiedApplicationAnswers,
+        {
+          canonicalKey: checkbox.answerKey,
+          answerType: "boolean",
+          booleanValue: true,
+          textValue: null,
+          numericValue: null,
+          userConfirmed: true,
+        },
+      ],
+    };
+    assert.equal((await adapter.canSubmit(schema, accepted)).eligible, true);
   } finally {
     await page.close();
   }
