@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
+import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { SENSITIVE_KEYS, type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
@@ -76,12 +76,13 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
       const unknownRequiredFields = fields
         .filter(
-          (f) =>
-            f.required &&
-            !f.canonicalKey &&
-            !(f.demographic && f.options && findDeclineOption(f.options)),
+          (field) =>
+            field.required &&
+            !field.canonicalKey &&
+            (field.type === "unknown" || field.type === "file") &&
+            !(field.demographic && field.options && findDeclineOption(field.options)),
         )
-        .map((f) => f.label);
+        .map((field) => field.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
@@ -131,7 +132,16 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         }
 
         if (!field.canonicalKey) {
-          unsupportedFields.push(field.label);
+          if (field.type === "unknown") {
+            unsupportedFields.push(field.label);
+            continue;
+          }
+          const custom = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (!custom) missingProfileAnswers.push(field.label);
           continue;
         }
 
@@ -272,6 +282,8 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
       return Boolean(profile.identity.phone);
     case "location":
       return Boolean(profile.identity.city || profile.identity.country);
+    case "country":
+      return Boolean(profile.identity.country);
     case "linkedin":
       return Boolean(profile.links.linkedin);
     case "portfolio":
@@ -383,13 +395,15 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
 
   return raw.map((field) => {
     const type = normalizeType(field.type);
+    const canonicalKey = canonicalKeyFor(field.label);
     return {
       selector: field.selector,
       label: field.label,
+      answerKey: answerKeyFor(field.label),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
-      canonicalKey: canonicalKeyFor(field.label),
+      canonicalKey,
       demographic: isDemographicQuestion(field.label),
     } satisfies InspectedField;
   });
