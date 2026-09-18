@@ -148,32 +148,10 @@ async function buildStructuredResume(
       };
     }
 
-    const candidateFacts = profile.facts.filter(
-      (fact) =>
-        fact.userConfirmed &&
-        fact.allowedForResume &&
-        (!fact.sourceRef || fact.sourceRef === base.experienceId),
-    );
-    const sourceIds = generated.map((bullet) =>
-      candidateFacts
-        .filter((fact) => factClaimSupportsText(fact.claim, bullet))
-        .map((fact) => fact.id),
-    );
-
-    // tailorResumeCopy already validated explicit source IDs before returning.
-    // Reconstruct provenance by selecting the verified facts that overlap the
-    // final wording; if that cannot be done safely, keep deterministic bullets.
-    if (sourceIds.some((ids) => ids.length === 0)) {
-      return {
-        ...base,
-        bulletSourceFactIds: base.bullets.map(() => []),
-      };
-    }
-
     return {
       ...base,
-      bullets: generated,
-      bulletSourceFactIds: sourceIds,
+      bullets: generated.map((bullet) => bullet.text),
+      bulletSourceFactIds: generated.map((bullet) => bullet.sourceFactIds),
     };
   });
 
@@ -184,16 +162,8 @@ async function buildStructuredResume(
 
   return {
     professionalSummary: summary,
-    professionalSummarySourceFactIds: tailored
-      ? profile.facts
-          .filter(
-            (fact) =>
-              fact.userConfirmed &&
-              fact.allowedForResume &&
-              factClaimSupportsText(fact.claim, summary),
-          )
-          .map((fact) => fact.id)
-      : [],
+    professionalSummarySourceFactIds:
+      tailored?.summarySourceFactIds ?? [],
     generationModel: tailored?.model ?? null,
     experience,
     education: profile.education.map((education) => ({
@@ -276,24 +246,6 @@ function factBackedSentenceIsSafe(
   const supported = facts.map((fact) => fact.claim).join(" ");
   const supportedNumbers = new Set(numericTokens(supported));
   return numericTokens(text).every((number) => supportedNumbers.has(number));
-}
-
-function factClaimSupportsText(claim: string, text: string) {
-  const claimWords = new Set(
-    claim
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}%]+/u)
-      .filter((word) => word.length >= 4),
-  );
-  if (!claimWords.size) return false;
-  const textWords = new Set(
-    text
-      .toLowerCase()
-      .split(/[^\p{L}\p{N}%]+/u)
-      .filter((word) => word.length >= 4),
-  );
-  const overlap = [...claimWords].filter((word) => textWords.has(word)).length;
-  return overlap >= Math.min(2, claimWords.size);
 }
 
 function numericTokens(value: string) {
