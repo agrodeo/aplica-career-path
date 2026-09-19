@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
+import { canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { SENSITIVE_KEYS, type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
@@ -63,9 +63,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const form = page.locator(options.formSelector).first();
       const formExists = (await form.count()) > 0;
-      const fields = formExists
-        ? await readFields(page, options.formSelector, url)
-        : [];
+      const fields = formExists ? await readFields(page, options.formSelector) : [];
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
@@ -76,15 +74,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
-      const unknownRequiredFields = fields
-        .filter(
-          (field) =>
-            field.required &&
-            !field.canonicalKey &&
-            (field.type === "unknown" || field.type === "file") &&
-            !(field.demographic && field.options && findDeclineOption(field.options)),
-        )
-        .map((field) => field.label);
+      const unknownRequiredFields = fields.filter((f) => f.required && !f.canonicalKey).map((f) => f.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
@@ -113,86 +103,20 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
       if (!schema.supportsFileUpload) reasons.push("El formulario no acepta subir un CV.");
 
-      // Keep global schema blockers separate from user-specific missing data.
-      // A user missing sponsorship/phone/etc. must never remove the job from
-      // everybody else's inventory.
-      const unsupportedFields: string[] = [...schema.unknownRequiredFields];
-      const missingProfileAnswers: string[] = [];
-
+      // Unknown required field → the job is unsupported. Never invent an answer.
+      const unanswerable: string[] = [...schema.unknownRequiredFields];
       for (const field of schema.fields) {
-        if (!field.required) continue;
-
-        if (field.demographic && field.options && findDeclineOption(field.options)) {
-          continue;
-        }
-
-        if (field.type === "checkbox") {
-          const storedCheckbox = profile.verifiedApplicationAnswers.find(
-            (answer) =>
-              answer.canonicalKey === field.answerKey &&
-              answer.userConfirmed,
-          );
-          if (
-            !storedCheckbox ||
-            storedCheckbox.answerType !== "boolean" ||
-            storedCheckbox.booleanValue !== true
-          ) {
-            missingProfileAnswers.push(field.label);
-            continue;
-          }
-        }
-
-        // MVP only generates/uploads the resume. Required extra documents are
-        // a capability gap of the adapter, not a profile gap.
-        if (field.type === "file") {
-          if (field.canonicalKey !== "resume") unsupportedFields.push(field.label);
-          continue;
-        }
-
-        if (!field.canonicalKey) {
-          if (field.type === "unknown") {
-            unsupportedFields.push(field.label);
-            continue;
-          }
-          const custom = profile.verifiedApplicationAnswers.find(
-            (answer) =>
-              answer.canonicalKey === field.answerKey &&
-              answer.userConfirmed,
-          );
-          if (!custom) missingProfileAnswers.push(field.label);
-          continue;
-        }
-
-        if (!canAnswer(field.canonicalKey, profile)) {
-          missingProfileAnswers.push(field.label);
-        }
+        if (!field.required || !field.canonicalKey) continue;
+        if (!canAnswer(field.canonicalKey, profile)) unanswerable.push(field.label);
       }
-
-      if (unsupportedFields.length || reasons.length) {
+      if (unanswerable.length || reasons.length) {
         return {
           eligible: false,
           failureCode: "UNSUPPORTED_FIELD",
-          reasons: [
-            ...reasons,
-            ...(unsupportedFields.length
-              ? [`Campos obligatorios no soportados: ${unsupportedFields.join(", ")}`]
-              : []),
-          ],
-          unknownRequiredFields: unsupportedFields,
+          reasons: [...reasons, ...(unanswerable.length ? [`Preguntas obligatorias sin respuesta verificada: ${unanswerable.join(", ")}`] : [])],
+          unknownRequiredFields: unanswerable,
         };
       }
-
-      if (missingProfileAnswers.length) {
-        return {
-          eligible: false,
-          failureCode: "PROFILE_INCOMPLETE",
-          reasons: [
-            `Faltan respuestas verificadas del usuario: ${missingProfileAnswers.join(", ")}`,
-          ],
-          unknownRequiredFields: missingProfileAnswers,
-        };
-      }
-
       return { eligible: true, reasons: [], unknownRequiredFields: [] };
     },
 
@@ -212,26 +136,10 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
               break;
             case "checkbox":
               if (answer.value === true) await locator.check();
-              else if (await locator.isChecked().catch(() => false)) await locator.uncheck();
               break;
-            case "radio": {
-              const value = String(answer.value);
-              const radios = page.locator(answer.field.selector);
-              const count = await radios.count();
-              let selected = false;
-              for (let i = 0; i < count; i += 1) {
-                const radio = radios.nth(i);
-                if ((await radio.getAttribute("value")) === value) {
-                  await radio.check();
-                  selected = true;
-                  break;
-                }
-              }
-              if (!selected) {
-                throw new ApplicationError("FORM_CHANGED", `Radio option disappeared: ${answer.field.label}`);
-              }
+            case "radio":
+              await page.locator(`${answer.field.selector}[value="${String(answer.value)}"]`).first().check();
               break;
-            }
             default:
               await locator.fill(String(answer.value));
           }
@@ -300,8 +208,6 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
       return Boolean(profile.identity.phone);
     case "location":
       return Boolean(profile.identity.city || profile.identity.country);
-    case "country":
-      return Boolean(profile.identity.country);
     case "linkedin":
       return Boolean(profile.links.linkedin);
     case "portfolio":
@@ -314,42 +220,14 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     case "years_experience":
       return profile.experience.length > 0;
     case "resume":
-      return true;
     case "cover_letter":
-      return Boolean(
-        profile.identity.professionalSummary ||
-          profile.experience.length ||
-          profile.facts.length,
-      );
-    case "motivation":
-      return Boolean(
-        profile.careerContext.careerGoal ||
-          profile.careerContext.preferredTasks.length ||
-          profile.facts.length,
-      );
-    case "about_you":
-      return Boolean(
-        profile.identity.currentTitle ||
-          profile.experience.length ||
-          profile.facts.length,
-      );
-    case "challenge_story":
-      return Boolean(profile.careerContext.challengeStory);
-    case "proud_achievement":
-      return Boolean(
-        profile.careerContext.proudProject ||
-          profile.careerContext.results.length,
-      );
+      return true;
     default:
       return Boolean(stored);
   }
 }
 
-async function readFields(
-  page: Page,
-  formSelector: string,
-  applicationUrl: string,
-): Promise<InspectedField[]> {
+async function readFields(page: Page, formSelector: string): Promise<InspectedField[]> {
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
     if (!form) return [];
@@ -370,44 +248,10 @@ async function readFields(
         }
 
         let label = "";
-
-        // Radio inputs often have per-option labels ("Yes"/"No"). The
-        // canonical question lives on the group legend/aria label, so resolve
-        // that first or we'd lose questions such as sponsorship.
-        if (inputType === "radio") {
-          const fieldset = el.closest("fieldset");
-          label = fieldset?.querySelector(":scope > legend")?.textContent?.trim() ?? "";
-          if (!label) {
-            const group = el.closest('[role="radiogroup"]');
-            const labelledBy = group?.getAttribute("aria-labelledby");
-            if (labelledBy) {
-              label =
-                document.getElementById(labelledBy)?.textContent?.trim() ?? "";
-            }
-            if (!label) label = group?.getAttribute("aria-label") ?? "";
-          }
-        }
-
-        if (!label && id) {
-          label =
-            document
-              .querySelector(`label[for="${CSS.escape(id)}"]`)
-              ?.textContent?.trim() ?? "";
-        }
+        if (id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
-        if (!label) {
-          label =
-            el
-              .closest("div,fieldset")
-              ?.querySelector("label,legend")
-              ?.textContent?.trim() ?? "";
-        }
-        if (!label) {
-          label =
-            el.getAttribute("aria-label") ??
-            el.getAttribute("placeholder") ??
-            name;
-        }
+        if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
+        if (!label) label = el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? name;
 
         const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /\*/.test(label);
 
@@ -423,11 +267,7 @@ async function readFields(
                 })
               : undefined;
 
-        const selector = id
-          ? `#${CSS.escape(id)}`
-          : name
-            ? `${selector0(tag, inputType)}[name="${CSS.escape(name)}"]`
-            : "";
+        const selector = id ? `#${CSS.escape(id)}` : name ? `${selector0(tag, inputType)}[name="${name}"]` : "";
         return { selector, label: label.replace(/\s+/g, " ").trim(), type: inputType, required, options };
 
         function selector0(tagName: string, type: string) {
@@ -440,15 +280,13 @@ async function readFields(
 
   return raw.map((field) => {
     const type = normalizeType(field.type);
-    const canonicalKey = canonicalKeyFor(field.label);
     return {
       selector: field.selector,
       label: field.label,
-      answerKey: answerKeyFor(field.label, applicationUrl),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
-      canonicalKey,
+      canonicalKey: canonicalKeyFor(field.label),
       demographic: isDemographicQuestion(field.label),
     } satisfies InspectedField;
   });

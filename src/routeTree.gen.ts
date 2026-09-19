@@ -22,9 +22,6 @@ import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedApplyingRouteImport } from './routes/_authenticated/applying'
 import { Route as JobsIdRouteImport } from './routes/jobs.$id'
-import { Route as ApiPublicWorkerClaimApplicationRouteImport } from './routes/api/public/worker/claim-application'
-import { Route as ApiPublicWorkerCreateUploadRouteImport } from './routes/api/public/worker/create-upload'
-import { Route as ApiPublicWorkerHeartbeatRouteImport } from './routes/api/public/worker/heartbeat'
 import { Route as ApiPublicWorkerInspectionsClaimRouteImport } from './routes/api/public/worker/inspections.claim'
 import { Route as ApiPublicWorkerJobsClaimRouteImport } from './routes/api/public/worker/jobs.claim'
 import { Route as ApiPublicWorkerInspectionsIdResultRouteImport } from './routes/api/public/worker/inspections.$id.result'
@@ -96,24 +93,6 @@ const JobsIdRoute = JobsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => JobsRoute,
 } as any)
-const ApiPublicWorkerClaimApplicationRoute =
-  ApiPublicWorkerClaimApplicationRouteImport.update({
-    id: '/api/public/worker/claim-application',
-    path: '/api/public/worker/claim-application',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicWorkerCreateUploadRoute =
-  ApiPublicWorkerCreateUploadRouteImport.update({
-    id: '/api/public/worker/create-upload',
-    path: '/api/public/worker/create-upload',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicWorkerHeartbeatRoute =
-  ApiPublicWorkerHeartbeatRouteImport.update({
-    id: '/api/public/worker/heartbeat',
-    path: '/api/public/worker/heartbeat',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicWorkerInspectionsClaimRoute =
   ApiPublicWorkerInspectionsClaimRouteImport.update({
     id: '/api/public/worker/inspections/claim',
@@ -164,9 +143,6 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
-  '/api/public/worker/claim-application': typeof ApiPublicWorkerClaimApplicationRoute
-  '/api/public/worker/create-upload': typeof ApiPublicWorkerCreateUploadRoute
-  '/api/public/worker/heartbeat': typeof ApiPublicWorkerHeartbeatRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -187,9 +163,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
-  '/api/public/worker/claim-application': typeof ApiPublicWorkerClaimApplicationRoute
-  '/api/public/worker/create-upload': typeof ApiPublicWorkerCreateUploadRoute
-  '/api/public/worker/heartbeat': typeof ApiPublicWorkerHeartbeatRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -212,9 +185,6 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
-  '/api/public/worker/claim-application': typeof ApiPublicWorkerClaimApplicationRoute
-  '/api/public/worker/create-upload': typeof ApiPublicWorkerCreateUploadRoute
-  '/api/public/worker/heartbeat': typeof ApiPublicWorkerHeartbeatRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -237,9 +207,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
-    | '/api/public/worker/claim-application'
-    | '/api/public/worker/create-upload'
-    | '/api/public/worker/heartbeat'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -260,9 +227,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
-    | '/api/public/worker/claim-application'
-    | '/api/public/worker/create-upload'
-    | '/api/public/worker/heartbeat'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -284,9 +248,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/applying'
     | '/jobs/$id'
-    | '/api/public/worker/claim-application'
-    | '/api/public/worker/create-upload'
-    | '/api/public/worker/heartbeat'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -306,9 +267,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   UpgradeRoute: typeof UpgradeRoute
-  ApiPublicWorkerClaimApplicationRoute: typeof ApiPublicWorkerClaimApplicationRoute
-  ApiPublicWorkerCreateUploadRoute: typeof ApiPublicWorkerCreateUploadRoute
-  ApiPublicWorkerHeartbeatRoute: typeof ApiPublicWorkerHeartbeatRoute
   ApiPublicWorkerInspectionsClaimRoute: typeof ApiPublicWorkerInspectionsClaimRoute
   ApiPublicWorkerJobsClaimRoute: typeof ApiPublicWorkerJobsClaimRoute
   ApiPublicWorkerInspectionsIdResultRoute: typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -410,27 +368,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsIdRouteImport
       parentRoute: typeof JobsRoute
     }
-    '/api/public/worker/claim-application': {
-      id: '/api/public/worker/claim-application'
-      path: '/api/public/worker/claim-application'
-      fullPath: '/api/public/worker/claim-application'
-      preLoaderRoute: typeof ApiPublicWorkerClaimApplicationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/worker/create-upload': {
-      id: '/api/public/worker/create-upload'
-      path: '/api/public/worker/create-upload'
-      fullPath: '/api/public/worker/create-upload'
-      preLoaderRoute: typeof ApiPublicWorkerCreateUploadRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/worker/heartbeat': {
-      id: '/api/public/worker/heartbeat'
-      path: '/api/public/worker/heartbeat'
-      fullPath: '/api/public/worker/heartbeat'
-      preLoaderRoute: typeof ApiPublicWorkerHeartbeatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/worker/inspections/claim': {
       id: '/api/public/worker/inspections/claim'
       path: '/api/public/worker/inspections/claim'
@@ -510,9 +447,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   UpgradeRoute: UpgradeRoute,
-  ApiPublicWorkerClaimApplicationRoute: ApiPublicWorkerClaimApplicationRoute,
-  ApiPublicWorkerCreateUploadRoute: ApiPublicWorkerCreateUploadRoute,
-  ApiPublicWorkerHeartbeatRoute: ApiPublicWorkerHeartbeatRoute,
   ApiPublicWorkerInspectionsClaimRoute: ApiPublicWorkerInspectionsClaimRoute,
   ApiPublicWorkerJobsClaimRoute: ApiPublicWorkerJobsClaimRoute,
   ApiPublicWorkerInspectionsIdResultRoute:
