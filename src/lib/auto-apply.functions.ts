@@ -388,14 +388,18 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
     const readiness = await applicationReadiness(
       supabase,
       userId,
-      matched.map((job) => ({
-        id: job.id,
-        application_schema_id: job.applicationSchemaId,
-      })),
+      matched
+        .filter((job) => job.autoApplyEligible)
+        .map((job) => ({
+          id: job.id,
+          application_schema_id: job.applicationSchemaId,
+        })),
     );
 
     const ready = matched.map((job) => {
-      const missingQuestions = readiness.get(job.id) ?? [];
+      const missingQuestions = job.autoApplyEligible
+        ? (readiness.get(job.id) ?? [])
+        : [];
       const actionableMissingQuestions = missingQuestions.filter(
         (question) => !question.answerKey.startsWith("system:"),
       );
