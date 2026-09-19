@@ -53,6 +53,14 @@ export async function syncWorkdaySource(input: {
   const origin = `https://${input.host}`;
   const cxsBase =
     `${origin}/wday/cxs/${encodeURIComponent(input.tenant)}/${encodeURIComponent(input.site)}`;
+  const careerUrl = new URL(
+    input.careersUrl ?? `${origin}/${encodeURIComponent(input.site)}`,
+  );
+  const careerSegments = careerUrl.pathname.split("/").filter(Boolean);
+  const localePrefix =
+    careerSegments[0] && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(careerSegments[0])
+      ? `/${careerSegments[0]}/${encodeURIComponent(input.site)}`
+      : `/${encodeURIComponent(input.site)}`;
   const postings: WorkdayPosting[] = [];
 
   for (let offset = 0; offset < 2000; offset += 20) {
@@ -140,7 +148,9 @@ export async function syncWorkdaySource(input: {
         salaryMin: null,
         salaryMax: null,
         salaryCurrency: null,
-        applicationUrl: `${origin}${posting.externalPath}`,
+        applicationUrl: posting.externalPath!.startsWith(localePrefix)
+          ? `${origin}${posting.externalPath}`
+          : `${origin}${localePrefix}${posting.externalPath}`,
         publishedAt: canonicalDate(info?.startDate) || canonicalDate(posting.postedOn),
         rawData: {
           external_path: posting.externalPath,
