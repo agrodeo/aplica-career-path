@@ -172,7 +172,6 @@ export type Database = {
       }
       application_attempts: {
         Row: {
-          test_mode: boolean
           adapter: string | null
           adapter_version: string | null
           attempt_number: number
@@ -195,7 +194,6 @@ export type Database = {
           verified_at: string | null
         }
         Insert: {
-          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -218,7 +216,6 @@ export type Database = {
           verified_at?: string | null
         }
         Update: {
-          test_mode?: boolean
           adapter?: string | null
           adapter_version?: string | null
           attempt_number?: number
@@ -365,7 +362,6 @@ export type Database = {
       }
       application_queue: {
         Row: {
-          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
@@ -380,7 +376,6 @@ export type Database = {
           worker_id: string | null
         }
         Insert: {
-          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -395,7 +390,6 @@ export type Database = {
           worker_id?: string | null
         }
         Update: {
-          test_mode?: boolean
           attempt_id?: string | null
           attempts?: number
           batch_id?: string | null
@@ -751,153 +745,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      career_contexts: {
-        Row: {
-          availability: string | null
-          avoid_tasks: string[]
-          career_goal: string | null
-          challenge_story: string | null
-          differentiators: string[]
-          preferred_tasks: string[]
-          proud_project: string | null
-          responsibilities: string[]
-          results: string[]
-          strengths: string[]
-          target_environment: string | null
-          tools: string[]
-          travel_preference: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          availability?: string | null
-          avoid_tasks?: string[]
-          career_goal?: string | null
-          challenge_story?: string | null
-          differentiators?: string[]
-          preferred_tasks?: string[]
-          proud_project?: string | null
-          responsibilities?: string[]
-          results?: string[]
-          strengths?: string[]
-          target_environment?: string | null
-          tools?: string[]
-          travel_preference?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          availability?: string | null
-          avoid_tasks?: string[]
-          career_goal?: string | null
-          challenge_story?: string | null
-          differentiators?: string[]
-          preferred_tasks?: string[]
-          proud_project?: string | null
-          responsibilities?: string[]
-          results?: string[]
-          strengths?: string[]
-          target_environment?: string | null
-          tools?: string[]
-          travel_preference?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      fact_ledger: {
-        Row: {
-          allowed_for_resume: boolean
-          claim: string
-          confidence: number
-          created_at: string
-          fact_type: string
-          id: string
-          metadata: Json
-          source_ref: string | null
-          source_type: string
-          updated_at: string
-          user_confirmed: boolean
-          user_id: string
-        }
-        Insert: {
-          allowed_for_resume?: boolean
-          claim: string
-          confidence?: number
-          created_at?: string
-          fact_type: string
-          id?: string
-          metadata?: Json
-          source_ref?: string | null
-          source_type: string
-          updated_at?: string
-          user_confirmed?: boolean
-          user_id: string
-        }
-        Update: {
-          allowed_for_resume?: boolean
-          claim?: string
-          confidence?: number
-          created_at?: string
-          fact_type?: string
-          id?: string
-          metadata?: Json
-          source_ref?: string | null
-          source_type?: string
-          updated_at?: string
-          user_confirmed?: boolean
-          user_id?: string
-        }
-        Relationships: []
-      }
-      onboarding_drafts: {
-        Row: {
-          last_step: number
-          state: Json
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          last_step?: number
-          state?: Json
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          last_step?: number
-          state?: Json
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      writing_preferences: {
-        Row: {
-          de_emphasis: string[]
-          emphasis: string[]
-          summary_style: string
-          updated_at: string
-          user_id: string
-          voice: string
-        }
-        Insert: {
-          de_emphasis?: string[]
-          emphasis?: string[]
-          summary_style?: string
-          updated_at?: string
-          user_id: string
-          voice?: string
-        }
-        Update: {
-          de_emphasis?: string[]
-          emphasis?: string[]
-          summary_style?: string
-          updated_at?: string
-          user_id?: string
-          voice?: string
-        }
-        Relationships: []
       }
       job_preferences: {
         Row: {
@@ -1401,7 +1248,6 @@ export type Database = {
       claim_application: {
         Args: { _limit?: number; _worker_id: string }
         Returns: {
-          test_mode: boolean
           attempt_id: string | null
           attempts: number
           batch_id: string | null
@@ -1477,10 +1323,6 @@ export type Database = {
           _queue_id: string
           _status?: string
         }
-        Returns: string
-      }
-      enqueue_admin_dry_run: {
-        Args: { _job_id: string; _user_id: string }
         Returns: string
       }
       has_role: {
