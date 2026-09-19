@@ -1,4 +1,4 @@
-import { skills as skillOptions } from "./aplica-data";
+import { skills as skillOptions } from "./career-options";
 
 export type CvFields = {
   firstName: string; lastName: string; email: string; phone: string; country: string; city: string;
