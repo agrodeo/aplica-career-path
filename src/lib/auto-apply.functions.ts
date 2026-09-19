@@ -398,7 +398,17 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           job.matchScore !== null &&
           job.matchScore >= minimum,
       )
-      .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+      .sort((a, b) => {
+        const matchDelta = (b.matchScore ?? 0) - (a.matchScore ?? 0);
+        if (matchDelta !== 0) return matchDelta;
+        const right = b.sourceUpdatedAt
+          ? new Date(b.sourceUpdatedAt).getTime()
+          : 0;
+        const left = a.sourceUpdatedAt
+          ? new Date(a.sourceUpdatedAt).getTime()
+          : 0;
+        return right - left;
+      });
 
     const readiness = await applicationReadiness(
       supabase,
