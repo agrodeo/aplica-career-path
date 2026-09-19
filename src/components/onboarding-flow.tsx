@@ -25,7 +25,10 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Choice } from "./aplica";
 import { OnboardingShell } from "./onboarding-shell";
-import { industries, skills } from "@/lib/aplica-data";
+import {
+  careerSkillOptions,
+  industryOptions,
+} from "@/lib/career-options";
 import { refreshJobMatches } from "@/lib/auto-apply.functions";
 import { extractStructuredCv } from "@/lib/cv-extract.functions";
 import {
