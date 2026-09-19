@@ -11,7 +11,14 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
 export function SiteHeader({ simple = false }: { simple?: boolean }) {
   const [open, setOpen] = useState(false);
   const path = useRouterState({ select: (state) => state.location.pathname });
-  const product = ["/jobs", "/applications", "/profile", "/settings"].some((route) => path.startsWith(route));
+  const product = [
+    "/jobs",
+    "/applications",
+    "/profile",
+    "/settings",
+    "/applying",
+    "/admin",
+  ].some((route) => path.startsWith(route));
   return <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
     <div className={cn("mx-auto flex h-16 items-center justify-between px-5", product ? "max-w-[1200px]" : "max-w-[1120px]")}>
       <Wordmark compact />
