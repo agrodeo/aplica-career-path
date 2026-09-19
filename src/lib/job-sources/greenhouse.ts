@@ -2,7 +2,6 @@ import {
   inferEmploymentType,
   inferRemoteType,
   inferSeniority,
-  safeIsoDate,
   toPlainText,
 } from "@/lib/job-sources/normalization";
 import type { JobSourceProvider } from "@/lib/job-sources/types";
@@ -70,7 +69,9 @@ export const greenhouseProvider: JobSourceProvider = {
           salaryMax: null,
           salaryCurrency: null,
           applicationUrl: canonicalApplicationUrl(identifier, job.id),
-          publishedAt: safeIsoDate(job.updated_at),
+          // Greenhouse exposes updated_at, not a trustworthy first-published
+          // timestamp. Keep it in rawData and use jobs.discovered_at for "new".
+          publishedAt: null,
           rawData: {
             board_token: identifier,
             internal_job_id: job.internal_job_id ?? null,
