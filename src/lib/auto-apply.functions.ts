@@ -513,180 +513,158 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
+    const { scoreStructuredMatch } = await import("@/lib/job-matching");
     await ensureInventoryFresh(20);
 
     const { supabase, userId } = context;
 
-    const [profile, experiences, skills, preferences, careerContext, jobs] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("current_title, city, country")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabase.from("experiences").select("title").eq("user_id", userId),
-        supabase.from("skills").select("name").eq("user_id", userId),
-        supabase
-          .from("job_preferences")
-          .select("*")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabase
-          .from("career_contexts")
-          .select("preferred_tasks,avoid_tasks,tools,target_environment,career_goal")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabase
-          .from("jobs")
-          .select(
-            "id, title, description, location, country, remote_type, employment_type, seniority, auto_apply_eligible, companies(name)",
-          )
-          .eq("is_active", true)
-          .limit(1000),
-      ]);
+    const [
+      profile,
+      experiences,
+      skills,
+      languages,
+      educations,
+      preferences,
+      careerContext,
+      verifiedAnswers,
+      jobs,
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("current_title, city, country")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("experiences")
+        .select("company,title,start_date,end_date,is_current,description,achievements")
+        .eq("user_id", userId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("skills")
+        .select("name,years_experience")
+        .eq("user_id", userId),
+      supabase
+        .from("languages")
+        .select("language,level")
+        .eq("user_id", userId),
+      supabase
+        .from("educations")
+        .select("degree,field")
+        .eq("user_id", userId),
+      supabase
+        .from("job_preferences")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("career_contexts")
+        .select("preferred_tasks,avoid_tasks,tools,target_environment,career_goal")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("application_answers")
+        .select("canonical_key,boolean_value,text_value,user_confirmed")
+        .eq("user_id", userId)
+        .eq("user_confirmed", true),
+      supabase
+        .from("jobs")
+        .select(
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,auto_apply_eligible,companies(name)",
+        )
+        .eq("is_active", true)
+        .limit(1500),
+    ]);
 
     const pref = preferences.data;
-    const targetRoles = pref?.target_roles ?? [];
-    const targetLocations = pref?.target_locations ?? [];
-    const desiredSeniorities = pref?.seniority_levels ?? [];
-    const desiredEmployment = pref?.employment_types ?? [];
-    const userSkills = (skills.data ?? [])
-      .map((skill) => skill.name)
-      .filter(Boolean);
     const careerData = careerContext.data;
-    const preferredTasks = careerData?.preferred_tasks ?? [];
-    const avoidTasks = careerData?.avoid_tasks ?? [];
-    const confirmedTools = careerData?.tools ?? [];
-    const experienceTitles = [
-      profile.data?.current_title ?? "",
-      ...(experiences.data ?? []).map((experience) => experience.title),
-    ].filter(Boolean);
+
+    const candidate = {
+      currentTitle: profile.data?.current_title ?? "",
+      city: profile.data?.city ?? "",
+      country: profile.data?.country ?? "",
+      targetRoles: pref?.target_roles ?? [],
+      targetLocations: pref?.target_locations ?? [],
+      remoteAllowed: pref?.remote_allowed !== false,
+      hybridAllowed: pref?.hybrid_allowed !== false,
+      onsiteAllowed: pref?.onsite_allowed === true,
+      employmentTypes: pref?.employment_types ?? [],
+      seniorityLevels: pref?.seniority_levels ?? [],
+      willingToRelocate: pref?.willing_to_relocate === true,
+      internationalRemote: pref?.international_remote !== false,
+      minimumSalary:
+        pref?.minimum_salary == null ? null : Number(pref.minimum_salary),
+      salaryCurrency: pref?.salary_currency ?? null,
+      skills: (skills.data ?? []).map((skill) => ({
+        name: skill.name,
+        yearsExperience:
+          skill.years_experience == null ? null : Number(skill.years_experience),
+      })),
+      languages: (languages.data ?? []).map((language) => ({
+        language: language.language,
+        level: language.level,
+      })),
+      education: (educations.data ?? []).map((education) => ({
+        degree: education.degree ?? "",
+        field: education.field ?? "",
+      })),
+      experiences: (experiences.data ?? []).map((experience) => ({
+        title: experience.title,
+        company: experience.company,
+        startDate: experience.start_date,
+        endDate: experience.end_date,
+        isCurrent: experience.is_current,
+        description: experience.description ?? "",
+        achievements: Array.isArray(experience.achievements)
+          ? experience.achievements.map(String)
+          : [],
+      })),
+      tools: careerData?.tools ?? [],
+      preferredTasks: careerData?.preferred_tasks ?? [],
+      avoidTasks: careerData?.avoid_tasks ?? [],
+      workAuthorizationAnswers: (verifiedAnswers.data ?? []).map((answer) => ({
+        key: answer.canonical_key,
+        booleanValue: answer.boolean_value,
+        textValue: answer.text_value,
+      })),
+    };
 
     const rows = (jobs.data ?? []).map((job) => {
-      const roleCandidates = [...targetRoles, ...experienceTitles];
-      const roleScore = roleCandidates.length
-        ? Math.max(...roleCandidates.map((role) => similarity(role, job.title)))
-        : 50;
-
-      const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase();
-      const matchedSkills = userSkills.filter((skill) => includesLoose(jobText, skill));
-      const skillsScore = userSkills.length
-        ? Math.round((matchedSkills.length / Math.min(userSkills.length, 8)) * 100)
-        : 50;
-
-      const experienceScore = experienceTitles.length
-        ? Math.max(...experienceTitles.map((title) => similarity(title, job.title)))
-        : 40;
-
-      const mode = normalizeMode(job.remote_type);
-      const modeAllowed =
-        mode === "remote"
-          ? pref?.remote_allowed !== false
-          : mode === "hybrid"
-            ? pref?.hybrid_allowed !== false
-            : mode === "onsite"
-              ? pref?.onsite_allowed === true
-              : true;
-
-      let locationScore = 70;
-      if (mode === "remote" && pref?.remote_allowed !== false) {
-        locationScore = 100;
-      } else if (targetLocations.length) {
-        locationScore = targetLocations.some(
-          (location) =>
-            includesLoose(job.location, location) ||
-            includesLoose(job.country, location),
-        )
-          ? 100
-          : mode === "remote"
-            ? 80
-            : 30;
-      } else if (
-        includesLoose(job.location, profile.data?.city ?? "") ||
-        includesLoose(job.country, profile.data?.country ?? "")
-      ) {
-        locationScore = 100;
-      }
-
-      const seniorityScore =
-        !desiredSeniorities.length || !job.seniority
-          ? 70
-          : desiredSeniorities.some((level) => includesLoose(job.seniority, level))
-            ? 100
-            : 45;
-
-      const employmentScore =
-        !desiredEmployment.length || !job.employment_type
-          ? 80
-          : desiredEmployment.some((type) =>
-                includesLoose(job.employment_type, type),
-              )
-            ? 100
-            : 50;
-
-      const matchedPreferredTasks = preferredTasks.filter((task) =>
-        includesLoose(jobText, task),
+      const scored = scoreStructuredMatch(
+        {
+          title: job.title,
+          description: job.description ?? "",
+          location: job.location,
+          country: job.country,
+          remoteType: job.remote_type,
+          employmentType: job.employment_type,
+          seniority: job.seniority,
+          salaryMin: job.salary_min == null ? null : Number(job.salary_min),
+          salaryMax: job.salary_max == null ? null : Number(job.salary_max),
+          salaryCurrency: job.salary_currency,
+        },
+        candidate,
       );
-      const matchedTools = confirmedTools.filter((tool) =>
-        includesLoose(jobText, tool),
-      );
-      const matchedAvoidTasks = avoidTasks.filter((task) =>
-        includesLoose(jobText, task),
-      );
-
-      const contextSignals = [...preferredTasks, ...confirmedTools];
-      const positiveContextScore = contextSignals.length
-        ? Math.round(
-            ((matchedPreferredTasks.length + matchedTools.length) /
-              Math.min(contextSignals.length, 10)) *
-              100,
-          )
-        : 70;
-      const avoidPenalty = Math.min(matchedAvoidTasks.length * 20, 60);
-      const contextScore = Math.max(0, positiveContextScore - avoidPenalty);
-
-      const hardRequirementsMet = modeAllowed;
-      const weighted =
-        roleScore * 0.3 +
-        skillsScore * 0.25 +
-        experienceScore * 0.15 +
-        contextScore * 0.1 +
-        locationScore * 0.1 +
-        seniorityScore * 0.05 +
-        employmentScore * 0.05;
-
-      const matchScore = Math.max(0, Math.min(100, Math.round(weighted)));
 
       return {
         user_id: userId,
         job_id: job.id,
-        match_score: matchScore,
-        role_score: roleScore,
-        skills_score: Math.min(100, skillsScore),
-        experience_score: experienceScore,
-        location_score: locationScore,
-        seniority_score: seniorityScore,
-        preferences_score: Math.round(
-          employmentScore * 0.4 + contextScore * 0.6,
-        ),
-        hard_requirements_met: hardRequirementsMet,
-        explanation: {
-          matchedSkills,
-          matchedPreferredTasks,
-          matchedTools,
-          avoidedSignals: matchedAvoidTasks,
-          targetRole: targetRoles[0] ?? profile.data?.current_title ?? null,
-          careerGoal: careerData?.career_goal ?? null,
-          mode: job.remote_type,
-          location: job.location,
-          note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
-        },
+        match_score: scored.matchScore,
+        role_score: scored.roleScore,
+        skills_score: scored.skillsScore,
+        experience_score: scored.experienceScore,
+        location_score: scored.locationScore,
+        seniority_score: scored.seniorityScore,
+        preferences_score: scored.preferencesScore,
+        hard_requirements_met: scored.hardRequirementsMet,
+        explanation: scored.explanation,
         created_at: new Date().toISOString(),
       };
     });
 
     if (rows.length) {
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { supabaseAdmin } = await import(
+        "@/integrations/supabase/client.server"
+      );
       const { error } = await supabaseAdmin
         .from("job_matches")
         .upsert(rows, { onConflict: "user_id,job_id" });
@@ -697,7 +675,11 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
     return {
       totalEligibleInventory: rows.length,
       readyCount: rows.filter(
-        (row) => row.hard_requirements_met && Number(row.match_score) >= minimum,
+        (row) =>
+          row.hard_requirements_met && Number(row.match_score) >= minimum,
+      ).length,
+      rejectedByHardRequirements: rows.filter(
+        (row) => !row.hard_requirements_met,
       ).length,
       minimumMatchScore: minimum,
     };
