@@ -3,15 +3,19 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   syncAllJobBoards,
   syncJobBoardUrl,
+  syncJobBoardUrls,
 } from "@/lib/discovery.functions";
 
 export function JobDiscoveryConsole() {
   const [companyName, setCompanyName] = useState("");
   const [boardUrl, setBoardUrl] = useState("");
+  const [bulkUrls, setBulkUrls] = useState("");
   const syncBoard = useServerFn(syncJobBoardUrl);
+  const syncBoards = useServerFn(syncJobBoardUrls);
   const syncAll = useServerFn(syncAllJobBoards);
 
   const mutation = useMutation({
@@ -20,6 +24,18 @@ export function JobDiscoveryConsole() {
         data: {
           url: boardUrl,
           companyName: companyName.trim() || undefined,
+        },
+      }),
+  });
+
+  const bulkMutation = useMutation({
+    mutationFn: () =>
+      syncBoards({
+        data: {
+          urls: bulkUrls
+            .split(/\r?\n/)
+            .map((value) => value.trim())
+            .filter(Boolean),
         },
       }),
   });
@@ -117,6 +133,61 @@ export function JobDiscoveryConsole() {
           <Result label="Bajas" value={mutation.data.deactivated} />
         </div>
       )}
+
+      <div className="mt-10 border-t border-border pt-8">
+        <h3 className="text-base font-medium">Carga masiva</h3>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+          Una URL de careers board por línea. Detectamos el ATS y registramos
+          hasta 100 fuentes por tanda; las que fallen quedan reportadas sin
+          frenar las demás.
+        </p>
+        <Textarea
+          className="mt-4 min-h-36 font-mono text-xs"
+          value={bulkUrls}
+          onChange={(event) => setBulkUrls(event.target.value)}
+          placeholder={"https://jobs.ashbyhq.com/acme\nhttps://jobs.lever.co/example\nhttps://example.wd5.myworkdayjobs.com/en-US/External"}
+        />
+        <Button
+          className="mt-3"
+          variant="outline"
+          disabled={bulkMutation.isPending || !bulkUrls.trim()}
+          onClick={() => bulkMutation.mutate()}
+        >
+          {bulkMutation.isPending
+            ? "Importando fuentes…"
+            : "Registrar lista"}
+        </Button>
+
+        {bulkMutation.error && (
+          <p className="mt-3 text-sm text-destructive">
+            {bulkMutation.error.message}
+          </p>
+        )}
+
+        {bulkMutation.data && (
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground">
+              {bulkMutation.data.successful}/{bulkMutation.data.total} fuentes
+              registradas · {bulkMutation.data.discovered} vacantes leídas.
+            </p>
+            {bulkMutation.data.failed > 0 && (
+              <div className="mt-3 space-y-1">
+                {bulkMutation.data.results
+                  .filter((result) => !result.ok)
+                  .slice(0, 10)
+                  .map((result) => (
+                    <p
+                      key={result.url}
+                      className="break-all text-xs text-destructive"
+                    >
+                      {result.url} · {result.error ?? "Error desconocido"}
+                    </p>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
