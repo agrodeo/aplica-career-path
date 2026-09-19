@@ -305,6 +305,9 @@ async function applicationReadiness(
 export const listAutoApplyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
+    await ensureInventoryFresh(20);
+
     const { supabase, userId } = context;
     const [
       { data: jobs },
@@ -497,6 +500,9 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
 export const refreshJobMatches = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
+    await ensureInventoryFresh(20);
+
     const { supabase, userId } = context;
 
     const [profile, experiences, skills, preferences, careerContext, jobs] =
