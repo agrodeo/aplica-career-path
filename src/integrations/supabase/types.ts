@@ -30,7 +30,7 @@ export type Database = {
           mapped_fields: Json
           mode: string
           reason: string | null
-          requested_by: string
+          requested_by: string | null
           required_fields: Json
           status: string
           unknown_fields: Json
@@ -52,7 +52,7 @@ export type Database = {
           mapped_fields?: Json
           mode?: string
           reason?: string | null
-          requested_by: string
+          requested_by?: string | null
           required_fields?: Json
           status?: string
           unknown_fields?: Json
@@ -74,7 +74,7 @@ export type Database = {
           mapped_fields?: Json
           mode?: string
           reason?: string | null
-          requested_by?: string
+          requested_by?: string | null
           required_fields?: Json
           status?: string
           unknown_fields?: Json
@@ -974,6 +974,10 @@ export type Database = {
           created_at: string
           discovery_enabled: boolean
           id: string
+          last_job_count: number
+          last_sync_error: string | null
+          last_sync_status: string
+          last_synced_at: string | null
           name: string
           requires_credentials: boolean
           submission_enabled: boolean
@@ -987,6 +991,10 @@ export type Database = {
           created_at?: string
           discovery_enabled?: boolean
           id?: string
+          last_job_count?: number
+          last_sync_error?: string | null
+          last_sync_status?: string
+          last_synced_at?: string | null
           name: string
           requires_credentials?: boolean
           submission_enabled?: boolean
@@ -1000,6 +1008,10 @@ export type Database = {
           created_at?: string
           discovery_enabled?: boolean
           id?: string
+          last_job_count?: number
+          last_sync_error?: string | null
+          last_sync_status?: string
+          last_synced_at?: string | null
           name?: string
           requires_credentials?: boolean
           submission_enabled?: boolean
@@ -1033,6 +1045,7 @@ export type Database = {
           salary_min: number | null
           seniority: string | null
           source_id: string | null
+          source_updated_at: string | null
           submission_mechanism: string
           title: string
         }
@@ -1061,6 +1074,7 @@ export type Database = {
           salary_min?: number | null
           seniority?: string | null
           source_id?: string | null
+          source_updated_at?: string | null
           submission_mechanism?: string
           title: string
         }
@@ -1089,6 +1103,7 @@ export type Database = {
           salary_min?: number | null
           seniority?: string | null
           source_id?: string | null
+          source_updated_at?: string | null
           submission_mechanism?: string
           title?: string
         }
@@ -1439,7 +1454,7 @@ export type Database = {
           mapped_fields: Json
           mode: string
           reason: string | null
-          requested_by: string
+          requested_by: string | null
           required_fields: Json
           status: string
           unknown_fields: Json

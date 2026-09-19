@@ -65,7 +65,7 @@ function Upgrade() {
   const active = overviewQuery.data?.subscriptionStatus === "active";
 
   return (
-    <main className="min-h-screen bg-surface">
+    <main className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-[1120px] items-center justify-between px-5 py-5">
         <Wordmark compact />
         <button

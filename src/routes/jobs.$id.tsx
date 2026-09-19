@@ -175,6 +175,9 @@ function JobDetail() {
                   {formatSalary(job)}
                 </p>
               )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Inventario {formatFreshness(job.sourceLastSyncedAt)} · formulario verificado {formatFreshness(job.lastVerifiedAt)}
+              </p>
             </div>
           </div>
 
@@ -265,6 +268,18 @@ function JobDetail() {
       </main>
     </div>
   );
+}
+
+function formatFreshness(value: string | null) {
+  if (!value) return "sin verificar";
+  const diff = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return "actualizado recientemente";
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 2) return "actualizado recién";
+  if (minutes < 60) return `actualizado hace ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `actualizado hace ${hours} h`;
+  return `actualizado hace ${Math.floor(hours / 24)} d`;
 }
 
 function initials(company: string) {

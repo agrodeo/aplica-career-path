@@ -1,45 +1,51 @@
-import { Check, FileText, Search } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import meliLogo from "@/assets/mercado-libre.png.asset.json";
-import rampLogo from "@/assets/ramp.png.asset.json";
-import canvaLogo from "@/assets/canva.png.asset.json";
+import {
+  Check,
+  FileText,
+  Search,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import {
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
-const phaseDurations = [1800, 1800, 2200, 2400, 2100, 2400, 2000];
+const phaseDurations = [1800, 1800, 2200, 2200, 2100, 2300, 1900];
 const exitDuration = 420;
-const profileSignals = ["Growth", "Marketing", "Buenos Aires", "Inglés", "Español", "Remoto"];
-const demoJobs = [
-  { role: "Growth Manager", company: "Mercado Libre", logo: meliLogo.url, match: "94% match" },
-  { role: "Growth Associate", company: "Ramp", logo: rampLogo.url, match: "91% match" },
-  { role: "Marketing Manager", company: "Canva", logo: canvaLogo.url, match: "88% match" },
+
+const profileSignals = [
+  "Experiencia extraída",
+  "Skills confirmadas",
+  "Idiomas",
+  "Ubicación",
+  "Preferencias",
+  "Autorización laboral",
 ];
 
-function SearchCounter({ duration }: { duration: number }) {
-  const [value, setValue] = useState(0);
-  const frame = useRef(0);
-
-  useEffect(() => {
-    const start = performance.now();
-    const run = (now: number) => {
-      const t = Math.min((now - start) / (duration - 320), 1);
-      const eased = 1 - Math.pow(1 - t, 2.4);
-      setValue(Math.round(eased * 127));
-      if (t < 1) frame.current = requestAnimationFrame(run);
-    };
-    frame.current = requestAnimationFrame(run);
-    return () => cancelAnimationFrame(frame.current);
-  }, [duration]);
-
-  return <strong className="demo-counter">{value}</strong>;
-}
+const jobChecks = [
+  "Rol y responsabilidades compatibles",
+  "Ubicación y modalidad compatibles",
+  "Formulario verificado para Auto Apply",
+];
 
 function DemoProgress({ phase }: { phase: number }) {
   return (
     <div className="demo-progress" aria-hidden="true">
       {phaseDurations.map((duration, index) => (
         <span
-          className={index === phase ? "is-active" : index < phase ? "is-complete" : ""}
+          className={
+            index === phase
+              ? "is-active"
+              : index < phase
+                ? "is-complete"
+                : ""
+          }
           key={index}
-          style={{ "--demo-phase-duration": `${duration}ms` } as CSSProperties}
+          style={
+            { "--demo-phase-duration": `${duration}ms` } as CSSProperties
+          }
         />
       ))}
     </div>
@@ -47,91 +53,181 @@ function DemoProgress({ phase }: { phase: number }) {
 }
 
 function phaseContent(phase: number): ReactNode {
-  if (phase === 0)
+  if (phase === 0) {
     return (
       <>
-        <div className="demo-heading"><span className="demo-eyebrow">Empezá con tu perfil</span><h2>Subí tu CV</h2></div>
+        <div className="demo-heading">
+          <span className="demo-eyebrow">Empezá con tu perfil</span>
+          <h2>Subí tu CV</h2>
+        </div>
         <div className="demo-upload">
-          <div className="demo-upload-icon"><FileText /></div>
-          <div className="demo-file"><FileText /><span><strong>CV_Fausto.pdf</strong><small>PDF · 248 KB</small></span></div>
-          <p>Arrastrá tu CV acá</p>
+          <div className="demo-upload-icon">
+            <FileText />
+          </div>
+          <div className="demo-file">
+            <FileText />
+            <span>
+              <strong>CV.pdf</strong>
+              <small>Documento cargado</small>
+            </span>
+          </div>
+          <p>PDF o DOCX</p>
         </div>
-        <p className="demo-confirm demo-delay-late"><Check /> CV cargado</p>
+        <p className="demo-confirm demo-delay-late">
+          <Check /> CV cargado
+        </p>
       </>
     );
+  }
 
-  if (phase === 1)
+  if (phase === 1) {
     return (
       <>
-        <div className="demo-heading"><span className="demo-eyebrow">Tu experiencia</span><h2>Analizando tu perfil...</h2></div>
+        <div className="demo-heading">
+          <span className="demo-eyebrow">Tu Career Profile</span>
+          <h2>Entendiendo tu experiencia…</h2>
+        </div>
         <div className="demo-signals">
-          {profileSignals.map((signal, index) => <span style={{ "--demo-order": index } as CSSProperties} key={signal}>{signal}</span>)}
+          {profileSignals.map((signal, index) => (
+            <span
+              style={{ "--demo-order": index } as CSSProperties}
+              key={signal}
+            >
+              {signal}
+            </span>
+          ))}
         </div>
-        <p className="demo-confirm demo-delay-late"><Check /> Perfil listo</p>
+        <p className="demo-confirm demo-delay-late">
+          <ShieldCheck /> Hechos listos para revisar
+        </p>
       </>
     );
+  }
 
-  if (phase === 2)
+  if (phase === 2) {
     return (
       <>
-        <div className="demo-search-icon"><Search /></div>
+        <div className="demo-search-icon">
+          <Search />
+        </div>
         <div className="demo-centered">
-          <h2>Buscando trabajos para vos...</h2>
-          <SearchCounter duration={phaseDurations[2] ?? 2200} />
-          <p>oportunidades encontradas</p>
+          <h2>Buscando inventario actualizado…</h2>
+          <p className="mx-auto mt-5 max-w-[330px] leading-6">
+            Aplica revisa vacantes activas y descarta formularios que ya no se
+            pueden completar de punta a punta.
+          </p>
         </div>
       </>
     );
+  }
 
-  if (phase === 3)
+  if (phase === 3) {
     return (
       <>
-        <div className="demo-heading"><span className="demo-eyebrow">Mejores resultados</span><h2>Trabajos que encajan con vos</h2></div>
+        <div className="demo-heading">
+          <span className="demo-eyebrow">Matching verificable</span>
+          <h2>Primero comprobamos el encaje</h2>
+        </div>
         <div className="demo-jobs">
-          {demoJobs.map((job, index) => (
-            <div className="demo-job" style={{ "--demo-order": index } as CSSProperties} key={job.role}>
-              <img className="demo-job-logo" src={job.logo} alt={job.company} />
-              <span><strong>{job.role}</strong><small>{job.company} · Remoto</small></span>
-              <b>{job.match}</b>
+          {jobChecks.map((label, index) => (
+            <div
+              className="demo-job"
+              style={{ "--demo-order": index } as CSSProperties}
+              key={label}
+            >
+              <div className="demo-job-logo grid place-items-center bg-primary-soft text-primary">
+                <Check className="h-4 w-4" />
+              </div>
+              <span>
+                <strong>{label}</strong>
+                <small>Señal calculada con tu perfil real</small>
+              </span>
             </div>
           ))}
         </div>
       </>
     );
+  }
 
-  if (phase === 4)
+  if (phase === 4) {
     return (
       <>
-        <div className="demo-heading"><span className="demo-eyebrow">Growth Manager · 94% match</span><h2>Adaptando tu CV...</h2></div>
-        <div className="demo-resume-lines" aria-hidden="true"><span /><span /><span /></div>
+        <div className="demo-heading">
+          <span className="demo-eyebrow">CV específico por vacante</span>
+          <h2>Adaptando la presentación…</h2>
+        </div>
+        <div className="demo-resume-lines" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
         <div className="demo-checklist">
-          {["Experiencia relevante priorizada", "Skills alineadas", "CV listo"].map((label, index) => <p style={{ "--demo-order": index } as CSSProperties} key={label}><Check />{label}</p>)}
+          {[
+            "Experiencia relevante priorizada",
+            "Redacción adaptada al puesto",
+            "Sin agregar habilidades ni logros",
+          ].map((label, index) => (
+            <p
+              style={{ "--demo-order": index } as CSSProperties}
+              key={label}
+            >
+              <Check />
+              {label}
+            </p>
+          ))}
         </div>
       </>
     );
+  }
 
-  if (phase === 5)
+  if (phase === 5) {
     return (
       <>
-        <div className="demo-heading"><span className="demo-eyebrow">Cola de postulaciones</span><h2>Aplicando por vos</h2></div>
+        <div className="demo-heading">
+          <span className="demo-eyebrow">Auto Apply</span>
+          <h2>Preparando la postulación</h2>
+        </div>
         <div className="demo-queue">
-          {demoJobs.map((job, index) => (
-            <div className={index < 2 ? "demo-queue-row is-done" : "demo-queue-row is-applying"} style={{ "--demo-order": index } as CSSProperties} key={job.role}>
-              <img className="demo-job-logo" src={job.logo} alt={job.company} />
-              <span><strong>{job.role}</strong><small>{index < 2 ? "CV adaptado" : "Preparando postulación"}</small></span>
-              <b>{index < 2 ? <><Check /> Aplicado</> : "Aplicando..."}</b>
+          {[
+            ["CV", "Archivo generado y validado"],
+            ["Preguntas", "Respuestas basadas en datos confirmados"],
+            ["Formulario", "Listo para envío automático"],
+          ].map(([label, detail], index) => (
+            <div
+              className="demo-queue-row is-done"
+              style={{ "--demo-order": index } as CSSProperties}
+              key={label}
+            >
+              <div className="demo-job-logo grid place-items-center bg-primary-soft text-primary">
+                {index === 0 ? (
+                  <FileText className="h-4 w-4" />
+                ) : index === 1 ? (
+                  <Sparkles className="h-4 w-4" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+              </div>
+              <span>
+                <strong>{label}</strong>
+                <small>{detail}</small>
+              </span>
+              <b>
+                <Check /> Listo
+              </b>
             </div>
           ))}
         </div>
       </>
     );
+  }
 
   return (
     <div className="demo-final">
-      <div className="demo-final-check"><Check /></div>
-      <strong>24</strong>
-      <h2>aplicaciones enviadas.</h2>
-      <p>Mientras vos seguís con tu día.</p>
+      <div className="demo-final-check">
+        <Check />
+      </div>
+      <h2>Todo listo para aplicar.</h2>
+      <p>Vos elegís las vacantes. Aplica hace el trabajo repetitivo.</p>
     </div>
   );
 }
@@ -155,9 +251,17 @@ export function ProductDemo() {
   }, [exiting]);
 
   return (
-    <div className="product-demo" aria-label="Demostración automática del proceso de Aplica" aria-live="off">
+    <div
+      className="product-demo"
+      aria-label="Demostración ilustrativa del proceso de Aplica"
+      aria-live="off"
+    >
       {exiting !== null && exiting !== phase && (
-        <div className="product-demo-frame is-exiting" key={`exit-${exiting}`} aria-hidden="true">
+        <div
+          className="product-demo-frame is-exiting"
+          key={`exit-${exiting}`}
+          aria-hidden="true"
+        >
           <DemoProgress phase={exiting} />
           {phaseContent(exiting)}
         </div>

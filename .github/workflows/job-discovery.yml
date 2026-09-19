@@ -1,0 +1,33 @@
+name: Live Job Discovery
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync due ATS sources
+        env:
+          APLICA_API_BASE_URL: ${{ secrets.APLICA_API_BASE_URL }}
+          DISCOVERY_CRON_TOKEN: ${{ secrets.DISCOVERY_CRON_TOKEN }}
+        run: |
+          if [ -z "$APLICA_API_BASE_URL" ] || [ -z "$DISCOVERY_CRON_TOKEN" ]; then
+            echo "::notice::Live discovery is ready but APLICA_API_BASE_URL / DISCOVERY_CRON_TOKEN are not configured yet."
+            exit 0
+          fi
+
+          BASE="${APLICA_API_BASE_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            --retry-all-errors \
+            --max-time 120 \
+            -X POST "$BASE/api/public/discovery/sync" \
+            -H "Authorization: Bearer $DISCOVERY_CRON_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"limit":20}'
