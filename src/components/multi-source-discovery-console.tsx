@@ -32,7 +32,7 @@ export function MultiSourceDiscoveryConsole() {
     <section className="mt-12">
       <h2 className="text-xl font-medium">Descubrimiento de vacantes</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Pegá un job board público de Greenhouse, Lever o Ashby. Aplica detecta
+        Pegá un job board público de Greenhouse, Lever, Ashby, SmartRecruiters, Workable o Workday. Aplica detecta
         el ATS, registra la fuente y sincroniza las vacantes activas. Discovery
         no implica Auto Apply: cada formulario se habilita por separado.
       </p>
