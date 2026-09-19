@@ -88,21 +88,25 @@ export function detectJobBoardUrl(value: string) {
   if (workdayHost) {
     const tenant = workdayHost[1];
     const parts = url.pathname.split("/").filter(Boolean);
-    if (parts[0] && /^[a-z]{2}(?:-[a-z]{2})?$/i.test(parts[0])) {
-      parts.shift();
-    }
-    if (!parts[0]) {
+    const locale =
+      parts[0] && /^[a-z]{2}(?:-[a-z]{2})?$/i.test(parts[0])
+        ? parts.shift() ?? null
+        : null;
+    const site = parts[0];
+    if (!site) {
       throw new Error(
         "La URL de Workday tiene que incluir el careers site, no sólo el dominio.",
       );
     }
+    const boardPath = locale ? `/${locale}/${site}` : `/${site}`;
+    const boardUrl = new URL(boardPath, url.origin).toString();
     return {
       provider: "workday" as const,
-      // Workday needs tenant + shard hostname + site. The full public board URL
-      // is the stable identifier because all three are encoded in it.
-      identifier: url.toString(),
+      // Workday needs tenant + shard hostname + site. Normalize job-detail
+      // URLs back to the board so one company does not register duplicates.
+      identifier: boardUrl,
       companyName: prettyCompanyName(tenant),
-      careersUrl: url.toString(),
+      careersUrl: boardUrl,
     };
   }
 
