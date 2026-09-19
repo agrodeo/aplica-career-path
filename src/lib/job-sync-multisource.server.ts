@@ -2,6 +2,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { syncGreenhouseSource } from "@/lib/job-sync.server";
 import { syncLeverSource } from "@/lib/job-sources/lever";
 import { syncAshbySource } from "@/lib/job-sources/ashby";
+import { syncSmartRecruitersSource } from "@/lib/job-sources/smartrecruiters";
+import { syncWorkableSource } from "@/lib/job-sources/workable";
+import { syncWorkdaySource } from "@/lib/job-sources/workday";
 
 type CompanySource = {
   id: string;
@@ -37,6 +40,32 @@ export async function syncRegisteredSource(company: CompanySource, requestedBy?:
       careersUrl: company.careers_url,
     });
   }
+  if (company.ats_type === "smartrecruiters") {
+    return syncSmartRecruitersSource({
+      companyIdentifier: company.ats_identifier,
+      companyName: company.name,
+      careersUrl: company.careers_url,
+    });
+  }
+  if (company.ats_type === "workable") {
+    return syncWorkableSource({
+      account: company.ats_identifier,
+      companyName: company.name,
+      careersUrl: company.careers_url,
+    });
+  }
+  if (company.ats_type === "workday") {
+    const [host, site] = company.ats_identifier.split("|");
+    const tenant = host?.split(".")[0] ?? "";
+    if (!host || !site || !tenant) throw new Error("Identificador de Workday inválido.");
+    return syncWorkdaySource({
+      host,
+      tenant,
+      site,
+      companyName: company.name,
+      careersUrl: company.careers_url,
+    });
+  }
   throw new Error(`ATS discovery todavía no soportado: ${company.ats_type}`);
 }
 
@@ -46,7 +75,7 @@ export async function syncAllRegisteredSources(options?: { requestedBy?: string 
     .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at")
     .eq("active", true)
     .not("ats_identifier", "is", null)
-    .in("ats_type", ["greenhouse", "lever", "ashby"])
+    .in("ats_type", ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday"])
     .order("last_scanned_at", { ascending: true, nullsFirst: true });
 
   if (error) throw new Error(error.message);
