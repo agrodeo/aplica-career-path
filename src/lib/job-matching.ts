@@ -146,8 +146,14 @@ export function extractJobRequirements(job: MatchableJob): JobRequirements {
     ),
   );
 
-  const degreeRequired = requiredSentences.some((sentence) =>
-    /\b(bachelor'?s?|master'?s?|degree|licenciatura|titulo universitario|título universitario|universit(?:y|ario))\b/i.test(sentence),
+  const degreeRequired = requiredSentences.some(
+    (sentence) =>
+      /\b(bachelor'?s?|master'?s?|degree|licenciatura|titulo universitario|título universitario|universit(?:y|ario))\b/i.test(
+        sentence,
+      ) &&
+      !/or equivalent(?: practical)? experience|equivalent experience|experiencia equivalente/i.test(
+        sentence,
+      ),
   );
 
   let workAuthorizationCountry: string | null = null;
@@ -191,15 +197,42 @@ function canonicalLanguage(value: string) {
 }
 
 function experienceYears(experiences: MatchCandidate["experiences"]) {
-  let months = 0;
-  for (const experience of experiences) {
-    if (!experience.startDate) continue;
-    const start = new Date(experience.startDate).getTime();
-    const end = experience.isCurrent || !experience.endDate ? Date.now() : new Date(experience.endDate).getTime();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
-    months += (end - start) / (1000 * 60 * 60 * 24 * 30.4375);
+  const intervals = experiences
+    .map((experience) => {
+      if (!experience.startDate) return null;
+      const start = new Date(experience.startDate).getTime();
+      const end =
+        experience.isCurrent || !experience.endDate
+          ? Date.now()
+          : new Date(experience.endDate).getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+        return null;
+      }
+      return { start, end };
+    })
+    .filter(
+      (interval): interval is { start: number; end: number } =>
+        interval !== null,
+    )
+    .sort((a, b) => a.start - b.start);
+
+  if (!intervals.length) return 0;
+
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const interval of intervals) {
+    const last = merged.at(-1);
+    if (!last || interval.start > last.end) {
+      merged.push({ ...interval });
+    } else {
+      last.end = Math.max(last.end, interval.end);
+    }
   }
-  return months / 12;
+
+  const milliseconds = merged.reduce(
+    (total, interval) => total + (interval.end - interval.start),
+    0,
+  );
+  return milliseconds / (1000 * 60 * 60 * 24 * 365.25);
 }
 
 function modeOf(value: string | null) {
