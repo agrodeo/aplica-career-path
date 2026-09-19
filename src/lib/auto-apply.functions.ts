@@ -710,11 +710,19 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       await Promise.all([
         supabase
           .from("profiles")
-          .select("current_title, city, country")
+          .select("current_title, city, country, professional_summary")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("experiences").select("title").eq("user_id", userId),
-        supabase.from("skills").select("name").eq("user_id", userId),
+        supabase
+          .from("experiences")
+          .select(
+            "title,company,description,achievements,start_date,end_date,is_current",
+          )
+          .eq("user_id", userId),
+        supabase
+          .from("skills")
+          .select("name,years_experience")
+          .eq("user_id", userId),
         supabase
           .from("job_preferences")
           .select("*")
@@ -722,7 +730,9 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
           .maybeSingle(),
         supabase
           .from("career_contexts")
-          .select("preferred_tasks,avoid_tasks,tools,target_environment,career_goal")
+          .select(
+            "preferred_tasks,avoid_tasks,tools,responsibilities,results,strengths,differentiators,target_environment,career_goal",
+          )
           .eq("user_id", userId)
           .maybeSingle(),
         supabase
@@ -746,25 +756,42 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
     const preferredTasks = careerData?.preferred_tasks ?? [];
     const avoidTasks = careerData?.avoid_tasks ?? [];
     const confirmedTools = careerData?.tools ?? [];
+    const responsibilities = careerData?.responsibilities ?? [];
+    const results = careerData?.results ?? [];
+    const strengths = careerData?.strengths ?? [];
+    const differentiators = careerData?.differentiators ?? [];
     const experienceTitles = [
       profile.data?.current_title ?? "",
       ...(experiences.data ?? []).map((experience) => experience.title),
     ].filter(Boolean);
+    const totalExperienceYears = calculateExperienceYears(
+      (experiences.data ?? []).map((experience) => ({
+        start_date: experience.start_date,
+        end_date: experience.end_date,
+        is_current: experience.is_current,
+      })),
+    );
 
     const rows = (jobs.data ?? []).map((job) => {
       const roleCandidates = [...targetRoles, ...experienceTitles];
       const roleScore = roleCandidates.length
         ? Math.max(...roleCandidates.map((role) => similarity(role, job.title)))
-        : 50;
+        : 45;
 
       const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase();
-      const matchedSkills = userSkills.filter((skill) => includesLoose(jobText, skill));
+      const matchedSkills = userSkills.filter((skill) =>
+        includesLoose(jobText, skill),
+      );
       const skillsScore = userSkills.length
-        ? Math.round((matchedSkills.length / Math.min(userSkills.length, 8)) * 100)
+        ? Math.round(
+            (matchedSkills.length / Math.min(userSkills.length, 8)) * 100,
+          )
         : 50;
 
       const experienceScore = experienceTitles.length
-        ? Math.max(...experienceTitles.map((title) => similarity(title, job.title)))
+        ? Math.max(
+            ...experienceTitles.map((title) => similarity(title, job.title)),
+          )
         : 40;
 
       const mode = normalizeMode(job.remote_type);
@@ -778,31 +805,37 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
               : true;
 
       let locationScore = 70;
+      let explicitLocationMatch = false;
       if (mode === "remote" && pref?.remote_allowed !== false) {
         locationScore = 100;
+        explicitLocationMatch = true;
       } else if (targetLocations.length) {
-        locationScore = targetLocations.some(
+        explicitLocationMatch = targetLocations.some(
           (location) =>
             includesLoose(job.location, location) ||
             includesLoose(job.country, location),
-        )
+        );
+        locationScore = explicitLocationMatch
           ? 100
           : mode === "remote"
             ? 80
-            : 30;
+            : 25;
       } else if (
         includesLoose(job.location, profile.data?.city ?? "") ||
         includesLoose(job.country, profile.data?.country ?? "")
       ) {
         locationScore = 100;
+        explicitLocationMatch = true;
       }
 
       const seniorityScore =
         !desiredSeniorities.length || !job.seniority
           ? 70
-          : desiredSeniorities.some((level) => includesLoose(job.seniority, level))
+          : desiredSeniorities.some((level) =>
+                includesLoose(job.seniority, level),
+              )
             ? 100
-            : 45;
+            : 40;
 
       const employmentScore =
         !desiredEmployment.length || !job.employment_type
@@ -811,7 +844,7 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
                 includesLoose(job.employment_type, type),
               )
             ? 100
-            : 50;
+            : 45;
 
       const matchedPreferredTasks = preferredTasks.filter((task) =>
         includesLoose(jobText, task),
@@ -819,30 +852,57 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       const matchedTools = confirmedTools.filter((tool) =>
         includesLoose(jobText, tool),
       );
+      const matchedResponsibilities = responsibilities.filter((item) =>
+        includesLoose(jobText, item),
+      );
       const matchedAvoidTasks = avoidTasks.filter((task) =>
         includesLoose(jobText, task),
       );
 
-      const contextSignals = [...preferredTasks, ...confirmedTools];
+      const contextSignals = [
+        ...preferredTasks,
+        ...confirmedTools,
+        ...responsibilities,
+        ...strengths,
+        ...differentiators,
+      ];
+      const positiveMatches =
+        matchedPreferredTasks.length +
+        matchedTools.length +
+        matchedResponsibilities.length;
       const positiveContextScore = contextSignals.length
         ? Math.round(
-            ((matchedPreferredTasks.length + matchedTools.length) /
-              Math.min(contextSignals.length, 10)) *
-              100,
+            (positiveMatches / Math.min(contextSignals.length, 12)) * 100,
           )
-        : 70;
-      const avoidPenalty = Math.min(matchedAvoidTasks.length * 20, 60);
+        : 60;
+      const avoidPenalty = Math.min(matchedAvoidTasks.length * 25, 70);
       const contextScore = Math.max(0, positiveContextScore - avoidPenalty);
 
-      const hardRequirementsMet = modeAllowed;
+      const requiredYears = requiredExperienceYears(job.description ?? "");
+      const experienceRequirementMet =
+        requiredYears == null ||
+        totalExperienceYears + 0.25 >= requiredYears;
+      const roleRelevant = roleCandidates.length === 0 || roleScore >= 30;
+      const locationRequirementMet =
+        mode === "remote" ||
+        !targetLocations.length ||
+        explicitLocationMatch ||
+        pref?.willing_to_relocate === true;
+
+      const hardRequirementsMet =
+        modeAllowed &&
+        experienceRequirementMet &&
+        roleRelevant &&
+        locationRequirementMet;
+
       const weighted =
-        roleScore * 0.3 +
-        skillsScore * 0.25 +
+        roleScore * 0.4 +
+        Math.min(100, skillsScore) * 0.2 +
         experienceScore * 0.15 +
         contextScore * 0.1 +
         locationScore * 0.1 +
-        seniorityScore * 0.05 +
-        employmentScore * 0.05;
+        seniorityScore * 0.025 +
+        employmentScore * 0.025;
 
       const matchScore = Math.max(0, Math.min(100, Math.round(weighted)));
 
@@ -856,18 +916,33 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
         location_score: locationScore,
         seniority_score: seniorityScore,
         preferences_score: Math.round(
-          employmentScore * 0.4 + contextScore * 0.6,
+          employmentScore * 0.35 + contextScore * 0.65,
         ),
         hard_requirements_met: hardRequirementsMet,
         explanation: {
           matchedSkills,
           matchedPreferredTasks,
+          matchedResponsibilities,
           matchedTools,
           avoidedSignals: matchedAvoidTasks,
           targetRole: targetRoles[0] ?? profile.data?.current_title ?? null,
           careerGoal: careerData?.career_goal ?? null,
           mode: job.remote_type,
           location: job.location,
+          requiredExperienceYears: requiredYears,
+          profileExperienceYears: Number(totalExperienceYears.toFixed(1)),
+          hardRequirementChecks: {
+            roleRelevant,
+            modeAllowed,
+            locationRequirementMet,
+            experienceRequirementMet,
+          },
+          profileContextUsed: Boolean(
+            profile.data?.professional_summary ||
+              results.length ||
+              strengths.length ||
+              differentiators.length,
+          ),
           note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
         },
         created_at: new Date().toISOString(),
