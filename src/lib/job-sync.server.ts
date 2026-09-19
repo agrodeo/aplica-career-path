@@ -48,7 +48,6 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         ats_identifier: identifier,
         auto_apply_supported: autoApplySupported,
         active: true,
-        last_scanned_at: now,
       })
       .select("id")
       .single();
@@ -65,7 +64,6 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         careers_url: input.careersUrl ?? null,
         auto_apply_supported: autoApplySupported,
         active: true,
-        last_scanned_at: now,
       })
       .eq("id", companyId);
 
@@ -149,9 +147,14 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   if (currentError) throw new Error(currentError.message);
 
   const discoveredIds = new Set(discovery.jobs.map((job) => job.externalId));
-  const staleIds = (currentJobs ?? [])
-    .filter((job) => !discoveredIds.has(job.external_job_id))
-    .map((job) => job.id);
+  const snapshotComplete =
+    discovery.reportedTotal == null ||
+    discovery.jobs.length >= discovery.reportedTotal;
+  const staleIds = snapshotComplete
+    ? (currentJobs ?? [])
+        .filter((job) => !discoveredIds.has(job.external_job_id))
+        .map((job) => job.id)
+    : [];
 
   for (let index = 0; index < staleIds.length; index += 100) {
     const { error } = await supabaseAdmin
@@ -220,6 +223,12 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     }
   }
 
+  const { error: scannedAtError } = await supabaseAdmin
+    .from("companies")
+    .update({ last_scanned_at: now })
+    .eq("id", companyId);
+  if (scannedAtError) throw new Error(scannedAtError.message);
+
   return {
     provider: provider.type,
     identifier,
@@ -229,6 +238,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     deactivated: staleIds.length,
     inspectionsQueued,
     reportedTotal: discovery.reportedTotal ?? discovery.jobs.length,
+    snapshotComplete,
     scannedAt: now,
   };
 }
