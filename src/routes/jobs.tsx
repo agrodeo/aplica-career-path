@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -300,9 +301,9 @@ function JobsPage() {
                 criterios.
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
-                Puede ser porque el inventario Auto Apply todavía es chico o
-                porque tus filtros son estrictos. Nunca inventamos un número de
-                oportunidades.
+                Puede ser porque el inventario todavía es chico o porque tus
+                filtros son estrictos. Mostramos también oportunidades sin Auto
+                Apply cuando tienen buen match.
               </p>
               <Button
                 className="mt-6"
@@ -324,7 +325,7 @@ function JobsPage() {
           <div>
             <p className="text-sm font-medium">
               {subscribed ? selectedIds.length : readyCount} trabajos{" "}
-              {subscribed ? "seleccionados" : "listos para aplicar"}
+              {subscribed ? "seleccionados para Auto Apply" : "listos para Auto Apply"}
             </p>
             <p className="hidden text-xs text-muted-foreground sm:block">
               CV específico por puesto · respuestas verificadas
@@ -379,6 +380,9 @@ type RealJob = {
   salaryCurrency: string | null;
   publishedAt: string | null;
   sourceScannedAt: string | null;
+  applicationUrl: string | null;
+  atsType: string | null;
+  autoApplyEligible: boolean;
   adapter: string | null;
   matchScore: number | null;
   hardRequirementsMet: boolean;
@@ -473,12 +477,27 @@ function RealJobRow({
               </div>
             )}
 
-            {job.readyForUser && (
+            {job.readyForUser ? (
               <p className="mt-4 flex items-center gap-1.5 text-xs font-medium text-success">
                 <Check className="h-3.5 w-3.5" />
                 Lista para Auto Apply
               </p>
-            )}
+            ) : !job.autoApplyEligible && job.applicationUrl ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <a
+                  href={job.applicationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  Aplicar en el sitio
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+                <span className="text-xs text-muted-foreground">
+                  {job.atsType ? `Fuente: ${job.atsType}` : "Aplicación externa"}
+                </span>
+              </div>
+            ) : null}
 
             {!job.readyForUser && questions.length > 0 && (
               <Button
