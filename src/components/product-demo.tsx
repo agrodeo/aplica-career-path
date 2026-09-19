@@ -273,6 +273,7 @@ export function ProductDemo() {
       aria-label="Demostración ilustrativa del proceso de Aplica"
       aria-live="off"
     >
+      <span className="demo-illustrative-badge">Demo ilustrativa</span>
       {exiting !== null && exiting !== phase && (
         <div
           className="product-demo-frame is-exiting"
