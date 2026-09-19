@@ -2,7 +2,7 @@ import {
   inferEmploymentType,
   inferRemoteType,
   inferSeniority,
-  safeIsoDate,
+  parseHumanPostedAt,
 } from "@/lib/job-sources/normalization";
 import type {
   JobSourceFetchResult,
@@ -105,7 +105,7 @@ function listingToJob(
     salaryMax: null,
     salaryCurrency: null,
     applicationUrl: applicationUrl(board, externalPath),
-    publishedAt: safeIsoDate(listing.postedOn),
+    publishedAt: parseHumanPostedAt(listing.postedOn),
     rawData: {
       external_path: externalPath,
       posted_on: listing.postedOn ?? null,
