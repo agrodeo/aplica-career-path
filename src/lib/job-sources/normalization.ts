@@ -85,3 +85,29 @@ export function safeIsoDate(value: unknown) {
 export function finiteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+
+
+export function parseHumanPostedAt(
+  value: string | null | undefined,
+  now = new Date(),
+) {
+  if (!value?.trim()) return null;
+  const text = value.trim().toLowerCase();
+
+  if (/^(posted\s+)?today$/.test(text)) {
+    return now.toISOString();
+  }
+  if (/^(posted\s+)?yesterday$/.test(text)) {
+    return new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const days = text.match(/(?:posted\s+)?(\d+)\+?\s+days?\s+ago/);
+  if (days) {
+    const count = Number(days[1]);
+    if (Number.isFinite(count)) {
+      return new Date(now.getTime() - count * 24 * 60 * 60 * 1000).toISOString();
+    }
+  }
+
+  return safeIsoDate(value);
+}
