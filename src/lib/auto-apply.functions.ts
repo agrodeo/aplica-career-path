@@ -3,27 +3,205 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
-function words(value: string) {
+const TITLE_NOISE = new Set([
+  "senior",
+  "sr",
+  "junior",
+  "jr",
+  "lead",
+  "principal",
+  "staff",
+  "head",
+  "associate",
+  "intern",
+  "internship",
+  "remote",
+  "latam",
+  "global",
+  "the",
+  "and",
+  "of",
+  "de",
+  "del",
+  "la",
+  "el",
+  "y",
+]);
+
+const ROLE_FAMILIES: Record<string, string[]> = {
+  engineering: [
+    "engineer",
+    "engineering",
+    "developer",
+    "software",
+    "backend",
+    "frontend",
+    "fullstack",
+    "devops",
+    "sre",
+    "qa",
+    "mobile",
+  ],
+  data: [
+    "data",
+    "analytics",
+    "scientist",
+    "machine",
+    "ml",
+    "ai",
+    "business intelligence",
+  ],
+  product: ["product", "product manager", "product owner"],
+  design: ["design", "designer", "ux", "ui", "creative"],
+  marketing: [
+    "marketing",
+    "growth",
+    "content",
+    "social media",
+    "community",
+    "brand",
+    "seo",
+    "performance",
+    "acquisition",
+  ],
+  sales: [
+    "sales",
+    "account executive",
+    "business development",
+    "sdr",
+    "bdr",
+    "partnerships",
+    "revenue",
+  ],
+  customer: [
+    "customer success",
+    "customer support",
+    "support",
+    "implementation",
+    "solutions",
+  ],
+  finance: ["finance", "financial", "accounting", "accountant", "fp&a", "actuar"],
+  operations: ["operations", "ops", "strategy", "chief of staff", "logistics"],
+  people: ["people", "human resources", "hr", "recruit", "talent"],
+  legal: ["legal", "lawyer", "counsel", "compliance"],
+};
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9+#.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function words(value: string, removeNoise = false) {
   return new Set(
-    value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .split(/[^a-z0-9+#.]+/)
+    normalizeText(value)
+      .split(" ")
       .map((word) => word.trim())
-      .filter((word) => word.length > 1),
+      .filter(
+        (word) =>
+          word.length > 1 && (!removeNoise || !TITLE_NOISE.has(word)),
+      ),
   );
 }
 
+function roleFamily(value: string) {
+  const normalized = normalizeText(value);
+  const tokens = new Set(normalized.split(" ").filter(Boolean));
+  for (const [family, signals] of Object.entries(ROLE_FAMILIES)) {
+    const matched = signals.some((signal) => {
+      if (signal.includes(" ")) return normalized.includes(signal);
+      if (signal === "actuar") return normalized.includes("actuar");
+      return tokens.has(signal);
+    });
+    if (matched) return family;
+  }
+  return null;
+}
+
 function similarity(a: string, b: string): number {
-  const left = words(a);
-  const right = words(b);
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  if (!normalizedA || !normalizedB) return 0;
+  if (normalizedA === normalizedB) return 100;
+
+  const left = words(a, true);
+  const right = words(b, true);
   if (!left.size || !right.size) return 0;
+
   const intersection = [...left].filter((word) => right.has(word)).length;
-  const union = new Set([...left, ...right]).size;
-  const jaccard = union ? intersection / union : 0;
-  const contains = a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase());
-  return Math.min(100, Math.round((contains ? 0.7 : 0) * 100 + jaccard * 70));
+  const precision = intersection / left.size;
+  const recall = intersection / right.size;
+  const f1 =
+    precision + recall > 0
+      ? (2 * precision * recall) / (precision + recall)
+      : 0;
+
+  const phraseContains =
+    normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA);
+  const sameFamily =
+    roleFamily(a) !== null && roleFamily(a) === roleFamily(b);
+
+  const lexical = Math.round(f1 * 85);
+  const containment = phraseContains ? 92 : 0;
+  const familyFloor = sameFamily ? 55 : 0;
+  return Math.min(100, Math.max(lexical, containment, familyFloor));
+}
+
+function requiredExperienceYears(description: string) {
+  const text = normalizeText(description);
+  const matches = [
+    ...text.matchAll(
+      /(?:at least |minimum of |minimum |minimo de |minimo )?(\d{1,2})\+? (?:years|anos)(?: of)? (?:professional |relevant |work )?(?:experience|experiencia)/g,
+    ),
+  ];
+  if (!matches.length) return null;
+  const years = matches
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 25);
+  return years.length ? Math.max(...years) : null;
+}
+
+function calculateExperienceYears(
+  experiences: Array<{
+    start_date: string | null;
+    end_date: string | null;
+    is_current: boolean;
+  }>,
+) {
+  const now = Date.now();
+  const intervals = experiences
+    .map((experience) => {
+      if (!experience.start_date) return null;
+      const start = new Date(experience.start_date).getTime();
+      const end = experience.is_current || !experience.end_date
+        ? now
+        : new Date(experience.end_date).getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        return null;
+      }
+      return [start, end] as const;
+    })
+    .filter((interval): interval is readonly [number, number] => Boolean(interval))
+    .sort((a, b) => a[0] - b[0]);
+
+  if (!intervals.length) return 0;
+
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of intervals) {
+    const last = merged.at(-1);
+    if (!last || start > last[1]) {
+      merged.push([start, end]);
+    } else {
+      last[1] = Math.max(last[1], end);
+    }
+  }
+
+  const totalMs = merged.reduce((sum, [start, end]) => sum + (end - start), 0);
+  return totalMs / (365.25 * 24 * 60 * 60 * 1000);
 }
 
 function normalizeMode(value: string | null) {
@@ -299,14 +477,15 @@ async function applicationReadiness(
 
 
 /**
- * Auto Apply inventory: only jobs a supported adapter can submit AND verify.
- * RLS already restricts the jobs table to auto_apply_eligible rows.
+ * Ranked job inventory. Discovery and Auto Apply are separate capabilities:
+ * users can see any active relevant job, while batch submission still requires
+ * auto_apply_eligible and a verified adapter.
  */
 export const listAutoApplyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
-    await ensureInventoryFresh(20);
+    await ensureInventoryFresh(10);
 
     const { supabase, userId } = context;
     const [
@@ -319,11 +498,11 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url, last_scanned_at)",
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, discovered_at, application_url, auto_apply_eligible, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url, last_scanned_at)",
         )
-        .eq("auto_apply_eligible", true)
         .eq("is_active", true)
-        .limit(500),
+        .order("discovered_at", { ascending: false })
+        .limit(1000),
       supabase.from("job_matches").select("*").eq("user_id", userId),
       supabase
         .from("job_preferences")
@@ -368,6 +547,9 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           salaryMax: job.salary_max,
           salaryCurrency: job.salary_currency,
           publishedAt: job.published_at,
+          discoveredAt: job.discovered_at,
+          applicationUrl: job.application_url,
+          autoApplyEligible: job.auto_apply_eligible,
           adapter: job.auto_apply_adapter,
           applicationSchemaId: job.application_schema_id,
           matchScore: match ? Number(match.match_score) : null,
@@ -386,22 +568,30 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
     const readiness = await applicationReadiness(
       supabase,
       userId,
-      matched.map((job) => ({
-        id: job.id,
-        application_schema_id: job.applicationSchemaId,
-      })),
+      matched
+        .filter((job) => job.autoApplyEligible)
+        .map((job) => ({
+          id: job.id,
+          application_schema_id: job.applicationSchemaId,
+        })),
     );
 
     const ready = matched.map((job) => {
-      const missingQuestions = readiness.get(job.id) ?? [];
+      const missingQuestions = job.autoApplyEligible
+        ? readiness.get(job.id) ?? []
+        : [];
       const actionableMissingQuestions = missingQuestions.filter(
         (question) => !question.answerKey.startsWith("system:"),
       );
       return {
         ...job,
         missingQuestions,
-        readyForUser: missingQuestions.length === 0,
-        needsUserAnswers: actionableMissingQuestions.length > 0,
+        readyForUser:
+          job.autoApplyEligible && missingQuestions.length === 0,
+        needsUserAnswers:
+          job.autoApplyEligible && actionableMissingQuestions.length > 0,
+        manualApply:
+          !job.autoApplyEligible && Boolean(job.applicationUrl),
       };
     });
 
@@ -415,6 +605,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       inventoryUpdatedAt,
       matchedCount: ready.length,
       readyCount: ready.filter((job) => job.readyForUser).length,
+      manualApplyCount: ready.filter((job) => job.manualApply).length,
       needsAnswersCount: ready.filter((job) => job.needsUserAnswers).length,
       minimumMatchScore: minimum,
       jobs: ready,
@@ -440,10 +631,9 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,discovered_at,application_url,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
         )
         .eq("id", data.jobId)
-        .eq("auto_apply_eligible", true)
         .eq("is_active", true)
         .maybeSingle(),
       supabase
@@ -469,9 +659,11 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
 
     if (!job) return null;
 
-    const readiness = await applicationReadiness(supabase, userId, [
-      { id: job.id, application_schema_id: job.application_schema_id },
-    ]);
+    const readiness = job.auto_apply_eligible
+      ? await applicationReadiness(supabase, userId, [
+          { id: job.id, application_schema_id: job.application_schema_id },
+        ])
+      : new Map<string, MissingApplicationQuestion[]>();
     const missingQuestions = readiness.get(job.id) ?? [];
     const latestAttempt = attempts?.[0] ?? null;
 
@@ -491,12 +683,18 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       salaryMax: job.salary_max,
       salaryCurrency: job.salary_currency,
       publishedAt: job.published_at,
+      discoveredAt: job.discovered_at,
+      applicationUrl: job.application_url,
+      autoApplyEligible: job.auto_apply_eligible,
       adapter: job.auto_apply_adapter,
       matchScore: match ? Number(match.match_score) : null,
       hardRequirementsMet: match?.hard_requirements_met ?? false,
       explanation: match?.explanation ?? null,
       missingQuestions,
-      readyForUser: missingQuestions.length === 0,
+      readyForUser:
+        job.auto_apply_eligible && missingQuestions.length === 0,
+      manualApply:
+        !job.auto_apply_eligible && Boolean(job.application_url),
       applicationStatus:
         latestAttempt?.status ??
         queue?.status ??
@@ -517,11 +715,19 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       await Promise.all([
         supabase
           .from("profiles")
-          .select("current_title, city, country")
+          .select("current_title, city, country, professional_summary")
           .eq("user_id", userId)
           .maybeSingle(),
-        supabase.from("experiences").select("title").eq("user_id", userId),
-        supabase.from("skills").select("name").eq("user_id", userId),
+        supabase
+          .from("experiences")
+          .select(
+            "title,company,description,achievements,start_date,end_date,is_current",
+          )
+          .eq("user_id", userId),
+        supabase
+          .from("skills")
+          .select("name,years_experience")
+          .eq("user_id", userId),
         supabase
           .from("job_preferences")
           .select("*")
@@ -529,17 +735,19 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
           .maybeSingle(),
         supabase
           .from("career_contexts")
-          .select("preferred_tasks,avoid_tasks,tools,target_environment,career_goal")
+          .select(
+            "preferred_tasks,avoid_tasks,tools,responsibilities,results,strengths,differentiators,target_environment,career_goal",
+          )
           .eq("user_id", userId)
           .maybeSingle(),
         supabase
           .from("jobs")
           .select(
-            "id, title, description, location, country, remote_type, employment_type, seniority, companies(name)",
+            "id, title, description, location, country, remote_type, employment_type, seniority, discovered_at, companies(name)",
           )
-          .eq("auto_apply_eligible", true)
           .eq("is_active", true)
-          .limit(500),
+          .order("discovered_at", { ascending: false })
+          .limit(1000),
       ]);
 
     const pref = preferences.data;
@@ -554,25 +762,51 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
     const preferredTasks = careerData?.preferred_tasks ?? [];
     const avoidTasks = careerData?.avoid_tasks ?? [];
     const confirmedTools = careerData?.tools ?? [];
+    const responsibilities = careerData?.responsibilities ?? [];
+    const results = careerData?.results ?? [];
+    const strengths = careerData?.strengths ?? [];
+    const differentiators = careerData?.differentiators ?? [];
     const experienceTitles = [
       profile.data?.current_title ?? "",
       ...(experiences.data ?? []).map((experience) => experience.title),
     ].filter(Boolean);
+    const experienceRows = experiences.data ?? [];
+    const experienceYearsKnown = experienceRows.some(
+      (experience) => Boolean(experience.start_date),
+    );
+    const totalExperienceYears = calculateExperienceYears(
+      experienceRows.map((experience) => ({
+        start_date: experience.start_date,
+        end_date: experience.end_date,
+        is_current: experience.is_current,
+      })),
+    );
 
     const rows = (jobs.data ?? []).map((job) => {
       const roleCandidates = [...targetRoles, ...experienceTitles];
       const roleScore = roleCandidates.length
         ? Math.max(...roleCandidates.map((role) => similarity(role, job.title)))
-        : 50;
+        : 45;
 
+      const hasDetailedDescription = Boolean(
+        job.description && job.description.trim().length >= 120,
+      );
       const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase();
-      const matchedSkills = userSkills.filter((skill) => includesLoose(jobText, skill));
-      const skillsScore = userSkills.length
-        ? Math.round((matchedSkills.length / Math.min(userSkills.length, 8)) * 100)
-        : 50;
+      const matchedSkills = userSkills.filter((skill) =>
+        includesLoose(jobText, skill),
+      );
+      const skillsScore = !hasDetailedDescription
+        ? 60
+        : userSkills.length
+          ? Math.round(
+              (matchedSkills.length / Math.min(userSkills.length, 8)) * 100,
+            )
+          : 50;
 
       const experienceScore = experienceTitles.length
-        ? Math.max(...experienceTitles.map((title) => similarity(title, job.title)))
+        ? Math.max(
+            ...experienceTitles.map((title) => similarity(title, job.title)),
+          )
         : 40;
 
       const mode = normalizeMode(job.remote_type);
@@ -586,31 +820,37 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
               : true;
 
       let locationScore = 70;
+      let explicitLocationMatch = false;
       if (mode === "remote" && pref?.remote_allowed !== false) {
         locationScore = 100;
+        explicitLocationMatch = true;
       } else if (targetLocations.length) {
-        locationScore = targetLocations.some(
+        explicitLocationMatch = targetLocations.some(
           (location) =>
             includesLoose(job.location, location) ||
             includesLoose(job.country, location),
-        )
+        );
+        locationScore = explicitLocationMatch
           ? 100
           : mode === "remote"
             ? 80
-            : 30;
+            : 25;
       } else if (
         includesLoose(job.location, profile.data?.city ?? "") ||
         includesLoose(job.country, profile.data?.country ?? "")
       ) {
         locationScore = 100;
+        explicitLocationMatch = true;
       }
 
       const seniorityScore =
         !desiredSeniorities.length || !job.seniority
           ? 70
-          : desiredSeniorities.some((level) => includesLoose(job.seniority, level))
+          : desiredSeniorities.some((level) =>
+                includesLoose(job.seniority, level),
+              )
             ? 100
-            : 45;
+            : 40;
 
       const employmentScore =
         !desiredEmployment.length || !job.employment_type
@@ -619,7 +859,7 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
                 includesLoose(job.employment_type, type),
               )
             ? 100
-            : 50;
+            : 45;
 
       const matchedPreferredTasks = preferredTasks.filter((task) =>
         includesLoose(jobText, task),
@@ -627,30 +867,60 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       const matchedTools = confirmedTools.filter((tool) =>
         includesLoose(jobText, tool),
       );
+      const matchedResponsibilities = responsibilities.filter((item) =>
+        includesLoose(jobText, item),
+      );
       const matchedAvoidTasks = avoidTasks.filter((task) =>
         includesLoose(jobText, task),
       );
 
-      const contextSignals = [...preferredTasks, ...confirmedTools];
-      const positiveContextScore = contextSignals.length
-        ? Math.round(
-            ((matchedPreferredTasks.length + matchedTools.length) /
-              Math.min(contextSignals.length, 10)) *
-              100,
-          )
-        : 70;
-      const avoidPenalty = Math.min(matchedAvoidTasks.length * 20, 60);
+      const contextSignals = [
+        ...preferredTasks,
+        ...confirmedTools,
+        ...responsibilities,
+        ...strengths,
+        ...differentiators,
+      ];
+      const positiveMatches =
+        matchedPreferredTasks.length +
+        matchedTools.length +
+        matchedResponsibilities.length;
+      const positiveContextScore = !hasDetailedDescription
+        ? 60
+        : contextSignals.length
+          ? Math.round(
+              (positiveMatches / Math.min(contextSignals.length, 12)) * 100,
+            )
+          : 60;
+      const avoidPenalty = Math.min(matchedAvoidTasks.length * 25, 70);
       const contextScore = Math.max(0, positiveContextScore - avoidPenalty);
 
-      const hardRequirementsMet = modeAllowed;
+      const requiredYears = requiredExperienceYears(job.description ?? "");
+      const experienceRequirementMet =
+        requiredYears == null ||
+        !experienceYearsKnown ||
+        totalExperienceYears + 0.25 >= requiredYears;
+      const roleRelevant = roleCandidates.length === 0 || roleScore >= 30;
+      const locationRequirementMet =
+        mode === "remote" ||
+        !targetLocations.length ||
+        explicitLocationMatch ||
+        pref?.willing_to_relocate === true;
+
+      const hardRequirementsMet =
+        modeAllowed &&
+        experienceRequirementMet &&
+        roleRelevant &&
+        locationRequirementMet;
+
       const weighted =
-        roleScore * 0.3 +
-        skillsScore * 0.25 +
+        roleScore * 0.4 +
+        Math.min(100, skillsScore) * 0.2 +
         experienceScore * 0.15 +
         contextScore * 0.1 +
         locationScore * 0.1 +
-        seniorityScore * 0.05 +
-        employmentScore * 0.05;
+        seniorityScore * 0.025 +
+        employmentScore * 0.025;
 
       const matchScore = Math.max(0, Math.min(100, Math.round(weighted)));
 
@@ -664,18 +934,37 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
         location_score: locationScore,
         seniority_score: seniorityScore,
         preferences_score: Math.round(
-          employmentScore * 0.4 + contextScore * 0.6,
+          employmentScore * 0.35 + contextScore * 0.65,
         ),
         hard_requirements_met: hardRequirementsMet,
         explanation: {
           matchedSkills,
           matchedPreferredTasks,
+          matchedResponsibilities,
           matchedTools,
           avoidedSignals: matchedAvoidTasks,
           targetRole: targetRoles[0] ?? profile.data?.current_title ?? null,
           careerGoal: careerData?.career_goal ?? null,
           mode: job.remote_type,
           location: job.location,
+          requiredExperienceYears: requiredYears,
+          profileExperienceYears: experienceYearsKnown
+            ? Number(totalExperienceYears.toFixed(1))
+            : null,
+          experienceYearsKnown,
+          hardRequirementChecks: {
+            roleRelevant,
+            modeAllowed,
+            locationRequirementMet,
+            experienceRequirementMet,
+          },
+          profileContextUsed: Boolean(
+            profile.data?.professional_summary ||
+              results.length ||
+              strengths.length ||
+              differentiators.length,
+          ),
+          descriptionCoverage: hasDetailedDescription ? "full" : "partial",
           note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
         },
         created_at: new Date().toISOString(),

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, MapPin } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, MapPin } from "lucide-react";
 import { MatchInfo, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/jobs/$id")({
       { title: "Trabajo — aplica" },
       {
         name: "description",
-        content: "Detalle de una oportunidad Auto Apply compatible con tu perfil.",
+        content: "Detalle de una oportunidad compatible con tu perfil.",
       },
       { property: "og:title", content: "Oportunidad — aplica" },
       {
@@ -90,10 +90,10 @@ function JobDetail() {
         <SiteHeader />
         <main className="mx-auto max-w-[700px] px-5 py-20 text-center">
           <h1 className="text-2xl font-medium">
-            Este trabajo ya no está disponible para Auto Apply.
+            Este trabajo ya no está disponible.
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Puede haber expirado o el formulario dejó de ser compatible.
+            Puede haber expirado o haber sido retirado por la empresa.
           </p>
           <Button asChild className="mt-6">
             <Link to="/jobs">Volver a trabajos</Link>
@@ -216,11 +216,20 @@ function JobDetail() {
                 </ul>
               )}
 
-              {!job.readyForUser && missingUserQuestions.length > 0 && (
+              {job.autoApplyEligible &&
+                !job.readyForUser &&
+                missingUserQuestions.length > 0 && (
                 <p className="mt-5 border-t border-border pt-4 text-xs leading-5 text-caution">
                   Faltan {missingUserQuestions.length}{" "}
                   {missingUserQuestions.length === 1 ? "respuesta" : "respuestas"}{" "}
                   obligatorias. Las podés completar desde la lista de trabajos.
+                </p>
+              )}
+
+              {job.manualApply && (
+                <p className="mt-5 border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
+                  Esta vacante está disponible en Aplica por discovery. El envío
+                  se completa directamente en el sitio de la empresa.
                 </p>
               )}
 
@@ -237,23 +246,36 @@ function JobDetail() {
               )}
             </div>
 
-            <Button
-              className="mt-4 w-full"
-              disabled={mutation.isPending || alreadyVerified || inProgress}
-              onClick={() => void apply()}
-            >
-              {mutation.isPending
-                ? "Preparando…"
-                : alreadyVerified
-                  ? "Ya aplicaste"
-                  : inProgress
-                    ? "Postulación en curso"
-                    : !job.readyForUser
-                      ? "Completar respuestas"
-                      : subscribed
-                        ? "Aplicar a este trabajo"
-                        : "Elegir plan para aplicar"}
-            </Button>
+            {job.manualApply && job.applicationUrl ? (
+              <Button asChild className="mt-4 w-full">
+                <a
+                  href={job.applicationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Aplicar en sitio
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : (
+              <Button
+                className="mt-4 w-full"
+                disabled={mutation.isPending || alreadyVerified || inProgress}
+                onClick={() => void apply()}
+              >
+                {mutation.isPending
+                  ? "Preparando…"
+                  : alreadyVerified
+                    ? "Ya aplicaste"
+                    : inProgress
+                      ? "Postulación en curso"
+                      : !job.readyForUser
+                        ? "Completar respuestas"
+                        : subscribed
+                          ? "Aplicar a este trabajo"
+                          : "Elegir plan para aplicar"}
+              </Button>
+            )}
 
             {mutation.error && (
               <p className="mt-3 text-xs leading-5 text-destructive">

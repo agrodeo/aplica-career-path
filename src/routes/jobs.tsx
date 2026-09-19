@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ExternalLink,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -75,6 +76,7 @@ function JobsPage() {
   const subscribed = overviewQuery.data?.subscriptionStatus === "active";
   const [query, setQuery] = useState("");
   const [min, setMin] = useState(70);
+  const [sortMode, setSortMode] = useState<"match" | "recent">("match");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -103,8 +105,14 @@ function JobsPage() {
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
-        .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)),
-    [jobs, query, min],
+        .sort((a, b) => {
+          if (sortMode === "recent") {
+            return freshnessTimestamp(b) - freshnessTimestamp(a);
+          }
+          const scoreDiff = (b.matchScore ?? 0) - (a.matchScore ?? 0);
+          return scoreDiff || freshnessTimestamp(b) - freshnessTimestamp(a);
+        }),
+    [jobs, query, min, sortMode],
   );
 
   const selectedIds = jobs
@@ -183,6 +191,7 @@ function JobsPage() {
   const serverMinimum = jobsQuery.data?.minimumMatchScore ?? 70;
   const matchedCount = jobsQuery.data?.matchedCount ?? 0;
   const readyCount = jobsQuery.data?.readyCount ?? 0;
+  const manualApplyCount = jobsQuery.data?.manualApplyCount ?? 0;
   const needsAnswersCount = jobsQuery.data?.needsAnswersCount ?? 0;
   const inventoryUpdatedAt = jobsQuery.data?.inventoryUpdatedAt ?? null;
 
@@ -198,15 +207,16 @@ function JobsPage() {
             <h1 className="mt-2 text-3xl font-medium tracking-normal md:text-[40px]">
               {loading
                 ? "Buscando trabajos…"
-                : `${readyCount} trabajos listos para aplicar`}
+                : `${matchedCount} trabajos que encajan con tu perfil`}
             </h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              {matchedCount} matches con puntaje ≥ {serverMinimum}%.
+              {readyCount} con Auto Apply · {manualApplyCount} para aplicar en
+              el sitio de la empresa.
               {needsAnswersCount > 0
                 ? ` ${needsAnswersCount} necesitan una respuesta tuya antes de poder enviarse.`
                 : ""}{" "}
-              El porcentaje compara perfil y vacante; no estima tus chances de
-              contratación.
+              Mostramos sólo matches ≥ {serverMinimum}%. El porcentaje compara
+              perfil y vacante; no estima tus chances de contratación.
             </p>
             {inventoryUpdatedAt && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -241,9 +251,16 @@ function JobsPage() {
             <SlidersHorizontal />
             Match mínimo: {min}%
           </Button>
-          <Button variant="outline" disabled>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setSortMode((current) =>
+                current === "match" ? "recent" : "match",
+              )
+            }
+          >
             <ArrowUpDown />
-            Mejor match
+            {sortMode === "match" ? "Mejor match" : "Más recientes"}
           </Button>
         </div>
 
@@ -300,9 +317,9 @@ function JobsPage() {
                 criterios.
               </h2>
               <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
-                Puede ser porque el inventario Auto Apply todavía es chico o
-                porque tus filtros son estrictos. Nunca inventamos un número de
-                oportunidades.
+                Puede ser porque todavía no sincronizamos suficientes fuentes
+                compatibles o porque tus filtros son estrictos. Nunca inventamos
+                un número de oportunidades.
               </p>
               <Button
                 className="mt-6"
@@ -319,7 +336,8 @@ function JobsPage() {
         </div>
       </PageShell>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur">
+      {readyCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4 px-5 py-3 md:px-8">
           <div>
             <p className="text-sm font-medium">
@@ -353,6 +371,7 @@ function JobsPage() {
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -378,7 +397,10 @@ type RealJob = {
   salaryMax: number | null;
   salaryCurrency: string | null;
   publishedAt: string | null;
+  discoveredAt: string;
   sourceScannedAt: string | null;
+  applicationUrl: string | null;
+  autoApplyEligible: boolean;
   adapter: string | null;
   matchScore: number | null;
   hardRequirementsMet: boolean;
@@ -386,6 +408,7 @@ type RealJob = {
   missingQuestions: MissingQuestion[];
   readyForUser: boolean;
   needsUserAnswers: boolean;
+  manualApply: boolean;
 };
 
 function RealJobRow({
@@ -461,6 +484,14 @@ function RealJobRow({
                 {formatSalary(job)}
               </p>
             )}
+            {(isSameLocalDay(job.publishedAt) ||
+              isSameLocalDay(job.discoveredAt)) && (
+              <p className="mt-2 text-xs font-medium text-primary">
+                {isSameLocalDay(job.publishedAt)
+                  ? "Publicado hoy"
+                  : "Nuevo hoy en Aplica"}
+              </p>
+            )}
 
             {matchedSkills.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
@@ -478,6 +509,19 @@ function RealJobRow({
                 <Check className="h-3.5 w-3.5" />
                 Lista para Auto Apply
               </p>
+            )}
+
+            {job.manualApply && job.applicationUrl && (
+              <Button asChild variant="outline" size="sm" className="mt-4">
+                <a
+                  href={job.applicationUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Aplicar en sitio
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
             )}
 
             {!job.readyForUser && questions.length > 0 && (
@@ -728,4 +772,27 @@ function formatSalary(job: {
     )
     .join("–");
   return `${job.salaryCurrency ?? ""} ${range}`.trim();
+}
+
+
+function freshnessTimestamp(job: {
+  publishedAt: string | null;
+  discoveredAt: string | null;
+}) {
+  const value = job.publishedAt ?? job.discoveredAt;
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isSameLocalDay(value: string | null | undefined) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
 }

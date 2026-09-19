@@ -1,4 +1,17 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  getJobSourceProvider,
+  supportedAtsProviders,
+} from "@/lib/job-sources/registry";
+import type { AtsProvider } from "@/lib/job-sources/types";
+
+export type JobSourceSyncInput = {
+  provider: AtsProvider;
+  identifier: string;
+  companyName: string;
+  careersUrl?: string | null;
+  requestedBy?: string | null;
+};
 
 export type GreenhouseSyncInput = {
   boardToken: string;
@@ -7,105 +20,23 @@ export type GreenhouseSyncInput = {
   requestedBy?: string | null;
 };
 
-type GreenhouseJob = {
-  id: number;
-  internal_job_id?: number | null;
-  title: string;
-  updated_at?: string;
-  location?: { name?: string | null } | null;
-  absolute_url?: string | null;
-  content?: string | null;
-  language?: string | null;
-  metadata?: unknown;
-  departments?: Array<{ id?: number; name?: string; parent_id?: number | null }>;
-  offices?: Array<{ id?: number; name?: string; location?: string | null }>;
-};
+export async function syncJobSource(input: JobSourceSyncInput) {
+  const provider = getJobSourceProvider(input.provider);
+  const identifier = input.identifier.trim();
+  if (!identifier) throw new Error("Identificador de ATS vacío.");
 
-function decodeEntities(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'");
-}
-
-function toPlainText(value: string | null | undefined) {
-  let decoded = value ?? "";
-  for (let i = 0; i < 2; i += 1) decoded = decodeEntities(decoded);
-  return decoded
-    .replace(/<br\s*\/?\s*>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function inferRemoteType(job: GreenhouseJob) {
-  const text =
-    `${job.title} ${job.location?.name ?? ""} ${toPlainText(job.content).slice(0, 1500)}`.toLowerCase();
-  if (/\bremote\b|\bremoto\b|work from home/.test(text)) return "remote";
-  if (/\bhybrid\b|\bhíbrido\b|\bhibrido\b/.test(text)) return "hybrid";
-  if (/\bon[- ]?site\b|\bpresencial\b/.test(text)) return "onsite";
-  return null;
-}
-
-function inferEmploymentType(title: string, description: string) {
-  const text = `${title} ${description.slice(0, 1200)}`.toLowerCase();
-  if (/\bintern(ship)?\b|\bpasant/.test(text)) return "internship";
-  if (/\bpart[- ]?time\b/.test(text)) return "part-time";
-  if (/\bcontract(or)?\b|\bfreelance\b/.test(text)) return "contract";
-  return "full-time";
-}
-
-function inferSeniority(title: string) {
-  const value = title.toLowerCase();
-  if (/\bchief\b|\bc[tef]o\b|\bvp\b|vice president/.test(value)) return "executive";
-  if (/\bdirector\b|\bhead of\b/.test(value)) return "director";
-  if (/\bmanager\b/.test(value)) return "manager";
-  if (/\bstaff\b|\bprincipal\b/.test(value)) return "staff";
-  if (/\blead\b/.test(value)) return "lead";
-  if (/\bsenior\b|\bsr\.?\b/.test(value)) return "senior";
-  if (/\bjunior\b|\bjr\.?\b|\bentry\b/.test(value)) return "junior";
-  if (/\bintern\b|\bpasant/.test(value)) return "intern";
-  return null;
-}
-
-function canonicalApplicationUrl(boardToken: string, jobId: number) {
-  return `https://job-boards.greenhouse.io/${encodeURIComponent(boardToken)}/jobs/${jobId}`;
-}
-
-export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
-  const endpoint = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(input.boardToken)}/jobs?content=true`;
-  const response = await fetch(endpoint, {
-    headers: {
-      accept: "application/json",
-      "user-agent": "AplicaJobDiscovery/2.0 (+https://aplica.lat)",
-    },
-    signal: AbortSignal.timeout(25_000),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Greenhouse ${input.boardToken} respondió ${response.status}.`,
-    );
-  }
-
-  const payload = (await response.json()) as {
-    jobs?: GreenhouseJob[];
-    meta?: { total?: number };
-  };
-  const jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
+  const discovery = await provider.fetchJobs(identifier);
   const now = new Date().toISOString();
 
   const { data: existingCompany } = await supabaseAdmin
     .from("companies")
     .select("id")
-    .eq("ats_type", "greenhouse")
-    .eq("ats_identifier", input.boardToken)
+    .eq("ats_type", provider.type)
+    .eq("ats_identifier", identifier)
     .maybeSingle();
 
   let companyId = existingCompany?.id ?? null;
+  const autoApplySupported = Boolean(provider.submissionAdapter);
 
   if (!companyId) {
     const { data: company, error } = await supabaseAdmin
@@ -113,11 +44,10 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
       .insert({
         name: input.companyName,
         careers_url: input.careersUrl ?? null,
-        ats_type: "greenhouse",
-        ats_identifier: input.boardToken,
-        auto_apply_supported: true,
+        ats_type: provider.type,
+        ats_identifier: identifier,
+        auto_apply_supported: autoApplySupported,
         active: true,
-        last_scanned_at: now,
       })
       .select("id")
       .single();
@@ -132,26 +62,26 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
       .update({
         name: input.companyName,
         careers_url: input.careersUrl ?? null,
-        auto_apply_supported: true,
+        auto_apply_supported: autoApplySupported,
         active: true,
-        last_scanned_at: now,
       })
       .eq("id", companyId);
 
     if (error) throw new Error(error.message);
   }
 
-  const sourceName = `greenhouse:${input.boardToken}`;
+  const sourceName = `${provider.type}:${identifier}`;
   const { data: source, error: sourceError } = await supabaseAdmin
     .from("job_sources")
     .upsert(
       {
         name: sourceName,
-        type: "greenhouse_job_board",
-        base_url: endpoint,
-        adapter_name: "greenhouse_public_form",
+        type: provider.sourceType,
+        base_url: discovery.endpoint,
+        adapter_name:
+          provider.submissionAdapter ?? provider.discoveryAdapter,
         discovery_enabled: true,
-        submission_enabled: true,
+        submission_enabled: autoApplySupported,
         requires_credentials: false,
         connection_status: "connected",
         active: true,
@@ -165,37 +95,42 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
     throw new Error(sourceError?.message ?? "No pudimos crear la fuente.");
   }
 
-  const rows = jobs.map((job) => {
-    const description = toPlainText(job.content);
-    return {
-      external_job_id: String(job.id),
-      source_id: source.id,
-      company_id: companyId!,
-      title: job.title.trim().slice(0, 500),
-      description,
-      location: job.location?.name?.trim() || null,
-      country:
-        job.offices?.find((office) => office.location)?.location ?? null,
-      remote_type: inferRemoteType(job),
-      employment_type: inferEmploymentType(job.title, description),
-      seniority: inferSeniority(job.title),
-      application_url: canonicalApplicationUrl(input.boardToken, job.id),
-      ats_type: "greenhouse",
-      auto_apply_adapter: "greenhouse_public_form",
-      is_active: true,
-      raw_data: {
-        board_token: input.boardToken,
-        internal_job_id: job.internal_job_id ?? null,
-        absolute_url: job.absolute_url ?? null,
-        updated_at: job.updated_at ?? null,
-        language: job.language ?? null,
-        metadata: job.metadata ?? null,
-        departments: job.departments ?? [],
-        offices: job.offices ?? [],
+  const rows = discovery.jobs.map((job) => ({
+    external_job_id: job.externalId,
+    source_id: source.id,
+    company_id: companyId!,
+    title: job.title,
+    description: job.description,
+    location: job.location,
+    country: job.country,
+    remote_type: job.remoteType,
+    employment_type: job.employmentType,
+    seniority: job.seniority,
+    salary_min: job.salaryMin,
+    salary_max: job.salaryMax,
+    salary_currency: job.salaryCurrency,
+    application_url: job.applicationUrl,
+    ats_type: provider.type,
+    auto_apply_adapter: provider.submissionAdapter,
+    submission_mechanism: autoApplySupported ? "public_form" : "manual",
+    published_at: job.publishedAt,
+    is_active: true,
+    raw_data: JSON.parse(
+      JSON.stringify({
+        ...job.rawData,
+        provider: provider.type,
+        identifier,
         synced_at: now,
-      },
-    };
-  });
+      }),
+    ),
+    ...(autoApplySupported
+      ? {}
+      : {
+          auto_apply_eligible: false,
+          ineligibility_reason: "MANUAL_APPLY_ONLY",
+          application_schema_id: null,
+        }),
+  }));
 
   if (rows.length) {
     const { error } = await supabaseAdmin
@@ -211,10 +146,15 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
 
   if (currentError) throw new Error(currentError.message);
 
-  const discoveredIds = new Set(jobs.map((job) => String(job.id)));
-  const staleIds = (currentJobs ?? [])
-    .filter((job) => !discoveredIds.has(job.external_job_id))
-    .map((job) => job.id);
+  const discoveredIds = new Set(discovery.jobs.map((job) => job.externalId));
+  const snapshotComplete =
+    discovery.reportedTotal == null ||
+    discovery.jobs.length >= discovery.reportedTotal;
+  const staleIds = snapshotComplete
+    ? (currentJobs ?? [])
+        .filter((job) => !discoveredIds.has(job.external_job_id))
+        .map((job) => job.id)
+    : [];
 
   for (let index = 0; index < staleIds.length; index += 100) {
     const { error } = await supabaseAdmin
@@ -228,16 +168,18 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
     if (error) throw new Error(error.message);
   }
 
-  const inspectionCandidates = (currentJobs ?? [])
-    .filter((job) => {
-      if (!job.application_url) return false;
-      if (!job.last_verified_at) return true;
-      return (
-        Date.now() - new Date(job.last_verified_at).getTime() >
-        24 * 60 * 60 * 1000
-      );
-    })
-    .slice(0, 250);
+  const inspectionCandidates = autoApplySupported
+    ? (currentJobs ?? [])
+        .filter((job) => {
+          if (!job.application_url) return false;
+          if (!job.last_verified_at) return true;
+          return (
+            Date.now() - new Date(job.last_verified_at).getTime() >
+            24 * 60 * 60 * 1000
+          );
+        })
+        .slice(0, 250)
+    : [];
 
   let inspectionsQueued = 0;
 
@@ -253,6 +195,7 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
         .in("id", staleInspectionIds.slice(index, index + 100));
       if (error) throw new Error(error.message);
     }
+
     const urls = inspectionCandidates
       .map((job) => job.application_url)
       .filter((url): url is string => Boolean(url));
@@ -280,43 +223,101 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
     }
   }
 
+  const { error: scannedAtError } = await supabaseAdmin
+    .from("companies")
+    .update({ last_scanned_at: now })
+    .eq("id", companyId);
+  if (scannedAtError) throw new Error(scannedAtError.message);
+
   return {
+    provider: provider.type,
+    identifier,
     companyId,
     sourceId: source.id,
-    discovered: jobs.length,
+    discovered: discovery.jobs.length,
     deactivated: staleIds.length,
     inspectionsQueued,
-    greenhouseReportedTotal: payload.meta?.total ?? jobs.length,
+    reportedTotal: discovery.reportedTotal ?? discovery.jobs.length,
+    snapshotComplete,
     scannedAt: now,
   };
 }
 
-export async function syncAllRegisteredGreenhouseSources(options?: {
+export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
+  const result = await syncJobSource({
+    provider: "greenhouse",
+    identifier: input.boardToken,
+    companyName: input.companyName,
+    careersUrl: input.careersUrl,
+    requestedBy: input.requestedBy,
+  });
+
+  return {
+    ...result,
+    greenhouseReportedTotal: result.reportedTotal,
+  };
+}
+
+export async function syncAllRegisteredJobSources(options?: {
   requestedBy?: string | null;
   concurrency?: number;
+  providers?: AtsProvider[];
+  staleAfterMinutes?: number;
+  limit?: number;
 }) {
-  const { data: companies, error } = await supabaseAdmin
+  const providers = options?.providers?.length
+    ? options.providers
+    : supportedAtsProviders;
+
+  let companyQuery = supabaseAdmin
     .from("companies")
-    .select("id,name,careers_url,ats_identifier,last_scanned_at")
+    .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at")
     .eq("active", true)
-    .eq("ats_type", "greenhouse")
+    .in("ats_type", providers)
     .not("ats_identifier", "is", null)
     .order("last_scanned_at", { ascending: true, nullsFirst: true });
+
+  const staleAfterMinutes =
+    options?.staleAfterMinutes != null
+      ? Math.max(1, Math.min(options.staleAfterMinutes, 24 * 60))
+      : null;
+
+  if (staleAfterMinutes != null) {
+    const cutoff = new Date(
+      Date.now() - staleAfterMinutes * 60_000,
+    ).toISOString();
+    companyQuery = companyQuery.or(
+      `last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`,
+    );
+  }
+
+  if (options?.limit != null) {
+    companyQuery = companyQuery.limit(
+      Math.max(1, Math.min(Math.floor(options.limit), 1000)),
+    );
+  }
+
+  const { data: companies, error } = await companyQuery;
 
   if (error) throw new Error(error.message);
 
   const queue = (companies ?? []).filter(
     (
       company,
-    ): company is typeof company & { ats_identifier: string } =>
-      Boolean(company.ats_identifier),
+    ): company is typeof company & {
+      ats_type: AtsProvider;
+      ats_identifier: string;
+    } =>
+      Boolean(company.ats_identifier) &&
+      providers.includes(company.ats_type as AtsProvider),
   );
 
-  const concurrency = Math.max(1, Math.min(options?.concurrency ?? 3, 6));
+  const concurrency = Math.max(1, Math.min(options?.concurrency ?? 4, 8));
   const results: Array<{
     companyId: string;
     companyName: string;
-    boardToken: string;
+    provider: AtsProvider;
+    identifier: string;
     ok: boolean;
     discovered?: number;
     deactivated?: number;
@@ -333,8 +334,9 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
       if (!company) return;
 
       try {
-        const result = await syncGreenhouseSource({
-          boardToken: company.ats_identifier,
+        const result = await syncJobSource({
+          provider: company.ats_type,
+          identifier: company.ats_identifier,
           companyName: company.name,
           careersUrl: company.careers_url,
           requestedBy: options?.requestedBy ?? null,
@@ -342,7 +344,8 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
         results.push({
           companyId: company.id,
           companyName: company.name,
-          boardToken: company.ats_identifier,
+          provider: company.ats_type,
+          identifier: company.ats_identifier,
           ok: true,
           discovered: result.discovered,
           deactivated: result.deactivated,
@@ -352,7 +355,8 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
         results.push({
           companyId: company.id,
           companyName: company.name,
-          boardToken: company.ats_identifier,
+          provider: company.ats_type,
+          identifier: company.ats_identifier,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -368,6 +372,7 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
 
   return {
     scanned: queue.length,
+    staleAfterMinutes,
     successful: results.filter((result) => result.ok).length,
     failed: results.filter((result) => !result.ok).length,
     discovered: results.reduce(
@@ -386,8 +391,19 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
   };
 }
 
+export function syncAllRegisteredGreenhouseSources(options?: {
+  requestedBy?: string | null;
+  concurrency?: number;
+}) {
+  return syncAllRegisteredJobSources({
+    ...options,
+    providers: ["greenhouse"],
+  });
+}
 
-let refreshPromise: Promise<ReturnType<typeof syncAllRegisteredGreenhouseSources> extends Promise<infer T> ? T : never> | null = null;
+let refreshPromise: Promise<
+  Awaited<ReturnType<typeof syncAllRegisteredJobSources>>
+> | null = null;
 
 /**
  * Self-healing freshness guard used by authenticated inventory reads.
@@ -398,9 +414,9 @@ export async function ensureInventoryFresh(maxAgeMinutes = 20) {
   const cutoff = Date.now() - maxAgeMinutes * 60_000;
   const { data: companies, error } = await supabaseAdmin
     .from("companies")
-    .select("last_scanned_at")
+    .select("last_scanned_at,ats_type")
     .eq("active", true)
-    .eq("ats_type", "greenhouse")
+    .in("ats_type", supportedAtsProviders)
     .not("ats_identifier", "is", null);
 
   if (error) throw new Error(error.message);
@@ -423,9 +439,11 @@ export async function ensureInventoryFresh(maxAgeMinutes = 20) {
         .limit(1)
         .maybeSingle();
 
-      return syncAllRegisteredGreenhouseSources({
+      return syncAllRegisteredJobSources({
         requestedBy: adminRole?.user_id ?? null,
-        concurrency: 3,
+        concurrency: 8,
+        staleAfterMinutes: maxAgeMinutes,
+        limit: 100,
       });
     })().finally(() => {
       refreshPromise = null;
