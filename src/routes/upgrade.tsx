@@ -65,7 +65,7 @@ function Upgrade() {
   const active = overviewQuery.data?.subscriptionStatus === "active";
 
   return (
-    <main className="min-h-screen bg-surface">
+    <main className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-[1120px] items-center justify-between px-5 py-5">
         <Wordmark compact />
         <button
@@ -105,24 +105,16 @@ function Upgrade() {
           </p>
         ) : (
           <div className="mt-10 grid gap-4 text-left md:grid-cols-3">
-            {plans.map((plan, index) => {
-              const preferred = index === 1;
+            {plans.map((plan) => {
               const isCurrent = active && currentPlan === plan.name;
               return (
                 <article
                   key={plan.code}
                   className={cn(
                     "relative rounded-xl border bg-background p-6",
-                    preferred
-                      ? "border-primary ring-1 ring-primary"
-                      : "border-border",
+                    isCurrent ? "border-primary ring-1 ring-primary" : "border-border",
                   )}
                 >
-                  {preferred && (
-                    <span className="absolute -top-3 left-5 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                      Más elegido
-                    </span>
-                  )}
                   <h2 className="text-xl font-medium">{plan.name}</h2>
                   <p className="mt-5">
                     <span className="text-3xl font-medium">
@@ -160,7 +152,7 @@ function Upgrade() {
 
                   <Button
                     className="w-full"
-                    variant={preferred ? "default" : "outline"}
+                    variant={isCurrent ? "default" : "outline"}
                     disabled={isCurrent}
                     onClick={() => {
                       if (isCurrent) return;
