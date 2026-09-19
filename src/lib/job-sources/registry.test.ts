@@ -29,6 +29,15 @@ describe("job board URL detection", () => {
     });
   });
 
+  test("detects SmartRecruiters", () => {
+    expect(
+      detectJobBoardUrl("https://jobs.smartrecruiters.com/ExampleCorp"),
+    ).toMatchObject({
+      provider: "smartrecruiters",
+      identifier: "ExampleCorp",
+    });
+  });
+
   test("keeps the full Workday board URL as identifier", () => {
     const input =
       "https://example.wd5.myworkdayjobs.com/en-US/External/job/Buenos-Aires/Role_JR123";
