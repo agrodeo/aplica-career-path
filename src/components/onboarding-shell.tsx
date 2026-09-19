@@ -28,10 +28,10 @@ export function OnboardingShell({ children, trust = false, flow = false, classNa
       ) : (
         <main id="experiencia" className="onboarding-grid">
           <section className="onboarding-promise">
-            <h1>La forma más rápida<br />de conseguir <span>trabajo.</span></h1>
-            <p>Subí tu CV y aplicá más rápido a trabajos que encajan con vos.</p>
+            <h1>Subí tu <span>CV</span> una vez.</h1>
+            <p>Aplica busca oportunidades, adapta tu perfil y aplica automáticamente a los trabajos que mejor encajan con vos.</p>
             <Button asChild size="lg" className="home-primary mt-8 h-[66px] w-[330px] rounded-[12px] text-[19px] font-semibold">
-              <Link to="/signup">Empezar ahora <ArrowRight /></Link>
+              <Link to="/signup">Encontrar trabajos para mí <ArrowRight /></Link>
             </Button>
             <small>Tu perfil usa información real.</small>
           </section>
