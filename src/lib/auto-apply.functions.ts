@@ -766,8 +766,12 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       profile.data?.current_title ?? "",
       ...(experiences.data ?? []).map((experience) => experience.title),
     ].filter(Boolean);
+    const experienceRows = experiences.data ?? [];
+    const experienceYearsKnown = experienceRows.some(
+      (experience) => Boolean(experience.start_date),
+    );
     const totalExperienceYears = calculateExperienceYears(
-      (experiences.data ?? []).map((experience) => ({
+      experienceRows.map((experience) => ({
         start_date: experience.start_date,
         end_date: experience.end_date,
         is_current: experience.is_current,
@@ -883,6 +887,7 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
       const requiredYears = requiredExperienceYears(job.description ?? "");
       const experienceRequirementMet =
         requiredYears == null ||
+        !experienceYearsKnown ||
         totalExperienceYears + 0.25 >= requiredYears;
       const roleRelevant = roleCandidates.length === 0 || roleScore >= 30;
       const locationRequirementMet =
@@ -932,7 +937,10 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
           mode: job.remote_type,
           location: job.location,
           requiredExperienceYears: requiredYears,
-          profileExperienceYears: Number(totalExperienceYears.toFixed(1)),
+          profileExperienceYears: experienceYearsKnown
+            ? Number(totalExperienceYears.toFixed(1))
+            : null,
+          experienceYearsKnown,
           hardRequirementChecks: {
             roleRelevant,
             modeAllowed,
