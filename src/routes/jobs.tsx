@@ -184,6 +184,7 @@ function JobsPage() {
   const matchedCount = jobsQuery.data?.matchedCount ?? 0;
   const readyCount = jobsQuery.data?.readyCount ?? 0;
   const needsAnswersCount = jobsQuery.data?.needsAnswersCount ?? 0;
+  const inventoryUpdatedAt = jobsQuery.data?.inventoryUpdatedAt ?? null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,6 +208,18 @@ function JobsPage() {
               El porcentaje compara perfil y vacante; no estima tus chances de
               contratación.
             </p>
+            {inventoryUpdatedAt && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Inventario sincronizado{" "}
+                {new Date(inventoryUpdatedAt).toLocaleString("es-AR", {
+                  day: "2-digit",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                .
+              </p>
+            )}
           </div>
           <MatchInfo />
         </div>
@@ -365,6 +378,7 @@ type RealJob = {
   salaryMax: number | null;
   salaryCurrency: string | null;
   publishedAt: string | null;
+  sourceScannedAt: string | null;
   adapter: string | null;
   matchScore: number | null;
   hardRequirementsMet: boolean;
