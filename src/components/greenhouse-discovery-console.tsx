@@ -4,24 +4,22 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  syncAllGreenhouseBoards,
-  syncGreenhouseBoard,
+  syncAllJobBoards,
+  syncJobBoardUrl,
 } from "@/lib/discovery.functions";
 
-export function GreenhouseDiscoveryConsole() {
+export function JobDiscoveryConsole() {
   const [companyName, setCompanyName] = useState("");
-  const [boardToken, setBoardToken] = useState("");
-  const [careersUrl, setCareersUrl] = useState("");
-  const syncBoard = useServerFn(syncGreenhouseBoard);
-  const syncAll = useServerFn(syncAllGreenhouseBoards);
+  const [boardUrl, setBoardUrl] = useState("");
+  const syncBoard = useServerFn(syncJobBoardUrl);
+  const syncAll = useServerFn(syncAllJobBoards);
 
   const mutation = useMutation({
     mutationFn: () =>
       syncBoard({
         data: {
-          companyName,
-          boardToken,
-          careersUrl: careersUrl.trim() || undefined,
+          url: boardUrl,
+          companyName: companyName.trim() || undefined,
         },
       }),
   });
@@ -32,11 +30,12 @@ export function GreenhouseDiscoveryConsole() {
 
   return (
     <section className="mt-12">
-      <h2 className="text-xl font-medium">Descubrimiento Greenhouse</h2>
+      <h2 className="text-xl font-medium">Descubrimiento de trabajos</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Registrá un board público de Greenhouse una sola vez. Después el
-        sincronizador actualiza automáticamente altas, cambios y bajas. Una
-        vacante sólo entra al inventario Auto Apply después de pasar inspección.
+        Pegá un careers board público de Greenhouse, Lever o Ashby. Aplica
+        detecta el ATS, normaliza las vacantes y después las mantiene frescas
+        automáticamente. Discovery no implica Auto Apply: una vacante sólo se
+        envía sola cuando existe un adaptador verificado para ese formulario.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -47,10 +46,10 @@ export function GreenhouseDiscoveryConsole() {
         >
           {syncAllMutation.isPending
             ? "Actualizando inventario…"
-            : "Actualizar todos ahora"}
+            : "Actualizar todas las fuentes"}
         </Button>
         <span className="text-xs text-muted-foreground">
-          El endpoint programable es /api/cron/sync-jobs.
+          El endpoint programable sigue siendo /api/cron/sync-jobs.
         </span>
       </div>
 
@@ -63,15 +62,15 @@ export function GreenhouseDiscoveryConsole() {
       {syncAllMutation.data && (
         <p className="mt-3 text-sm text-muted-foreground">
           {syncAllMutation.data.successful} fuentes actualizadas ·{" "}
-          {syncAllMutation.data.discovered} vacantes activas leídas ·{" "}
+          {syncAllMutation.data.discovered} vacantes leídas ·{" "}
           {syncAllMutation.data.deactivated} bajas detectadas ·{" "}
-          {syncAllMutation.data.inspectionsQueued} inspecciones en cola.
+          {syncAllMutation.data.inspectionsQueued} inspecciones Auto Apply.
         </p>
       )}
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <div className="mt-5 grid gap-3 md:grid-cols-[1fr_2fr]">
         <label className="text-sm font-medium">
-          Empresa
+          Empresa opcional
           <Input
             className="mt-2"
             value={companyName}
@@ -80,35 +79,27 @@ export function GreenhouseDiscoveryConsole() {
           />
         </label>
         <label className="text-sm font-medium">
-          Board token
+          URL del careers board
           <Input
             className="mt-2"
-            value={boardToken}
-            onChange={(event) => setBoardToken(event.target.value)}
-            placeholder="acme"
-          />
-        </label>
-        <label className="text-sm font-medium">
-          Careers URL opcional
-          <Input
-            className="mt-2"
-            value={careersUrl}
-            onChange={(event) => setCareersUrl(event.target.value)}
-            placeholder="https://acme.com/careers"
+            value={boardUrl}
+            onChange={(event) => setBoardUrl(event.target.value)}
+            placeholder="https://jobs.ashbyhq.com/acme"
           />
         </label>
       </div>
 
+      <p className="mt-2 text-xs text-muted-foreground">
+        Ejemplos compatibles: job-boards.greenhouse.io/acme · jobs.lever.co/acme
+        · jobs.ashbyhq.com/acme
+      </p>
+
       <Button
         className="mt-4"
-        disabled={
-          mutation.isPending ||
-          !companyName.trim() ||
-          !boardToken.trim()
-        }
+        disabled={mutation.isPending || !boardUrl.trim()}
         onClick={() => mutation.mutate()}
       >
-        {mutation.isPending ? "Sincronizando…" : "Sincronizar board"}
+        {mutation.isPending ? "Sincronizando…" : "Registrar y sincronizar"}
       </Button>
 
       {mutation.error && (
@@ -118,21 +109,30 @@ export function GreenhouseDiscoveryConsole() {
       )}
 
       {mutation.data && (
-        <div className="mt-5 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-3">
-          <Result label="Vacantes descubiertas" value={mutation.data.discovered} />
-          <Result label="Inspecciones en cola" value={mutation.data.inspectionsQueued} />
-          <Result label="Vacantes desactivadas" value={mutation.data.deactivated} />
+        <div className="mt-5 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
+          <Result label="ATS" value={mutation.data.provider} />
+          <Result label="Vacantes" value={mutation.data.discovered} />
+          <Result label="Inspecciones" value={mutation.data.inspectionsQueued} />
+          <Result label="Bajas" value={mutation.data.deactivated} />
         </div>
       )}
     </section>
   );
 }
 
-function Result({ label, value }: { label: string; value: number }) {
+export const GreenhouseDiscoveryConsole = JobDiscoveryConsole;
+
+function Result({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
   return (
     <div className="bg-background p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-medium">{value}</p>
+      <p className="mt-1 text-xl font-medium">{value}</p>
     </div>
   );
 }
