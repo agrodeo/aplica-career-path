@@ -662,3 +662,20 @@
     align-items: center;
   }
 }
+
+
+.demo-illustrative-badge {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 5;
+  border: 1px solid color-mix(in oklab, var(--primary) 20%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--background) 88%, transparent);
+  padding: 5px 8px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(10px);
+}
