@@ -2,6 +2,7 @@ import { ashbyProvider } from "@/lib/job-sources/ashby";
 import { greenhouseProvider } from "@/lib/job-sources/greenhouse";
 import { leverProvider } from "@/lib/job-sources/lever";
 import { workdayProvider } from "@/lib/job-sources/workday";
+import { smartRecruitersProvider } from "@/lib/job-sources/smartrecruiters";
 import type {
   AtsProvider,
   JobSourceProvider,
@@ -12,6 +13,7 @@ export const jobSourceProviders: Record<AtsProvider, JobSourceProvider> = {
   lever: leverProvider,
   ashby: ashbyProvider,
   workday: workdayProvider,
+  smartrecruiters: smartRecruitersProvider,
 };
 
 export const supportedAtsProviders = Object.keys(
@@ -65,6 +67,21 @@ export function detectJobBoardUrl(value: string) {
     };
   }
 
+  if (
+    host === "jobs.smartrecruiters.com" ||
+    host === "careers.smartrecruiters.com"
+  ) {
+    if (!identifier) {
+      throw new Error("No encontramos la empresa en SmartRecruiters.");
+    }
+    return {
+      provider: "smartrecruiters" as const,
+      identifier,
+      companyName: prettyCompanyName(identifier),
+      careersUrl: url.toString(),
+    };
+  }
+
   const workdayHost = host.match(
     /^([a-z0-9-]+)\.wd\d+\.myworkdayjobs\.com$/i,
   );
@@ -90,7 +107,7 @@ export function detectJobBoardUrl(value: string) {
   }
 
   throw new Error(
-    "URL no soportada todavía. Usá un board público de Greenhouse, Lever, Ashby o Workday.",
+    "URL no soportada todavía. Usá un board público de Greenhouse, Lever, Ashby, SmartRecruiters o Workday.",
   );
 }
 
