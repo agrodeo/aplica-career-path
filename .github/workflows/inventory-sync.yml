@@ -1,0 +1,35 @@
+name: Fresh Job Inventory
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-job-inventory
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Sync stale job boards
+        env:
+          CRON_SECRET: ${{ secrets.LOVABLE_CRON_SECRET }}
+          APLICA_BASE_URL: ${{ vars.APLICA_BASE_URL }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${APLICA_BASE_URL:-https://aplica-career-path.lovable.app}"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing GitHub Actions secret LOVABLE_CRON_SECRET"
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 5 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${BASE_URL%/}/api/cron/sync-jobs?freshnessMinutes=10&limit=100"
