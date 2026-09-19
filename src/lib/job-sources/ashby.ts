@@ -1,4 +1,5 @@
 import {
+  finiteNumber,
   inferEmploymentType,
   inferRemoteType,
   inferSeniority,
@@ -22,7 +23,23 @@ type AshbyPosting = {
   applyUrl?: string | null;
   descriptionHtml?: string | null;
   descriptionPlain?: string | null;
-  compensation?: unknown;
+  isListed?: boolean | null;
+  address?: {
+    postalAddress?: {
+      addressCountry?: string | null;
+    } | null;
+  } | null;
+  compensation?: {
+    summaryComponents?: Array<{
+      compensationType?: string | null;
+      interval?: string | null;
+      currencyCode?: string | null;
+      minValue?: number | null;
+      maxValue?: number | null;
+    }> | null;
+    compensationTierSummary?: string | null;
+    scrapeableCompensationSalarySummary?: string | null;
+  } | null;
 };
 
 export const ashbyProvider: JobSourceProvider = {
@@ -51,7 +68,7 @@ export const ashbyProvider: JobSourceProvider = {
       endpoint,
       reportedTotal: sourceJobs.length,
       jobs: sourceJobs
-        .filter((job) => job.id && job.title)
+        .filter((job) => job.id && job.title && job.isListed !== false)
         .map((job) => {
           const title = String(job.title ?? "").trim().slice(0, 500);
           const description = toPlainText(
@@ -61,12 +78,15 @@ export const ashbyProvider: JobSourceProvider = {
           const explicitRemote = job.isRemote
             ? "remote"
             : job.workplaceType ?? null;
+          const salary = job.compensation?.summaryComponents?.find(
+            (component) => component.compensationType === "Salary",
+          );
           return {
             externalId: String(job.id),
             title,
             description,
             location,
-            country: null,
+            country: job.address?.postalAddress?.addressCountry ?? null,
             remoteType: inferRemoteType(
               title,
               location,
@@ -79,9 +99,9 @@ export const ashbyProvider: JobSourceProvider = {
               job.employmentType,
             ),
             seniority: inferSeniority(title),
-            salaryMin: null,
-            salaryMax: null,
-            salaryCurrency: null,
+            salaryMin: finiteNumber(salary?.minValue),
+            salaryMax: finiteNumber(salary?.maxValue),
+            salaryCurrency: salary?.currencyCode ?? null,
             applicationUrl: job.applyUrl ?? job.jobUrl ?? null,
             publishedAt: safeIsoDate(job.publishedAt),
             rawData: {
