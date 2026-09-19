@@ -1783,26 +1783,34 @@ falls back to the deterministic parser instead of blocking onboarding.
 
 ## Live job inventory
 
-Greenhouse boards are registered once from the admin console and then kept fresh
-by the reusable source synchronizer.
+Aplica registers public ATS boards once and keeps them fresh through the shared
+multi-source synchronizer. Supported discovery providers currently include
+Greenhouse, Lever, Ashby, Workable, SmartRecruiters and Workday.
 
-Recommended production schedule: call
+The repository includes `.github/workflows/inventory-sync.yml`, scheduled every
+10 minutes. Add the same `LOVABLE_CRON_SECRET` used by the deployed app as a
+GitHub Actions repository secret. Optionally set the `APLICA_BASE_URL`
+repository variable; otherwise the workflow targets the Lovable production URL.
+
+Each scheduled run calls:
 
 ```http
-GET /api/cron/sync-jobs
+GET /api/cron/sync-jobs?freshnessMinutes=10&limit=100
 Authorization: Bearer $LOVABLE_CRON_SECRET
 ```
 
-every 15–20 minutes.
-
-The sync:
-- reads the current public Greenhouse board
+The synchronizer:
+- selects the stalest registered boards first
+- skips boards scanned within the freshness window
 - upserts new/changed vacancies
-- deactivates jobs removed from the latest board response
-- rechecks forms whose structural verification is older than 24 hours
-- removes stale forms from Auto Apply inventory while they are being reverified
+- preserves `discovered_at` as Aplica's first-seen timestamp
+- deactivates missing jobs only when the provider response is a complete snapshot
+- rechecks supported Auto Apply forms independently from discovery
 
-Authenticated job reads also contain a 20-minute self-healing freshness guard, so
-a delayed scheduler does not leave the product indefinitely stale.
+Authenticated job reads contain the same 10-minute self-healing freshness guard.
+Job results prioritize the newest discovered inventory before applying the
+per-user match filter, so jobs found today are not pushed out by an unordered
+database limit.
 
-Only structurally verified, active jobs are user-facing Auto Apply inventory.
+Auto Apply eligibility remains separate from discovery: unsupported ATS jobs can
+still be shown as relevant manual-apply opportunities.
