@@ -11,12 +11,8 @@ const TITLE_NOISE = new Set([
   "lead",
   "principal",
   "staff",
-  "manager",
-  "director",
   "head",
   "associate",
-  "specialist",
-  "analyst",
   "intern",
   "internship",
   "remote",
@@ -114,8 +110,14 @@ function words(value: string, removeNoise = false) {
 
 function roleFamily(value: string) {
   const normalized = normalizeText(value);
+  const tokens = new Set(normalized.split(" ").filter(Boolean));
   for (const [family, signals] of Object.entries(ROLE_FAMILIES)) {
-    if (signals.some((signal) => normalized.includes(signal))) return family;
+    const matched = signals.some((signal) => {
+      if (signal.includes(" ")) return normalized.includes(signal);
+      if (signal === "actuar") return normalized.includes("actuar");
+      return tokens.has(signal);
+    });
+    if (matched) return family;
   }
   return null;
 }
