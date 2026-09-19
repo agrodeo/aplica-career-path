@@ -76,6 +76,7 @@ function JobsPage() {
   const subscribed = overviewQuery.data?.subscriptionStatus === "active";
   const [query, setQuery] = useState("");
   const [min, setMin] = useState(70);
+  const [sortMode, setSortMode] = useState<"match" | "recent">("match");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -104,8 +105,14 @@ function JobsPage() {
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
-        .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0)),
-    [jobs, query, min],
+        .sort((a, b) => {
+          if (sortMode === "recent") {
+            return freshnessTimestamp(b) - freshnessTimestamp(a);
+          }
+          const scoreDiff = (b.matchScore ?? 0) - (a.matchScore ?? 0);
+          return scoreDiff || freshnessTimestamp(b) - freshnessTimestamp(a);
+        }),
+    [jobs, query, min, sortMode],
   );
 
   const selectedIds = jobs
@@ -244,9 +251,16 @@ function JobsPage() {
             <SlidersHorizontal />
             Match mínimo: {min}%
           </Button>
-          <Button variant="outline" disabled>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setSortMode((current) =>
+                current === "match" ? "recent" : "match",
+              )
+            }
+          >
             <ArrowUpDown />
-            Mejor match
+            {sortMode === "match" ? "Mejor match" : "Más recientes"}
           </Button>
         </div>
 
@@ -383,6 +397,7 @@ type RealJob = {
   salaryMax: number | null;
   salaryCurrency: string | null;
   publishedAt: string | null;
+  discoveredAt: string;
   sourceScannedAt: string | null;
   applicationUrl: string | null;
   autoApplyEligible: boolean;
@@ -467,6 +482,14 @@ function RealJobRow({
             {formatSalary(job) && (
               <p className="mt-1 text-xs text-muted-foreground">
                 {formatSalary(job)}
+              </p>
+            )}
+            {(isSameLocalDay(job.publishedAt) ||
+              isSameLocalDay(job.discoveredAt)) && (
+              <p className="mt-2 text-xs font-medium text-primary">
+                {isSameLocalDay(job.publishedAt)
+                  ? "Publicado hoy"
+                  : "Nuevo hoy en Aplica"}
               </p>
             )}
 
@@ -749,4 +772,27 @@ function formatSalary(job: {
     )
     .join("–");
   return `${job.salaryCurrency ?? ""} ${range}`.trim();
+}
+
+
+function freshnessTimestamp(job: {
+  publishedAt: string | null;
+  discoveredAt: string | null;
+}) {
+  const value = job.publishedAt ?? job.discoveredAt;
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isSameLocalDay(value: string | null | undefined) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
 }
