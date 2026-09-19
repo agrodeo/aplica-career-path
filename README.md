@@ -1779,3 +1779,30 @@ experience before it becomes a verified MasterProfile fact.
 
 If the structured extractor is not configured or temporarily fails, Aplica
 falls back to the deterministic parser instead of blocking onboarding.
+
+
+## Live job inventory
+
+Greenhouse boards are registered once from the admin console and then kept fresh
+by the reusable source synchronizer.
+
+Recommended production schedule: call
+
+```http
+GET /api/cron/sync-jobs
+Authorization: Bearer $LOVABLE_CRON_SECRET
+```
+
+every 15–20 minutes.
+
+The sync:
+- reads the current public Greenhouse board
+- upserts new/changed vacancies
+- deactivates jobs removed from the latest board response
+- rechecks forms whose structural verification is older than 24 hours
+- removes stale forms from Auto Apply inventory while they are being reverified
+
+Authenticated job reads also contain a 20-minute self-healing freshness guard, so
+a delayed scheduler does not leave the product indefinitely stale.
+
+Only structurally verified, active jobs are user-facing Auto Apply inventory.

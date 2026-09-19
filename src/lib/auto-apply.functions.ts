@@ -305,6 +305,9 @@ async function applicationReadiness(
 export const listAutoApplyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
+    await ensureInventoryFresh(20);
+
     const { supabase, userId } = context;
     const [
       { data: jobs },
@@ -316,7 +319,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url)",
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url, last_scanned_at)",
         )
         .eq("auto_apply_eligible", true)
         .eq("is_active", true)
@@ -356,6 +359,7 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           title: job.title,
           company: job.companies?.name ?? "",
           logoUrl: job.companies?.logo_url ?? null,
+          sourceScannedAt: job.companies?.last_scanned_at ?? null,
           location: job.location,
           remoteType: job.remote_type,
           employmentType: job.employment_type,
@@ -401,7 +405,14 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       };
     });
 
+    const inventoryUpdatedAt = ready
+      .map((job) => job.sourceScannedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1) ?? null;
+
     return {
+      inventoryUpdatedAt,
       matchedCount: ready.length,
       readyCount: ready.filter((job) => job.readyForUser).length,
       needsAnswersCount: ready.filter((job) => job.needsUserAnswers).length,
@@ -497,6 +508,9 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
 export const refreshJobMatches = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { ensureInventoryFresh } = await import("@/lib/job-sync.server");
+    await ensureInventoryFresh(20);
+
     const { supabase, userId } = context;
 
     const [profile, experiences, skills, preferences, careerContext, jobs] =
