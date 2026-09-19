@@ -252,18 +252,42 @@ export async function syncAllRegisteredJobSources(options?: {
   requestedBy?: string | null;
   concurrency?: number;
   providers?: AtsProvider[];
+  staleAfterMinutes?: number;
+  limit?: number;
 }) {
   const providers = options?.providers?.length
     ? options.providers
     : supportedAtsProviders;
 
-  const { data: companies, error } = await supabaseAdmin
+  let companyQuery = supabaseAdmin
     .from("companies")
     .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at")
     .eq("active", true)
     .in("ats_type", providers)
     .not("ats_identifier", "is", null)
     .order("last_scanned_at", { ascending: true, nullsFirst: true });
+
+  const staleAfterMinutes =
+    options?.staleAfterMinutes != null
+      ? Math.max(1, Math.min(options.staleAfterMinutes, 24 * 60))
+      : null;
+
+  if (staleAfterMinutes != null) {
+    const cutoff = new Date(
+      Date.now() - staleAfterMinutes * 60_000,
+    ).toISOString();
+    companyQuery = companyQuery.or(
+      `last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`,
+    );
+  }
+
+  if (options?.limit != null) {
+    companyQuery = companyQuery.limit(
+      Math.max(1, Math.min(Math.floor(options.limit), 1000)),
+    );
+  }
+
+  const { data: companies, error } = await companyQuery;
 
   if (error) throw new Error(error.message);
 
@@ -338,6 +362,7 @@ export async function syncAllRegisteredJobSources(options?: {
 
   return {
     scanned: queue.length,
+    staleAfterMinutes,
     successful: results.filter((result) => result.ok).length,
     failed: results.filter((result) => !result.ok).length,
     discovered: results.reduce(
@@ -406,7 +431,9 @@ export async function ensureInventoryFresh(maxAgeMinutes = 20) {
 
       return syncAllRegisteredJobSources({
         requestedBy: adminRole?.user_id ?? null,
-        concurrency: 4,
+        concurrency: 8,
+        staleAfterMinutes: maxAgeMinutes,
+        limit: 100,
       });
     })().finally(() => {
       refreshPromise = null;
