@@ -784,15 +784,20 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
         ? Math.max(...roleCandidates.map((role) => similarity(role, job.title)))
         : 45;
 
+      const hasDetailedDescription = Boolean(
+        job.description && job.description.trim().length >= 120,
+      );
       const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase();
       const matchedSkills = userSkills.filter((skill) =>
         includesLoose(jobText, skill),
       );
-      const skillsScore = userSkills.length
-        ? Math.round(
-            (matchedSkills.length / Math.min(userSkills.length, 8)) * 100,
-          )
-        : 50;
+      const skillsScore = !hasDetailedDescription
+        ? 60
+        : userSkills.length
+          ? Math.round(
+              (matchedSkills.length / Math.min(userSkills.length, 8)) * 100,
+            )
+          : 50;
 
       const experienceScore = experienceTitles.length
         ? Math.max(
@@ -876,11 +881,13 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
         matchedPreferredTasks.length +
         matchedTools.length +
         matchedResponsibilities.length;
-      const positiveContextScore = contextSignals.length
-        ? Math.round(
-            (positiveMatches / Math.min(contextSignals.length, 12)) * 100,
-          )
-        : 60;
+      const positiveContextScore = !hasDetailedDescription
+        ? 60
+        : contextSignals.length
+          ? Math.round(
+              (positiveMatches / Math.min(contextSignals.length, 12)) * 100,
+            )
+          : 60;
       const avoidPenalty = Math.min(matchedAvoidTasks.length * 25, 70);
       const contextScore = Math.max(0, positiveContextScore - avoidPenalty);
 
@@ -953,6 +960,7 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
               strengths.length ||
               differentiators.length,
           ),
+          descriptionCoverage: hasDetailedDescription ? "full" : "partial",
           note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
         },
         created_at: new Date().toISOString(),
