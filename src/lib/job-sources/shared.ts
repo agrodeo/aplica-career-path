@@ -1,5 +1,21 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+export function toPlainText(value: string | null | undefined) {
+  return (value ?? "")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<li[^>]*>/gi, " • ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export type NormalizedJob = {
   externalJobId: string;
   title: string;
