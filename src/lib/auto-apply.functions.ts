@@ -319,11 +319,10 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url, last_scanned_at)",
+          "id, title, location, remote_type, employment_type, seniority, salary_min, salary_max, salary_currency, published_at, application_url, ats_type, auto_apply_eligible, auto_apply_adapter, application_schema_id, company_id, companies(name, logo_url, last_scanned_at)",
         )
-        .eq("auto_apply_eligible", true)
         .eq("is_active", true)
-        .limit(500),
+        .limit(1000),
       supabase.from("job_matches").select("*").eq("user_id", userId),
       supabase
         .from("job_preferences")
@@ -368,6 +367,9 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
           salaryMax: job.salary_max,
           salaryCurrency: job.salary_currency,
           publishedAt: job.published_at,
+          applicationUrl: job.application_url,
+          atsType: job.ats_type,
+          autoApplyEligible: job.auto_apply_eligible,
           adapter: job.auto_apply_adapter,
           applicationSchemaId: job.application_schema_id,
           matchScore: match ? Number(match.match_score) : null,
@@ -400,8 +402,8 @@ export const listAutoApplyJobs = createServerFn({ method: "GET" })
       return {
         ...job,
         missingQuestions,
-        readyForUser: missingQuestions.length === 0,
-        needsUserAnswers: actionableMissingQuestions.length > 0,
+        readyForUser: job.autoApplyEligible && missingQuestions.length === 0,
+        needsUserAnswers: job.autoApplyEligible && actionableMissingQuestions.length > 0,
       };
     });
 
@@ -440,10 +442,9 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       supabase
         .from("jobs")
         .select(
-          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
+          "id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,application_url,ats_type,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)",
         )
         .eq("id", data.jobId)
-        .eq("auto_apply_eligible", true)
         .eq("is_active", true)
         .maybeSingle(),
       supabase
@@ -491,6 +492,9 @@ export const getAutoApplyJob = createServerFn({ method: "GET" })
       salaryMax: job.salary_max,
       salaryCurrency: job.salary_currency,
       publishedAt: job.published_at,
+      applicationUrl: job.application_url,
+      atsType: job.ats_type,
+      autoApplyEligible: job.auto_apply_eligible,
       adapter: job.auto_apply_adapter,
       matchScore: match ? Number(match.match_score) : null,
       hardRequirementsMet: match?.hard_requirements_met ?? false,
@@ -535,11 +539,10 @@ export const refreshJobMatches = createServerFn({ method: "POST" })
         supabase
           .from("jobs")
           .select(
-            "id, title, description, location, country, remote_type, employment_type, seniority, companies(name)",
+            "id, title, description, location, country, remote_type, employment_type, seniority, auto_apply_eligible, companies(name)",
           )
-          .eq("auto_apply_eligible", true)
           .eq("is_active", true)
-          .limit(500),
+          .limit(1000),
       ]);
 
     const pref = preferences.data;
