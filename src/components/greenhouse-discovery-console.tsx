@@ -48,7 +48,7 @@ export function JobDiscoveryConsole() {
     <section className="mt-12">
       <h2 className="text-xl font-medium">Descubrimiento de trabajos</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-        Pegá un careers board público de Greenhouse, Lever, Ashby, SmartRecruiters o Workday. Aplica
+        Pegá un careers board público de Greenhouse, Lever, Ashby, Workable, SmartRecruiters o Workday. Aplica
         detecta el ATS, normaliza las vacantes y después las mantiene frescas
         automáticamente. Discovery no implica Auto Apply: una vacante sólo se
         envía sola cuando existe un adaptador verificado para ese formulario.
@@ -107,8 +107,8 @@ export function JobDiscoveryConsole() {
 
       <p className="mt-2 text-xs text-muted-foreground">
         Ejemplos compatibles: job-boards.greenhouse.io/acme · jobs.lever.co/acme
-        · jobs.ashbyhq.com/acme · jobs.smartrecruiters.com/acme ·
-        acme.wd5.myworkdayjobs.com/en-US/External
+        · jobs.ashbyhq.com/acme · apply.workable.com/acme ·
+        jobs.smartrecruiters.com/acme · acme.wd5.myworkdayjobs.com/en-US/External
       </p>
 
       <Button
