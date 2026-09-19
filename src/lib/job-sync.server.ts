@@ -374,3 +374,52 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
     results,
   };
 }
+
+
+let refreshPromise: Promise<ReturnType<typeof syncAllRegisteredGreenhouseSources> extends Promise<infer T> ? T : never> | null = null;
+
+/**
+ * Self-healing freshness guard used by authenticated inventory reads.
+ * The cron route is the normal path; this prevents stale jobs if the scheduler
+ * is delayed or temporarily unavailable.
+ */
+export async function ensureInventoryFresh(maxAgeMinutes = 20) {
+  const cutoff = Date.now() - maxAgeMinutes * 60_000;
+  const { data: companies, error } = await supabaseAdmin
+    .from("companies")
+    .select("last_scanned_at")
+    .eq("active", true)
+    .eq("ats_type", "greenhouse")
+    .not("ats_identifier", "is", null);
+
+  if (error) throw new Error(error.message);
+  if (!companies?.length) return null;
+
+  const stale = companies.some((company) => {
+    if (!company.last_scanned_at) return true;
+    const timestamp = new Date(company.last_scanned_at).getTime();
+    return !Number.isFinite(timestamp) || timestamp < cutoff;
+  });
+
+  if (!stale) return null;
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const { data: adminRole } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin")
+        .limit(1)
+        .maybeSingle();
+
+      return syncAllRegisteredGreenhouseSources({
+        requestedBy: adminRole?.user_id ?? null,
+        concurrency: 3,
+      });
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+}
