@@ -14,6 +14,16 @@ async function handleSync({ request }: { request: Request }) {
   const auth = await authenticateCronRequest(request);
   if (auth) return auth;
 
+  const url = new URL(request.url);
+  const freshnessMinutes = Math.max(
+    1,
+    Math.min(Number(url.searchParams.get("freshnessMinutes") ?? 10) || 10, 60),
+  );
+  const limit = Math.max(
+    1,
+    Math.min(Number(url.searchParams.get("limit") ?? 100) || 100, 1000),
+  );
+
   const { supabaseAdmin } = await import(
     "@/integrations/supabase/client.server"
   );
@@ -30,13 +40,17 @@ async function handleSync({ request }: { request: Request }) {
 
   const result = await syncAllRegisteredJobSources({
     requestedBy: adminRole?.user_id ?? null,
-    concurrency: 4,
+    concurrency: 8,
+    staleAfterMinutes: freshnessMinutes,
+    limit,
   });
 
   return new Response(
     JSON.stringify({
       ok: result.failed === 0,
       syncedAt: new Date().toISOString(),
+      targetFreshnessMinutes: freshnessMinutes,
+      boardLimit: limit,
       ...result,
     }),
     {
