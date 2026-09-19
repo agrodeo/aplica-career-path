@@ -1,4 +1,4 @@
-export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workday" | "smartrecruiters";
+export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workday" | "smartrecruiters" | "workable";
 
 export type NormalizedJob = {
   externalId: string;
