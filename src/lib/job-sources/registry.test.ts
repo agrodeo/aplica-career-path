@@ -38,13 +38,16 @@ describe("job board URL detection", () => {
     });
   });
 
-  test("keeps the full Workday board URL as identifier", () => {
+  test("normalizes Workday job URLs back to the board", () => {
     const input =
       "https://example.wd5.myworkdayjobs.com/en-US/External/job/Buenos-Aires/Role_JR123";
+    const board =
+      "https://example.wd5.myworkdayjobs.com/en-US/External";
     expect(detectJobBoardUrl(input)).toMatchObject({
       provider: "workday",
+      identifier: board,
       companyName: "Example",
-      careersUrl: input,
+      careersUrl: board,
     });
   });
 
