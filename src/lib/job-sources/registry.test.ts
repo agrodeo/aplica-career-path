@@ -29,6 +29,16 @@ describe("job board URL detection", () => {
     });
   });
 
+  test("detects Workable", () => {
+    expect(
+      detectJobBoardUrl("https://apply.workable.com/example/jobs/"),
+    ).toMatchObject({
+      provider: "workable",
+      identifier: "example",
+      careersUrl: "https://apply.workable.com/example/",
+    });
+  });
+
   test("detects SmartRecruiters", () => {
     expect(
       detectJobBoardUrl("https://jobs.smartrecruiters.com/ExampleCorp"),
