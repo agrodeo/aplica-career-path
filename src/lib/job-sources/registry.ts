@@ -1,6 +1,7 @@
 import { ashbyProvider } from "@/lib/job-sources/ashby";
 import { greenhouseProvider } from "@/lib/job-sources/greenhouse";
 import { leverProvider } from "@/lib/job-sources/lever";
+import { workdayProvider } from "@/lib/job-sources/workday";
 import type {
   AtsProvider,
   JobSourceProvider,
@@ -10,6 +11,7 @@ export const jobSourceProviders: Record<AtsProvider, JobSourceProvider> = {
   greenhouse: greenhouseProvider,
   lever: leverProvider,
   ashby: ashbyProvider,
+  workday: workdayProvider,
 };
 
 export const supportedAtsProviders = Object.keys(
@@ -63,8 +65,32 @@ export function detectJobBoardUrl(value: string) {
     };
   }
 
+  const workdayHost = host.match(
+    /^([a-z0-9-]+)\.wd\d+\.myworkdayjobs\.com$/i,
+  );
+  if (workdayHost) {
+    const tenant = workdayHost[1];
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts[0] && /^[a-z]{2}(?:-[a-z]{2})?$/i.test(parts[0])) {
+      parts.shift();
+    }
+    if (!parts[0]) {
+      throw new Error(
+        "La URL de Workday tiene que incluir el careers site, no sólo el dominio.",
+      );
+    }
+    return {
+      provider: "workday" as const,
+      // Workday needs tenant + shard hostname + site. The full public board URL
+      // is the stable identifier because all three are encoded in it.
+      identifier: url.toString(),
+      companyName: prettyCompanyName(tenant),
+      careersUrl: url.toString(),
+    };
+  }
+
   throw new Error(
-    "URL no soportada todavía. Usá un board público de Greenhouse, Lever o Ashby.",
+    "URL no soportada todavía. Usá un board público de Greenhouse, Lever, Ashby o Workday.",
   );
 }
 
