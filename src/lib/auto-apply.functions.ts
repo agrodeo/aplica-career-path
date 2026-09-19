@@ -3,27 +3,203 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
-function words(value: string) {
+const TITLE_NOISE = new Set([
+  "senior",
+  "sr",
+  "junior",
+  "jr",
+  "lead",
+  "principal",
+  "staff",
+  "manager",
+  "director",
+  "head",
+  "associate",
+  "specialist",
+  "analyst",
+  "intern",
+  "internship",
+  "remote",
+  "latam",
+  "global",
+  "the",
+  "and",
+  "of",
+  "de",
+  "del",
+  "la",
+  "el",
+  "y",
+]);
+
+const ROLE_FAMILIES: Record<string, string[]> = {
+  engineering: [
+    "engineer",
+    "engineering",
+    "developer",
+    "software",
+    "backend",
+    "frontend",
+    "fullstack",
+    "devops",
+    "sre",
+    "qa",
+    "mobile",
+  ],
+  data: [
+    "data",
+    "analytics",
+    "scientist",
+    "machine",
+    "ml",
+    "ai",
+    "business intelligence",
+  ],
+  product: ["product", "product manager", "product owner"],
+  design: ["design", "designer", "ux", "ui", "creative"],
+  marketing: [
+    "marketing",
+    "growth",
+    "content",
+    "social media",
+    "community",
+    "brand",
+    "seo",
+    "performance",
+    "acquisition",
+  ],
+  sales: [
+    "sales",
+    "account executive",
+    "business development",
+    "sdr",
+    "bdr",
+    "partnerships",
+    "revenue",
+  ],
+  customer: [
+    "customer success",
+    "customer support",
+    "support",
+    "implementation",
+    "solutions",
+  ],
+  finance: ["finance", "financial", "accounting", "accountant", "fp&a", "actuar"],
+  operations: ["operations", "ops", "strategy", "chief of staff", "logistics"],
+  people: ["people", "human resources", "hr", "recruit", "talent"],
+  legal: ["legal", "lawyer", "counsel", "compliance"],
+};
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9+#.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function words(value: string, removeNoise = false) {
   return new Set(
-    value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .split(/[^a-z0-9+#.]+/)
+    normalizeText(value)
+      .split(" ")
       .map((word) => word.trim())
-      .filter((word) => word.length > 1),
+      .filter(
+        (word) =>
+          word.length > 1 && (!removeNoise || !TITLE_NOISE.has(word)),
+      ),
   );
 }
 
+function roleFamily(value: string) {
+  const normalized = normalizeText(value);
+  for (const [family, signals] of Object.entries(ROLE_FAMILIES)) {
+    if (signals.some((signal) => normalized.includes(signal))) return family;
+  }
+  return null;
+}
+
 function similarity(a: string, b: string): number {
-  const left = words(a);
-  const right = words(b);
+  const normalizedA = normalizeText(a);
+  const normalizedB = normalizeText(b);
+  if (!normalizedA || !normalizedB) return 0;
+  if (normalizedA === normalizedB) return 100;
+
+  const left = words(a, true);
+  const right = words(b, true);
   if (!left.size || !right.size) return 0;
+
   const intersection = [...left].filter((word) => right.has(word)).length;
-  const union = new Set([...left, ...right]).size;
-  const jaccard = union ? intersection / union : 0;
-  const contains = a.toLowerCase().includes(b.toLowerCase()) || b.toLowerCase().includes(a.toLowerCase());
-  return Math.min(100, Math.round((contains ? 0.7 : 0) * 100 + jaccard * 70));
+  const precision = intersection / left.size;
+  const recall = intersection / right.size;
+  const f1 =
+    precision + recall > 0
+      ? (2 * precision * recall) / (precision + recall)
+      : 0;
+
+  const phraseContains =
+    normalizedA.includes(normalizedB) || normalizedB.includes(normalizedA);
+  const sameFamily =
+    roleFamily(a) !== null && roleFamily(a) === roleFamily(b);
+
+  const lexical = Math.round(f1 * 85);
+  const containment = phraseContains ? 92 : 0;
+  const familyFloor = sameFamily ? 55 : 0;
+  return Math.min(100, Math.max(lexical, containment, familyFloor));
+}
+
+function requiredExperienceYears(description: string) {
+  const text = normalizeText(description);
+  const matches = [
+    ...text.matchAll(
+      /(?:at least |minimum of |minimum |minimo de |minimo )?(\d{1,2})\+? (?:years|anos)(?: of)? (?:professional |relevant |work )?(?:experience|experiencia)/g,
+    ),
+  ];
+  if (!matches.length) return null;
+  const years = matches
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 25);
+  return years.length ? Math.max(...years) : null;
+}
+
+function calculateExperienceYears(
+  experiences: Array<{
+    start_date: string | null;
+    end_date: string | null;
+    is_current: boolean;
+  }>,
+) {
+  const now = Date.now();
+  const intervals = experiences
+    .map((experience) => {
+      if (!experience.start_date) return null;
+      const start = new Date(experience.start_date).getTime();
+      const end = experience.is_current || !experience.end_date
+        ? now
+        : new Date(experience.end_date).getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        return null;
+      }
+      return [start, end] as const;
+    })
+    .filter((interval): interval is readonly [number, number] => Boolean(interval))
+    .sort((a, b) => a[0] - b[0]);
+
+  if (!intervals.length) return 0;
+
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of intervals) {
+    const last = merged.at(-1);
+    if (!last || start > last[1]) {
+      merged.push([start, end]);
+    } else {
+      last[1] = Math.max(last[1], end);
+    }
+  }
+
+  const totalMs = merged.reduce((sum, [start, end]) => sum + (end - start), 0);
+  return totalMs / (365.25 * 24 * 60 * 60 * 1000);
 }
 
 function normalizeMode(value: string | null) {
