@@ -17,7 +17,7 @@ async function handleSync({ request }: { request: Request }) {
   const { supabaseAdmin } = await import(
     "@/integrations/supabase/client.server"
   );
-  const { syncAllRegisteredGreenhouseSources } = await import(
+  const { syncAllRegisteredJobSources } = await import(
     "@/lib/job-sync.server"
   );
 
@@ -28,9 +28,9 @@ async function handleSync({ request }: { request: Request }) {
     .limit(1)
     .maybeSingle();
 
-  const result = await syncAllRegisteredGreenhouseSources({
+  const result = await syncAllRegisteredJobSources({
     requestedBy: adminRole?.user_id ?? null,
-    concurrency: 3,
+    concurrency: 4,
   });
 
   return new Response(

@@ -8,17 +8,19 @@ on:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/worker-ci.yml"
+      - ".gitignore"
+      - ".env.example"
   push:
     branches:
-      - "chatgpt/auto-apply-worker-hardening"
+      - "main"
     paths:
       - "worker/**"
-      - "src/lib/worker-*.server.ts"
-      - "src/routes/api/public/worker/**"
-      - "src/routeTree.gen.ts"
+      - "src/**"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/worker-ci.yml"
+      - ".gitignore"
+      - ".env.example"
 
 permissions:
   contents: read
@@ -47,5 +49,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun test src/lib/cv-parse.test.ts src/lib/cv-extract.test.ts
+      - run: bun test src/lib/cv-parse.test.ts src/lib/cv-extract.test.ts src/lib/job-sources/registry.test.ts
       - run: bun run build
