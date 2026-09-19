@@ -387,7 +387,7 @@ export async function syncAllRegisteredGreenhouseSources(options?: {
 }
 
 
-let refreshPromise: Promise<ReturnType<typeof syncAllRegisteredGreenhouseSources> extends Promise<infer T> ? T : never> | null = null;
+let refreshPromise: Promise<unknown> | null = null;
 
 /**
  * Self-healing freshness guard used by authenticated inventory reads.

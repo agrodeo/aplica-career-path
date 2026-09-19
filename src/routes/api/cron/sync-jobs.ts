@@ -28,9 +28,9 @@ async function handleSync({ request }: { request: Request }) {
     .limit(1)
     .maybeSingle();
 
-  const result = await syncAllRegisteredGreenhouseSources({
+  const result = await syncAllRegisteredSources({
     requestedBy: adminRole?.user_id ?? null,
-    concurrency: 3,
+    concurrency: 4,
   });
 
   return new Response(
