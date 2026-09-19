@@ -10,7 +10,7 @@ on:
       - ".github/workflows/worker-ci.yml"
   push:
     branches:
-      - "chatgpt/auto-apply-worker-hardening"
+      - "main"
     paths:
       - "worker/**"
       - "src/lib/worker-*.server.ts"
