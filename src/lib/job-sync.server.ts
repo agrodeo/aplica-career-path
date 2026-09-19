@@ -242,6 +242,17 @@ export async function syncGreenhouseSource(input: GreenhouseSyncInput) {
   let inspectionsQueued = 0;
 
   if (input.requestedBy && inspectionCandidates.length) {
+    const staleInspectionIds = inspectionCandidates.map((job) => job.id);
+    for (let index = 0; index < staleInspectionIds.length; index += 100) {
+      const { error } = await supabaseAdmin
+        .from("jobs")
+        .update({
+          auto_apply_eligible: false,
+          ineligibility_reason: "REVERIFYING_FORM",
+        })
+        .in("id", staleInspectionIds.slice(index, index + 100));
+      if (error) throw new Error(error.message);
+    }
     const urls = inspectionCandidates
       .map((job) => job.application_url)
       .filter((url): url is string => Boolean(url));
