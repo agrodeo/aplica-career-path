@@ -1,5 +1,3 @@
-import { skills as skillOptions } from "./aplica-data";
-
 export type CvFields = {
   firstName: string; lastName: string; email: string; phone: string; country: string; city: string;
   company: string; role: string; start: string; end: string; description: string; achievements: string;
@@ -7,6 +5,35 @@ export type CvFields = {
 };
 
 export type CvResult = { fields: Partial<CvFields>; skills: string[]; text: string };
+
+const skillOptions = [
+  "Marketing",
+  "Python",
+  "Excel",
+  "Sales",
+  "SQL",
+  "Meta Ads",
+  "Google Ads",
+  "Figma",
+  "React",
+  "TypeScript",
+  "JavaScript",
+  "Node.js",
+  "PostgreSQL",
+  "Looker",
+  "Tableau",
+  "Power BI",
+  "Google Analytics",
+  "GA4",
+  "HubSpot",
+  "Salesforce",
+  "SEO",
+  "CRM",
+  "Product Management",
+  "Project Management",
+  "Análisis financiero",
+  "Gestión de proyectos",
+];
 
 const countries = ["Argentina", "México", "Colombia", "Chile", "Uruguay", "Perú", "Brasil", "España"];
 const cities = ["Buenos Aires", "Córdoba", "Rosario", "Ciudad de México", "Guadalajara", "Monterrey", "Bogotá", "Medellín", "Santiago", "Montevideo", "Lima", "São Paulo", "Madrid"];
