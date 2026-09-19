@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Check, MapPin } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, MapPin } from "lucide-react";
 import { MatchInfo, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/jobs/$id")({
       { title: "Trabajo — aplica" },
       {
         name: "description",
-        content: "Detalle de una oportunidad Auto Apply compatible con tu perfil.",
+        content: "Detalle de una oportunidad compatible con tu perfil.",
       },
       { property: "og:title", content: "Oportunidad — aplica" },
       {
@@ -90,10 +90,10 @@ function JobDetail() {
         <SiteHeader />
         <main className="mx-auto max-w-[700px] px-5 py-20 text-center">
           <h1 className="text-2xl font-medium">
-            Este trabajo ya no está disponible para Auto Apply.
+            Este trabajo ya no está disponible.
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Puede haber expirado o el formulario dejó de ser compatible.
+            Puede haber expirado o haber sido retirado por la empresa.
           </p>
           <Button asChild className="mt-6">
             <Link to="/jobs">Volver a trabajos</Link>
@@ -105,12 +105,23 @@ function JobDetail() {
 
   const explanation = (job.explanation ?? {}) as {
     matchedSkills?: unknown;
-    targetRole?: unknown;
+    positives?: unknown;
+    concerns?: unknown;
     note?: unknown;
   };
   const matchedSkills = Array.isArray(explanation.matchedSkills)
     ? explanation.matchedSkills.filter(
         (skill): skill is string => typeof skill === "string",
+      )
+    : [];
+  const positives = Array.isArray(explanation.positives)
+    ? explanation.positives.filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [];
+  const concerns = Array.isArray(explanation.concerns)
+    ? explanation.concerns.filter(
+        (item): item is string => typeof item === "string",
       )
     : [];
 
@@ -202,9 +213,18 @@ function JobDetail() {
                 de contratación.
               </p>
 
-              {matchedSkills.length > 0 && (
+              {(positives.length > 0 || matchedSkills.length > 0) && (
                 <ul className="mt-4 space-y-3">
-                  {matchedSkills.slice(0, 8).map((skill) => (
+                  {positives.slice(0, 4).map((item) => (
+                    <li
+                      key={item}
+                      className="flex gap-2 text-sm text-muted-foreground"
+                    >
+                      <Check className="h-4 w-4 shrink-0 text-success" />
+                      {item}
+                    </li>
+                  ))}
+                  {matchedSkills.slice(0, Math.max(0, 6 - positives.length)).map((skill) => (
                     <li
                       key={skill}
                       className="flex gap-2 text-sm text-muted-foreground"
@@ -214,6 +234,22 @@ function JobDetail() {
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {concerns.length > 0 && (
+                <div className="mt-5 border-t border-border pt-4">
+                  <p className="text-xs font-medium">A revisar</p>
+                  <ul className="mt-2 space-y-2">
+                    {concerns.slice(0, 4).map((item) => (
+                      <li
+                        key={item}
+                        className="text-xs leading-5 text-muted-foreground"
+                      >
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               {!job.readyForUser && missingUserQuestions.length > 0 && (
@@ -237,23 +273,32 @@ function JobDetail() {
               )}
             </div>
 
-            <Button
-              className="mt-4 w-full"
-              disabled={mutation.isPending || alreadyVerified || inProgress}
-              onClick={() => void apply()}
-            >
-              {mutation.isPending
-                ? "Preparando…"
-                : alreadyVerified
-                  ? "Ya aplicaste"
-                  : inProgress
-                    ? "Postulación en curso"
-                    : !job.readyForUser
-                      ? "Completar respuestas"
-                      : subscribed
-                        ? "Aplicar a este trabajo"
-                        : "Elegir plan para aplicar"}
-            </Button>
+            {!job.autoApplyEligible && job.applicationUrl ? (
+              <Button asChild className="mt-4 w-full">
+                <a href={job.applicationUrl} target="_blank" rel="noreferrer">
+                  Aplicar en el sitio
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : (
+              <Button
+                className="mt-4 w-full"
+                disabled={mutation.isPending || alreadyVerified || inProgress}
+                onClick={() => void apply()}
+              >
+                {mutation.isPending
+                  ? "Preparando…"
+                  : alreadyVerified
+                    ? "Ya aplicaste"
+                    : inProgress
+                      ? "Postulación en curso"
+                      : !job.readyForUser
+                        ? "Completar respuestas"
+                        : subscribed
+                          ? "Aplicar a este trabajo"
+                          : "Elegir plan para aplicar"}
+              </Button>
+            )}
 
             {mutation.error && (
               <p className="mt-3 text-xs leading-5 text-destructive">
