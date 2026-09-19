@@ -1,75 +1,114 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { DatabaseZap, RefreshCw, ShieldCheck } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding-shell";
 import { ProductDemo } from "@/components/product-demo";
-import { applications, jobs } from "@/lib/aplica-data";
-import accentureAsset from "@/assets/accenture.png.asset.json";
-import amazonAsset from "@/assets/amazon.png.asset.json";
-import anthropicAsset from "@/assets/anthropic.png.asset.json";
-import canvaAsset from "@/assets/canva.png.asset.json";
-import kavakAsset from "@/assets/kavak.png.asset.json";
-import mercadoLibreAsset from "@/assets/mercado-libre.png.asset.json";
-import metaAsset from "@/assets/meta.png.asset.json";
-import rampAsset from "@/assets/ramp.png.asset.json";
-import rappiAsset from "@/assets/rappi.png.asset.json";
-import santanderAsset from "@/assets/santander.png.asset.json";
-import stripeAsset from "@/assets/stripe.png.asset.json";
-import ualaAsset from "@/assets/uala.png.asset.json";
+import { getPublicInventoryStats } from "@/lib/public-inventory.functions";
 
-const coverageLogos: { name: string; src: string }[] = [
-  { name: "Mercado Libre", src: mercadoLibreAsset.url },
-  { name: "Amazon", src: amazonAsset.url },
-  { name: "Meta", src: metaAsset.url },
-  { name: "Santander", src: santanderAsset.url },
-  { name: "Stripe", src: stripeAsset.url },
-  { name: "Accenture", src: accentureAsset.url },
-  { name: "Anthropic", src: anthropicAsset.url },
-  { name: "Kavak", src: kavakAsset.url },
-  { name: "Ramp", src: rampAsset.url },
-  { name: "Rappi", src: rappiAsset.url },
-  { name: "Ualá", src: ualaAsset.url },
-  { name: "Canva", src: canvaAsset.url },
-];
-
-const coveredCompanies = Array.from(new Set([...jobs, ...applications].map((item) => item.company)));
-const logoCompanies = new Set(coverageLogos.map((logo) => logo.name.toLowerCase()));
-const otherCompanies = coveredCompanies.filter((company) => !logoCompanies.has(company.toLowerCase()));
-
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "aplica — Encontrar trabajo no debería ser un trabajo" }, { name: "description", content: "Subí tu CV. Encontramos los trabajos correctos y aplicamos por vos." }, { property: "og:title", content: "aplica — Tu búsqueda laboral, automatizada" }, { property: "og:description", content: "Subí tu CV. Encontramos los trabajos correctos y aplicamos por vos." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }),
+  head: () => ({
+    meta: [
+      {
+        title: "aplica — Encontrar trabajo no debería ser un trabajo",
+      },
+      {
+        name: "description",
+        content:
+          "Subí tu CV. Encontramos trabajos compatibles y preparamos tus postulaciones sin inventar experiencia.",
+      },
+      {
+        property: "og:title",
+        content: "aplica — Tu búsqueda laboral, automatizada",
+      },
+      {
+        property: "og:description",
+        content:
+          "Subí tu CV. Encontramos trabajos compatibles y preparamos tus postulaciones.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
+  const fetchStats = useServerFn(getPublicInventoryStats);
+  const statsQuery = useQuery({
+    queryKey: ["public-inventory-stats"],
+    queryFn: () => fetchStats(),
+    refetchInterval: 60_000,
+  });
+
+  const stats = statsQuery.data;
+
   return (
     <div className="home-continuum">
       <OnboardingShell className="onboarding-sheet-demo">
         <ProductDemo />
       </OnboardingShell>
 
-      <section className="coverage-section" aria-label="Cobertura de oportunidades">
-        <div className="coverage-heading">
-          <p className="coverage-kicker">Oportunidades en empresas de la región y el mundo</p>
-        </div>
-        <div className="coverage-wall" aria-label={`Cobertura de oportunidades públicas en ${coveredCompanies.join(", ")}`}>
-          <div className="coverage-marquee">
-            <div className="coverage-track">
-              {[0, 1, 2, 3].map((copy) => (
-                <div className="coverage-group" aria-hidden={copy !== 0} key={copy}>
-                  {coverageLogos.map((logo) => (
-                    <img className="coverage-logo-img" key={`${copy}-${logo.name}`} src={logo.src} alt={copy === 0 ? logo.name : ""} aria-hidden={copy !== 0} loading="eager" />
-                  ))}
-                  {otherCompanies.map((company) => <span className="coverage-logo" key={`${copy}-${company}`}>{company}</span>)}
-                </div>
-              ))}
-              </div>
+      <section className="inventory-proof" aria-label="Inventario de trabajos">
+        <div className="inventory-proof-inner">
+          <div>
+            <p className="inventory-proof-kicker">Inventario real</p>
+            <h2>Vacantes públicas, sincronizadas y verificadas.</h2>
+            <p className="inventory-proof-copy">
+              No mostramos puestos ficticios en el producto. Una vacante entra
+              al inventario sólo si sigue activa y su formulario es compatible
+              con Auto Apply.
+            </p>
+          </div>
+
+          <div className="inventory-proof-grid">
+            <ProofCard
+              icon={<DatabaseZap />}
+              label="Vacantes activas"
+              value={statsQuery.isLoading ? "…" : String(stats?.activeJobs ?? 0)}
+            />
+            <ProofCard
+              icon={<ShieldCheck />}
+              label="Listas para Auto Apply"
+              value={statsQuery.isLoading ? "…" : String(stats?.readyJobs ?? 0)}
+            />
+            <ProofCard
+              icon={<RefreshCw />}
+              label="Última actualización"
+              value={
+                stats?.lastUpdatedAt
+                  ? new Date(stats.lastUpdatedAt).toLocaleString("es-AR", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "Sin sincronizar"
+              }
+            />
           </div>
         </div>
-        <p className="coverage-disclaimer">La inclusión de marcas indica disponibilidad de oportunidades públicas y no implica afiliación.</p>
       </section>
+    </div>
+  );
+}
+
+function ProofCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="inventory-proof-card">
+      <span className="inventory-proof-icon">{icon}</span>
+      <span>
+        <small>{label}</small>
+        <strong>{value}</strong>
+      </span>
     </div>
   );
 }
