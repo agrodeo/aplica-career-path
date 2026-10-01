@@ -22,6 +22,7 @@ import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedApplyingRouteImport } from './routes/_authenticated/applying'
 import { Route as JobsIdRouteImport } from './routes/jobs.$id'
+import { Route as ApiPublicCronPingRouteImport } from './routes/api/public/cron/ping'
 import { Route as ApiPublicWorkerInspectionsClaimRouteImport } from './routes/api/public/worker/inspections.claim'
 import { Route as ApiPublicWorkerJobsClaimRouteImport } from './routes/api/public/worker/jobs.claim'
 import { Route as ApiPublicWorkerInspectionsIdResultRouteImport } from './routes/api/public/worker/inspections.$id.result'
@@ -93,6 +94,11 @@ const JobsIdRoute = JobsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => JobsRoute,
 } as any)
+const ApiPublicCronPingRoute = ApiPublicCronPingRouteImport.update({
+  id: '/api/public/cron/ping',
+  path: '/api/public/cron/ping',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWorkerInspectionsClaimRoute =
   ApiPublicWorkerInspectionsClaimRouteImport.update({
     id: '/api/public/worker/inspections/claim',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/cron/ping': typeof ApiPublicCronPingRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/cron/ping': typeof ApiPublicCronPingRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/applying': typeof AuthenticatedApplyingRoute
   '/jobs/$id': typeof JobsIdRoute
+  '/api/public/cron/ping': typeof ApiPublicCronPingRoute
   '/api/public/worker/inspections/claim': typeof ApiPublicWorkerInspectionsClaimRoute
   '/api/public/worker/jobs/claim': typeof ApiPublicWorkerJobsClaimRoute
   '/api/public/worker/inspections/$id/result': typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
+    | '/api/public/cron/ping'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/applying'
     | '/jobs/$id'
+    | '/api/public/cron/ping'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/applying'
     | '/jobs/$id'
+    | '/api/public/cron/ping'
     | '/api/public/worker/inspections/claim'
     | '/api/public/worker/jobs/claim'
     | '/api/public/worker/inspections/$id/result'
@@ -267,6 +279,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   UpgradeRoute: typeof UpgradeRoute
+  ApiPublicCronPingRoute: typeof ApiPublicCronPingRoute
   ApiPublicWorkerInspectionsClaimRoute: typeof ApiPublicWorkerInspectionsClaimRoute
   ApiPublicWorkerJobsClaimRoute: typeof ApiPublicWorkerJobsClaimRoute
   ApiPublicWorkerInspectionsIdResultRoute: typeof ApiPublicWorkerInspectionsIdResultRoute
@@ -368,6 +381,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof JobsIdRouteImport
       parentRoute: typeof JobsRoute
     }
+    '/api/public/cron/ping': {
+      id: '/api/public/cron/ping'
+      path: '/api/public/cron/ping'
+      fullPath: '/api/public/cron/ping'
+      preLoaderRoute: typeof ApiPublicCronPingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/worker/inspections/claim': {
       id: '/api/public/worker/inspections/claim'
       path: '/api/public/worker/inspections/claim'
@@ -447,6 +467,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   UpgradeRoute: UpgradeRoute,
+  ApiPublicCronPingRoute: ApiPublicCronPingRoute,
   ApiPublicWorkerInspectionsClaimRoute: ApiPublicWorkerInspectionsClaimRoute,
   ApiPublicWorkerJobsClaimRoute: ApiPublicWorkerJobsClaimRoute,
   ApiPublicWorkerInspectionsIdResultRoute:
