@@ -285,7 +285,6 @@ async function applicationReadiness(
     { data: profile },
     { data: experiences },
     { data: answers },
-    { data: careerContext },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -306,13 +305,6 @@ async function applicationReadiness(
       )
       .eq("user_id", userId)
       .eq("user_confirmed", true),
-    supabase
-      .from("career_contexts")
-      .select(
-        "preferred_tasks,strengths,differentiators,results,proud_project,challenge_story,career_goal",
-      )
-      .eq("user_id", userId)
-      .maybeSingle(),
   ]);
 
   const confirmed = new Set((answers ?? []).map((answer) => answer.canonical_key));
@@ -369,30 +361,16 @@ async function applicationReadiness(
             (profile?.current_title || experiences?.length || profile?.base_resume_path),
         );
       case "cover_letter":
-        return Boolean(
-          profile?.professional_summary ||
-            experiences?.length ||
-            careerContext?.results?.length,
-        );
+        return Boolean(profile?.professional_summary || experiences?.length);
       case "motivation":
-        return Boolean(
-          careerContext?.career_goal ||
-            careerContext?.preferred_tasks?.length ||
-            careerContext?.results?.length,
-        );
+        return confirmed.has(key);
       case "about_you":
-        return Boolean(
-          profile?.current_title ||
-            experiences?.length ||
-            careerContext?.strengths?.length ||
-            careerContext?.differentiators?.length,
-        );
+        return Boolean(profile?.professional_summary || profile?.current_title || experiences?.length);
       case "challenge_story":
-        return Boolean(careerContext?.challenge_story);
+        return confirmed.has(key);
       case "proud_achievement":
         return Boolean(
-          careerContext?.proud_project ||
-            careerContext?.results?.length ||
+          confirmed.has(key) ||
             (experiences ?? []).some(
               (experience) =>
                 Array.isArray(experience.achievements) &&
