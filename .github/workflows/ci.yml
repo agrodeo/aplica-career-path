@@ -1,0 +1,43 @@
+name: Aplica CI
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "worker/**"
+      - "drizzle/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/**"
+  push:
+    branches:
+      - "main"
+
+permissions:
+  contents: read
+
+jobs:
+  app-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test src/lib/job-sources/registry.test.ts src/lib/job-sources/normalization.test.ts
+      - run: bun run build
+
+  worker-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
