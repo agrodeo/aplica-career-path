@@ -37,7 +37,7 @@ export const leverProvider: JobSourceProvider = {
   discoveryAdapter: "lever_postings_api",
   // The worker adapter exists but stays disabled until a verified E2E submission
   // is proven. Discovery and submission capability are intentionally separate.
-  submissionAdapter: null,
+  submissionAdapter: "lever_public_form",
   async fetchJobs(identifier) {
     const endpoint = `https://api.lever.co/v0/postings/${encodeURIComponent(identifier)}?mode=json`;
     const response = await fetch(endpoint, {
