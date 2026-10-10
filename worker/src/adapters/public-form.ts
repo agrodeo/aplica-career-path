@@ -58,10 +58,6 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
       }
 
-      const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
-      const captchaDetected = await detectCaptcha(page);
-      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
-
       let form = page.locator(options.formSelector).first();
       let formExists = (await form.count()) > 0;
 
@@ -77,6 +73,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         }
       }
 
+      const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
+      const captchaDetected = await detectCaptcha(page);
+      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
       const fields = formExists ? await readFields(page, options.formSelector) : [];
 
       let submitSelector: string | null = null;
