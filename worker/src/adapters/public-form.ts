@@ -22,6 +22,7 @@ export interface PublicFormAdapterOptions {
   hostPatterns: RegExp[];
   formSelector: string;
   submitSelectors: string[];
+  activateSelectors?: string[];
 }
 
 /**
@@ -57,12 +58,24 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
       }
 
+      let form = page.locator(options.formSelector).first();
+      let formExists = (await form.count()) > 0;
+
+      if (!formExists && options.activateSelectors?.length) {
+        for (const selector of options.activateSelectors) {
+          const trigger = page.locator(selector).first();
+          if ((await trigger.count()) === 0 || !(await trigger.isVisible().catch(() => false))) continue;
+          await trigger.click().catch(() => undefined);
+          await page.waitForTimeout(800);
+          form = page.locator(options.formSelector).first();
+          formExists = (await form.count()) > 0;
+          if (formExists) break;
+        }
+      }
+
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
       const captchaDetected = await detectCaptcha(page);
       const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
-
-      const form = page.locator(options.formSelector).first();
-      const formExists = (await form.count()) > 0;
       const fields = formExists ? await readFields(page, options.formSelector) : [];
 
       let submitSelector: string | null = null;

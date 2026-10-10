@@ -185,7 +185,7 @@ export const smartRecruitersProvider: JobSourceProvider = {
   type: "smartrecruiters",
   sourceType: "smartrecruiters_public_posting_api",
   discoveryAdapter: "smartrecruiters_public_posting_api",
-  submissionAdapter: null,
+  submissionAdapter: "smartrecruiters_public_form",
   async fetchJobs(identifier): Promise<JobSourceFetchResult> {
     const companyIdentifier = identifier.trim();
     const endpoint = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(

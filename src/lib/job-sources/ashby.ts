@@ -46,7 +46,7 @@ export const ashbyProvider: JobSourceProvider = {
   type: "ashby",
   sourceType: "ashby_public_job_posting_api",
   discoveryAdapter: "ashby_public_job_posting_api",
-  submissionAdapter: null,
+  submissionAdapter: "ashby_public_form",
   async fetchJobs(identifier) {
     const endpoint = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(identifier)}?includeCompensation=true`;
     const response = await fetch(endpoint, {

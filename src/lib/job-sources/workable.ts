@@ -44,7 +44,7 @@ export const workableProvider: JobSourceProvider = {
   type: "workable",
   sourceType: "workable_public_widget",
   discoveryAdapter: "workable_public_widget",
-  submissionAdapter: null,
+  submissionAdapter: "workable_public_form",
   async fetchJobs(identifier): Promise<JobSourceFetchResult> {
     const slug = identifier.trim();
     const endpoint = `https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(
