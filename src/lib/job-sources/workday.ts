@@ -120,7 +120,7 @@ export const workdayProvider: JobSourceProvider = {
   type: "workday",
   sourceType: "workday_public_cxs",
   discoveryAdapter: "workday_public_cxs",
-  submissionAdapter: null,
+  submissionAdapter: "workday_public_form",
   async fetchJobs(identifier): Promise<JobSourceFetchResult> {
     const board = parseBoardUrl(identifier);
     const endpoint = `${board.origin}/wday/cxs/${encodeURIComponent(
