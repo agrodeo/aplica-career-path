@@ -1,13 +1,25 @@
+import { ashbyPublicAdapter } from "./ashby-public.js";
 import { greenhousePublicAdapter } from "./greenhouse-public.js";
+import { leverPublicAdapter } from "./lever-public.js";
+import { smartRecruitersPublicAdapter } from "./smartrecruiters-public.js";
 import { unsupportedAdapter } from "./unsupported.js";
+import { workablePublicAdapter } from "./workable-public.js";
+import { workdayPublicAdapter } from "./workday-public.js";
 import type { ApplicationAdapter } from "./types.js";
 
 /**
- * Enabled adapters, in priority order. Only ONE public-form family is enabled
- * for this milestone; Lever stays out of the registry until Greenhouse is proven
- * end to end. Anything unmatched falls through to the unsupported adapter.
+ * Public application adapters. Every job still has to pass runtime inspection:
+ * CAPTCHA, login requirements, unknown required fields, missing CV upload, or
+ * an unverifiable confirmation keep it out of Auto Apply.
  */
-export const enabledAdapters: ApplicationAdapter[] = [greenhousePublicAdapter];
+export const enabledAdapters: ApplicationAdapter[] = [
+  greenhousePublicAdapter,
+  leverPublicAdapter,
+  ashbyPublicAdapter,
+  workablePublicAdapter,
+  smartRecruitersPublicAdapter,
+  workdayPublicAdapter,
+];
 
 export function resolveAdapter(url: string): ApplicationAdapter {
   return enabledAdapters.find((adapter) => adapter.supports(url)) ?? unsupportedAdapter;
