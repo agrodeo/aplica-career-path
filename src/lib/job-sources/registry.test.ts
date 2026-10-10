@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectJobBoardUrl } from "@/lib/job-sources/registry";
+import { detectJobBoardUrl, jobSourceProviders } from "@/lib/job-sources/registry";
 
 describe("job board URL detection", () => {
   test("detects Greenhouse", () => {
@@ -65,5 +65,26 @@ describe("job board URL detection", () => {
     expect(() =>
       detectJobBoardUrl("https://www.linkedin.com/jobs/view/123"),
     ).toThrow(/no soportada/i);
+  });
+});
+
+
+describe("Auto Apply capability", () => {
+  test("registers a submission adapter for every supported ATS", () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(jobSourceProviders).map(([provider, config]) => [
+          provider,
+          config.submissionAdapter,
+        ]),
+      ),
+    ).toEqual({
+      greenhouse: "greenhouse_public_form",
+      lever: "lever_public_form",
+      ashby: "ashby_public_form",
+      workday: "workday_public_form",
+      smartrecruiters: "smartrecruiters_public_form",
+      workable: "workable_public_form",
+    });
   });
 });
