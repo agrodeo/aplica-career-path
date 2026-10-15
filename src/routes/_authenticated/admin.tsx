@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AdapterTestConsole } from "@/components/adapter-test-console";
 import { PageShell, SiteHeader } from "@/components/aplica";
-import { getAdminDashboard } from "@/lib/admin.client";
+import { getAdminDashboard } from "@/lib/admin.supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin")({
