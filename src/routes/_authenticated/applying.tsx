@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { supabase } from "@/integrations/supabase/client";
-import { getBatchProgress } from "@/lib/auto-apply.client";
+import { getBatchProgress } from "@/lib/auto-apply.supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/applying")({
