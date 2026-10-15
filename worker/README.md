@@ -2,7 +2,7 @@
 
 Standalone, independently deployable Node.js + TypeScript service. It is the only
 component that opens a browser, fills a real application form, submits it and
-verifies the result. Deploy it on Railway, Fly.io or Render.
+verifies the result. It can run locally or in scheduled one-shot mode from GitHub Actions.
 
 ## Loop
 
@@ -28,13 +28,12 @@ to the user as "Enviada".
 
 | Variable | Notes |
 | --- | --- |
-| `APLICA_API_BASE_URL` | `https://project--<id>.lovable.app` (or the `-dev` preview host) |
-| `WORKER_SERVICE_TOKEN` | must match the backend secret of the same name |
 | `SUPABASE_URL` | backend URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role, worker-only |
 | `WORKER_MODE` | `development` \| `production` |
 | `DRY_RUN` | `true` fills everything and stops before the final Submit. Must be `false` in production |
 | `WORKER_ID` | optional identifier used when claiming work |
+| `RUN_ONCE` | `true` processes one queue cycle and exits; used by GitHub Actions |
 | `POLL_INTERVAL_MS`, `MAX_CONCURRENCY`, `LOG_LEVEL` | optional tuning |
 
 `WORKER_MODE=production` with `DRY_RUN=true` refuses to start: production must
@@ -49,12 +48,9 @@ npm run dev                       # or: npm run build && npm start
 docker build -t aplica-worker . && docker run --env-file .env aplica-worker
 ```
 
-## Supported family
+## Supported families
 
-One adapter is enabled: `greenhouse_public_form` (public Greenhouse job board
-forms), mechanism `PUBLIC_APPLICATION_FORM`. `lever_public_form` exists but is
-deliberately out of the registry until the first family is proven end to end.
-`AUTHORIZED_API` submission requires employer-side credentials and is not used.
+Public-form adapters are enabled for Greenhouse, Lever, Ashby, Workable, SmartRecruiters and Workday. Each individual posting must still pass runtime inspection before Auto Apply is allowed.
 
 ## Hard rules
 
