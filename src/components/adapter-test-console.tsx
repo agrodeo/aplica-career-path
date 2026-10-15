@@ -1,9 +1,8 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listInspections, requestInspection } from "@/lib/inspections.functions";
+import { listInspections, requestInspection } from "@/lib/inspections.client";
 import { cn } from "@/lib/utils";
 
 type Field = { label?: string; canonicalKey?: string | null; type?: string; required?: boolean };
@@ -12,17 +11,15 @@ type Field = { label?: string; canonicalKey?: string | null; type?: string; requ
 export function AdapterTestConsole() {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const enqueue = useServerFn(requestInspection);
-  const fetchInspections = useServerFn(listInspections);
 
   const { data: inspections, refetch } = useQuery({
     queryKey: ["adapter-inspections"],
-    queryFn: () => fetchInspections(),
+    queryFn: () => listInspections(),
     refetchInterval: 5000,
   });
 
   const mutation = useMutation({
-    mutationFn: (mode: "inspect" | "dry_run") => enqueue({ data: { url, mode } }),
+    mutationFn: (mode: "inspect" | "dry_run") => requestInspection({ data: { url, mode } }),
     onSuccess: () => {
       setError(null);
       void refetch();
