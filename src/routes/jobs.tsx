@@ -1,6 +1,5 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowUpDown,
   BriefcaseBusiness,
@@ -23,8 +22,8 @@ import {
   listAutoApplyJobs,
   refreshJobMatches,
   startAutoApplyBatch,
-} from "@/lib/auto-apply.functions";
-import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.functions";
+} from "@/lib/auto-apply.client";
+import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/jobs")({
@@ -55,21 +54,17 @@ export const Route = createFileRoute("/jobs")({
 
 function JobsPage() {
   const navigate = useNavigate();
-  const fetchJobs = useServerFn(listAutoApplyJobs);
-  const refreshMatches = useServerFn(refreshJobMatches);
-  const fetchOverview = useServerFn(getAutoApplyOverview);
-  const startBatch = useServerFn(startAutoApplyBatch);
 
   const jobsQuery = useQuery({
     queryKey: ["auto-apply-jobs"],
     queryFn: async () => {
-      await refreshMatches();
-      return fetchJobs();
+      await refreshJobMatches();
+      return listAutoApplyJobs();
     },
   });
   const overviewQuery = useQuery({
     queryKey: ["auto-apply-overview"],
-    queryFn: () => fetchOverview(),
+    queryFn: () => getAutoApplyOverview(),
   });
 
   const jobs = jobsQuery.data?.jobs ?? [];
@@ -120,7 +115,7 @@ function JobsPage() {
     .map((job) => job.id);
 
   const mutation = useMutation({
-    mutationFn: () => startBatch({ data: { jobIds: selectedIds } }),
+    mutationFn: () => startAutoApplyBatch({ data: { jobIds: selectedIds } }),
     onSuccess: async (result) => {
       setActionError(null);
 
