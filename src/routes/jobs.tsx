@@ -22,8 +22,8 @@ import {
   listAutoApplyJobs,
   refreshJobMatches,
   startAutoApplyBatch,
-} from "@/lib/auto-apply.client";
-import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.client";
+} from "@/lib/auto-apply.supabase";
+import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/jobs")({
