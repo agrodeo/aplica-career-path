@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { supabase } from "@/integrations/supabase/client";
-import { getBatchProgress } from "@/lib/auto-apply.functions";
+import { getBatchProgress } from "@/lib/auto-apply.client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/applying")({
@@ -39,10 +38,9 @@ const statusLabel: Record<string, string> = {
 
 function ApplyingPage() {
   const { batch } = Route.useSearch();
-  const fetchProgress = useServerFn(getBatchProgress);
   const { data, refetch } = useQuery({
     queryKey: ["batch-progress", batch],
-    queryFn: () => fetchProgress({ data: { batchId: batch } }),
+    queryFn: () => getBatchProgress({ data: { batchId: batch } }),
     enabled: Boolean(batch),
   });
 
