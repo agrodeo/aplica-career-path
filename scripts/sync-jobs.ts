@@ -1,0 +1,31 @@
+import { supabaseAdmin } from "../src/integrations/supabase/client.server";
+import { syncAllRegisteredJobSources } from "../src/lib/job-sync.server";
+
+async function main() {
+  const { data: adminRole } = await supabaseAdmin
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin")
+    .limit(1)
+    .maybeSingle();
+
+  const result = await syncAllRegisteredJobSources({
+    concurrency: 8,
+    staleAfterMinutes: 10,
+    limit: 100,
+    requestedBy: adminRole?.user_id ?? null,
+  });
+
+  console.log(JSON.stringify({
+    syncedAt: new Date().toISOString(),
+    inspectionRequester: adminRole?.user_id ? "admin" : "none",
+    ...result,
+  }, null, 2));
+
+  if (result.failed > 0) process.exitCode = 1;
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

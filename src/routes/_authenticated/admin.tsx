@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { AdapterTestConsole } from "@/components/adapter-test-console";
 import { PageShell, SiteHeader } from "@/components/aplica";
-import { getAdminDashboard } from "@/lib/admin.functions";
+import { getAdminDashboard } from "@/lib/admin.supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -22,8 +21,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 function AdminPage() {
-  const fetchDashboard = useServerFn(getAdminDashboard);
-  const { data, isLoading, error } = useQuery({ queryKey: ["admin-dashboard"], queryFn: () => fetchDashboard(), refetchInterval: 30000 });
+  const { data, isLoading, error } = useQuery({ queryKey: ["admin-dashboard"], queryFn: () => getAdminDashboard(), refetchInterval: 30000 });
 
   return (
     <div className="min-h-screen">

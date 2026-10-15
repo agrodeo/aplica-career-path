@@ -1,4 +1,5 @@
 import { loadConfig } from "../config.js";
+import { db } from "../supabase.js";
 import { ApplicationError } from "../utils/errors.js";
 
 export interface QueueItem {
@@ -16,48 +17,120 @@ export interface InspectionItem {
   requested_by: string;
 }
 
-function api(path: string) {
-  const config = loadConfig();
-  return `${config.APLICA_API_BASE_URL.replace(/\/$/, "")}${path}`;
+function fail(error: { message?: string } | null, operation: string): never {
+  throw new ApplicationError("NETWORK_ERROR", `${operation} failed: ${error?.message ?? "unknown Supabase error"}`);
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const config = loadConfig();
-  const response = await fetch(api(path), {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${config.WORKER_SERVICE_TOKEN}` },
-    body: JSON.stringify(body),
-  });
-  const text = await response.text();
-  if (!response.ok) throw new ApplicationError("NETWORK_ERROR", `Aplica API ${path} failed [${response.status}]: ${text}`);
-  return (text ? JSON.parse(text) : {}) as T;
-}
-
-/** Atomically claims queued applications; two workers never get the same row. */
+/** Atomically claims queued applications directly from Supabase. */
 export async function claimApplications(limit = 1): Promise<QueueItem[]> {
   const config = loadConfig();
-  const result = await post<{ claimed: QueueItem[] }>("/api/public/worker/jobs/claim", { workerId: config.WORKER_ID, limit });
-  return result.claimed ?? [];
+  const { data, error } = await db().rpc("claim_application", {
+    _worker_id: config.WORKER_ID,
+    _limit: Math.min(Math.max(limit, 1), 25),
+  });
+  if (error) fail(error, "claim_application");
+  return (data ?? []) as QueueItem[];
 }
 
 export async function claimInspections(limit = 1): Promise<InspectionItem[]> {
   const config = loadConfig();
-  const result = await post<{ claimed: InspectionItem[] }>("/api/public/worker/inspections/claim", { workerId: config.WORKER_ID, limit });
-  return result.claimed ?? [];
+  const { data, error } = await db().rpc("claim_inspection", {
+    _worker_id: config.WORKER_ID,
+    _limit: Math.min(Math.max(limit, 1), 10),
+  });
+  if (error) fail(error, "claim_inspection");
+  return (data ?? []) as InspectionItem[];
 }
 
 export async function reportStatus(queueId: string, status: string): Promise<void> {
-  await post(`/api/public/worker/jobs/${queueId}/status`, { status });
+  const { error } = await db().rpc("update_attempt_status", {
+    _queue_id: queueId,
+    _status: status,
+  });
+  if (error) fail(error, "update_attempt_status");
 }
 
 export async function reportSubmission(queueId: string, payload: Record<string, unknown>): Promise<void> {
-  await post(`/api/public/worker/jobs/${queueId}/submission`, payload);
+  if (payload["verified"] !== true || !payload["verificationSignal"] || !payload["submissionReference"]) {
+    const { error } = await db().rpc("update_attempt_status", {
+      _queue_id: queueId,
+      _status: "submitted_unverified",
+    });
+    if (error) fail(error, "mark submitted_unverified");
+    return;
+  }
+
+  const { data: queueRow, error: queueError } = await db()
+    .from("application_queue")
+    .select("attempt_id")
+    .eq("id", queueId)
+    .maybeSingle();
+  if (queueError) fail(queueError, "load application queue");
+
+  const args: Record<string, unknown> = {
+    _queue_id: queueId,
+    _submission_reference: String(payload["submissionReference"]),
+  };
+  if (payload["evidencePath"]) args["_evidence_path"] = String(payload["evidencePath"]);
+
+  const { error } = await db().rpc("complete_application", args);
+  if (error) fail(error, "complete_application");
+
+  if (queueRow?.attempt_id) {
+    const { error: attemptError } = await db()
+      .from("application_attempts")
+      .update({
+        verification_type: String(payload["verificationType"] ?? payload["verificationSignal"]),
+        verification_value: String(payload["verificationValue"] ?? payload["submissionReference"]),
+        resume_variant_id: payload["resumeVariantId"] ? String(payload["resumeVariantId"]) : null,
+      })
+      .eq("id", queueRow.attempt_id);
+    if (attemptError) fail(attemptError, "update application attempt verification");
+  }
 }
 
 export async function reportFailure(queueId: string, payload: Record<string, unknown>): Promise<void> {
-  await post(`/api/public/worker/jobs/${queueId}/failure`, payload);
+  const errorCode = String(payload["errorCode"] ?? "unknown_error");
+  const errorMessage = String(payload["errorMessage"] ?? "").slice(0, 1000);
+
+  if (payload["retryable"] === true) {
+    const { error } = await db().rpc("retry_application", {
+      _queue_id: queueId,
+      _delay_seconds: Math.min(Math.max(Number(payload["delaySeconds"] ?? 300), 30), 86400),
+      _error_code: errorCode,
+      _error_message: errorMessage,
+    });
+    if (error) fail(error, "retry_application");
+    return;
+  }
+
+  const { error } = await db().rpc("fail_application", {
+    _queue_id: queueId,
+    _error_code: errorCode,
+    _error_message: errorMessage,
+    _status: String(payload["status"] ?? "failed_permanent"),
+  });
+  if (error) fail(error, "fail_application");
 }
 
 export async function reportInspection(inspectionId: string, payload: Record<string, unknown>): Promise<void> {
-  await post(`/api/public/worker/inspections/${inspectionId}/result`, payload);
+  const { error } = await db()
+    .from("adapter_inspections")
+    .update({
+      status: String(payload["status"] ?? "completed"),
+      adapter: payload["adapter"] ? String(payload["adapter"]) : null,
+      ats_type: payload["atsType"] ? String(payload["atsType"]) : null,
+      auto_apply_eligible: typeof payload["autoApplyEligible"] === "boolean" ? payload["autoApplyEligible"] : null,
+      captcha_detected: typeof payload["captchaDetected"] === "boolean" ? payload["captchaDetected"] : null,
+      login_required: typeof payload["loginRequired"] === "boolean" ? payload["loginRequired"] : null,
+      required_fields: (payload["requiredFields"] ?? []) as never,
+      mapped_fields: (payload["mappedFields"] ?? []) as never,
+      unknown_fields: (payload["unknownFields"] ?? []) as never,
+      reason: payload["reason"] ? String(payload["reason"]) : null,
+      error_code: payload["errorCode"] ? String(payload["errorCode"]) : null,
+      error_message: payload["errorMessage"] ? String(payload["errorMessage"]) : null,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", inspectionId);
+  if (error) fail(error, "report inspection");
 }

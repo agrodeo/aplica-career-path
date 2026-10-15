@@ -1,6 +1,5 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Check, ExternalLink, MapPin } from "lucide-react";
 import { MatchInfo, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,7 @@ import {
   getAutoApplyJob,
   getAutoApplyOverview,
   startAutoApplyBatch,
-} from "@/lib/auto-apply.functions";
+} from "@/lib/auto-apply.supabase";
 
 export const Route = createFileRoute("/jobs/$id")({
   ssr: false,
@@ -40,21 +39,18 @@ export const Route = createFileRoute("/jobs/$id")({
 function JobDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const fetchJob = useServerFn(getAutoApplyJob);
-  const fetchOverview = useServerFn(getAutoApplyOverview);
-  const startBatch = useServerFn(startAutoApplyBatch);
 
   const jobQuery = useQuery({
     queryKey: ["auto-apply-job", id],
-    queryFn: () => fetchJob({ data: { jobId: id } }),
+    queryFn: () => getAutoApplyJob({ data: { jobId: id } }),
   });
   const overviewQuery = useQuery({
     queryKey: ["auto-apply-overview"],
-    queryFn: () => fetchOverview(),
+    queryFn: () => getAutoApplyOverview(),
   });
 
   const mutation = useMutation({
-    mutationFn: () => startBatch({ data: { jobIds: [id] } }),
+    mutationFn: () => startAutoApplyBatch({ data: { jobIds: [id] } }),
     onSuccess: async (result) => {
       if (result.status === "subscription_required") {
         await navigate({ to: "/upgrade" });
