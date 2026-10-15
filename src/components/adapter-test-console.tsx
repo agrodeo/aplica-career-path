@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listInspections, requestInspection } from "@/lib/inspections.client";
+import { listInspections, requestInspection } from "@/lib/inspections.supabase";
 import { cn } from "@/lib/utils";
 
 type Field = { label?: string; canonicalKey?: string | null; type?: string; required?: boolean };
