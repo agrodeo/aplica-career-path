@@ -6,19 +6,38 @@ import { logger } from "./utils/logger.js";
 
 let running = true;
 
+async function runCycle() {
+  const config = loadConfig();
+  const inspected = await drainInspections();
+  const items = await claimApplications(config.MAX_CONCURRENCY);
+  for (const item of items) {
+    if (!running) break;
+    await processApplication(item);
+  }
+  return { inspected, processed: items.length };
+}
+
 async function main() {
   const config = loadConfig();
-  logger.info({ workerId: config.WORKER_ID, mode: config.WORKER_MODE, dryRun: config.DRY_RUN }, "worker started");
+  logger.info(
+    { workerId: config.WORKER_ID, mode: config.WORKER_MODE, dryRun: config.DRY_RUN, runOnce: config.RUN_ONCE },
+    "worker started",
+  );
+
+  if (config.RUN_ONCE) {
+    try {
+      const result = await runCycle();
+      logger.info(result, "worker cycle completed");
+    } finally {
+      await closeBrowser();
+    }
+    return;
+  }
 
   while (running) {
     try {
-      const inspected = await drainInspections();
-      const items = await claimApplications(config.MAX_CONCURRENCY);
-      for (const item of items) {
-        if (!running) break;
-        await processApplication(item);
-      }
-      if (!items.length && !inspected) await sleep(config.POLL_INTERVAL_MS);
+      const result = await runCycle();
+      if (!result.processed && !result.inspected) await sleep(config.POLL_INTERVAL_MS);
     } catch (error) {
       logger.error({ err: error instanceof Error ? error.message : String(error) }, "loop error");
       await sleep(config.POLL_INTERVAL_MS);
