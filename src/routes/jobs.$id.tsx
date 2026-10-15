@@ -8,7 +8,7 @@ import {
   getAutoApplyJob,
   getAutoApplyOverview,
   startAutoApplyBatch,
-} from "@/lib/auto-apply.client";
+} from "@/lib/auto-apply.supabase";
 
 export const Route = createFileRoute("/jobs/$id")({
   ssr: false,
