@@ -120,11 +120,10 @@ export async function processInspection(item: InspectionItem): Promise<void> {
       await reportInspection(item.id, {
         status: "completed",
         adapter: adapter.id,
-        adapterVersion: adapter.version,
+        adapterVersion: schema.adapterVersion,
         atsType: schema.atsType,
         captchaDetected: schema.captchaDetected,
         loginRequired: schema.loginRequired,
-        adapterVersion: schema.adapterVersion,
         fields: schema.fields,
         requiredFields: schema.requiredFields,
         mappedFields: schema.fields.filter((f) => f.canonicalKey).map((f) => ({ label: f.label, canonicalKey: f.canonicalKey, type: f.type, required: f.required })),
