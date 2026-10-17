@@ -3,7 +3,7 @@ import { syncAllRegisteredJobSources } from "../src/lib/job-sync.server";
 
 const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
 
-// worldwide inventory wave 10
+// worldwide inventory wave 11
 async function main() {
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
@@ -15,7 +15,7 @@ async function main() {
   const result = await syncAllRegisteredJobSources({
     concurrency: 8,
     staleAfterMinutes: 10,
-    limit: 100,
+    limit: 250,
     requestedBy: adminRole?.user_id ?? SYSTEM_INSPECTION_REQUESTER,
   });
 
