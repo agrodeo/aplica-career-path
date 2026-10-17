@@ -136,26 +136,44 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         }),
   }));
 
-  if (rows.length) {
+  // Large public boards can expose thousands of openings. Keep writes below
+  // PostgREST payload limits and never rely on the default 1,000-row response cap.
+  for (let index = 0; index < rows.length; index += 500) {
     const { error } = await supabaseAdmin
       .from("jobs")
-      .upsert(rows, { onConflict: "source_id,external_job_id" });
+      .upsert(rows.slice(index, index + 500), {
+        onConflict: "source_id,external_job_id",
+      });
     if (error) throw new Error(error.message);
   }
 
-  const { data: currentJobs, error: currentError } = await supabaseAdmin
-    .from("jobs")
-    .select("id, external_job_id, application_url, last_verified_at")
-    .eq("source_id", source.id);
+  const currentJobs: Array<{
+    id: string;
+    external_job_id: string;
+    application_url: string | null;
+    last_verified_at: string | null;
+  }> = [];
+  const pageSize = 1000;
 
-  if (currentError) throw new Error(currentError.message);
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabaseAdmin
+      .from("jobs")
+      .select("id, external_job_id, application_url, last_verified_at")
+      .eq("source_id", source.id)
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    currentJobs.push(...page);
+    if (page.length < pageSize) break;
+  }
 
   const discoveredIds = new Set(uniqueJobs.map((job) => job.externalId));
   const snapshotComplete =
     discovery.reportedTotal == null ||
     uniqueJobs.length >= discovery.reportedTotal;
   const staleIds = snapshotComplete
-    ? (currentJobs ?? [])
+    ? currentJobs
         .filter((job) => !discoveredIds.has(job.external_job_id))
         .map((job) => job.id)
     : [];
@@ -173,7 +191,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   }
 
   const inspectionCandidates = autoApplySupported
-    ? (currentJobs ?? [])
+    ? currentJobs
         .filter((job) => {
           if (!job.application_url) return false;
           if (!job.last_verified_at) return true;
@@ -182,7 +200,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
             24 * 60 * 60 * 1000
           );
         })
-        .slice(0, 250)
+        .slice(0, 1000)
     : [];
 
   let inspectionsQueued = 0;
