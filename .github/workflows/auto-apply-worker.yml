@@ -12,7 +12,7 @@ on:
       - ".github/workflows/auto-apply-worker.yml"
 
 concurrency:
-  group: aplica-auto-apply-worker
+  group: aplica-auto-apply-worker-v2
   cancel-in-progress: false
 
 jobs:
