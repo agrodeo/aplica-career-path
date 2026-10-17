@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "../src/integrations/supabase/client.server";
 import { syncAllRegisteredJobSources } from "../src/lib/job-sync.server";
 
+const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
+
 async function main() {
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
@@ -13,12 +15,12 @@ async function main() {
     concurrency: 8,
     staleAfterMinutes: 10,
     limit: 100,
-    requestedBy: adminRole?.user_id ?? null,
+    requestedBy: adminRole?.user_id ?? SYSTEM_INSPECTION_REQUESTER,
   });
 
   console.log(JSON.stringify({
     syncedAt: new Date().toISOString(),
-    inspectionRequester: adminRole?.user_id ? "admin" : "none",
+    inspectionRequester: adminRole?.user_id ? "admin" : "system",
     ...result,
   }, null, 2));
 
