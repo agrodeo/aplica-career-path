@@ -11,7 +11,7 @@ import type {
 } from "@/lib/job-sources/types";
 
 const PAGE_SIZE = 20;
-const MAX_JOBS_PER_BOARD = 400;
+const MAX_JOBS_PER_BOARD = 2_000;
 
 type WorkdayListing = {
   title?: string | null;
