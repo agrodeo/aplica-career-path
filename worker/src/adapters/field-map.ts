@@ -59,3 +59,32 @@ export function isDemographicQuestion(label: string): boolean {
 export function findDeclineOption(options: { label: string; value: string }[]) {
   return options.find((option) => /decline|prefer not|do not wish|no deseo|prefiero no/i.test(option.label)) ?? null;
 }
+
+/**
+ * Unknown employer questions still need a stable identity so Aplica can ask the
+ * user once and reuse only that explicitly confirmed answer for this form.
+ */
+export function answerKeyFor(label: string, scope = ""): string {
+  const canonical = canonicalKeyFor(label);
+  if (canonical) return canonical;
+
+  const normalized = label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\*/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+  const scoped = `${scope.trim().toLowerCase()}|${normalized}`;
+
+  let hash = 2166136261;
+  for (let index = 0; index < scoped.length; index += 1) {
+    hash ^= scoped.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const slug = normalized.replace(/\s+/g, "-").slice(0, 120) || "question";
+  return `custom:${slug}:${(hash >>> 0).toString(36)}`;
+}
+
