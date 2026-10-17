@@ -58,8 +58,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
       }
 
-      let form = page.locator(options.formSelector).first();
-      let formExists = (await form.count()) > 0;
+      let selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
+      let form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
+      let formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
 
       if (!formExists && options.activateSelectors?.length) {
         for (const selector of options.activateSelectors) {
@@ -67,8 +68,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           if ((await trigger.count()) === 0 || !(await trigger.isVisible().catch(() => false))) continue;
           await trigger.click().catch(() => undefined);
           await page.waitForTimeout(800);
-          form = page.locator(options.formSelector).first();
-          formExists = (await form.count()) > 0;
+          selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
+          form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
+          formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
           if (formExists) break;
         }
       }
@@ -76,7 +78,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
       const captchaDetected = await detectCaptcha(page);
       const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
-      const fields = formExists ? await readFields(page, options.formSelector) : [];
+      const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector) : [];
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
@@ -221,6 +223,8 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
       return Boolean(profile.identity.phone);
     case "location":
       return Boolean(profile.identity.city || profile.identity.country);
+    case "country":
+      return Boolean(profile.identity.country);
     case "linkedin":
       return Boolean(profile.links.linkedin);
     case "portfolio":
@@ -238,6 +242,58 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
     default:
       return Boolean(stored);
   }
+}
+
+async function markBestApplicationForm(page: Page, selector: string): Promise<string | null> {
+  return page.evaluate((candidateSelector) => {
+    for (const old of document.querySelectorAll("[data-aplica-application-form]")) {
+      old.removeAttribute("data-aplica-application-form");
+    }
+
+    const candidates = Array.from(document.querySelectorAll(candidateSelector)) as HTMLElement[];
+    if (!candidates.length) return null;
+
+    const scored = candidates.map((candidate, index) => {
+      const controls = Array.from(candidate.querySelectorAll("input, textarea, select")) as HTMLInputElement[];
+      const fileInputs = controls.filter((el) => el instanceof HTMLInputElement && el.type === "file").length;
+      const usefulInputs = controls.filter((el) => {
+        if (!(el instanceof HTMLInputElement)) return true;
+        return !["hidden", "submit", "button", "search"].includes(el.type);
+      }).length;
+      const identityInputs = controls.filter((el) => {
+        const haystack = [
+          el.getAttribute("name"),
+          el.getAttribute("id"),
+          el.getAttribute("autocomplete"),
+          el.getAttribute("aria-label"),
+          el.getAttribute("placeholder"),
+        ].filter(Boolean).join(" ");
+        return /email|mail|phone|first.?name|last.?name|full.?name|resume|cv|linkedin/i.test(haystack);
+      }).length;
+      const metadata = [
+        candidate.getAttribute("action"),
+        candidate.getAttribute("id"),
+        candidate.getAttribute("class"),
+        candidate.getAttribute("data-testid"),
+        candidate.getAttribute("aria-label"),
+      ].filter(Boolean).join(" ");
+
+      const score =
+        fileInputs * 200 +
+        identityInputs * 25 +
+        usefulInputs * 5 +
+        (/apply|application|candidate|job/i.test(metadata) ? 80 : 0) -
+        (usefulInputs <= 1 ? 50 : 0);
+
+      return { candidate, index, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score || a.index - b.index);
+    const best = scored[0]?.candidate;
+    if (!best) return null;
+    best.setAttribute("data-aplica-application-form", "true");
+    return '[data-aplica-application-form="true"]';
+  }, selector);
 }
 
 async function readFields(page: Page, formSelector: string): Promise<InspectedField[]> {
