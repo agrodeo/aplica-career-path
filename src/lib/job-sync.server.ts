@@ -220,6 +220,8 @@ export async function syncJobSource(input: JobSourceSyncInput) {
           url,
           mode: "inspect",
           status: "queued",
+          adapter: provider.submissionAdapter,
+          ats_type: provider.type,
         })),
       );
       if (error) throw new Error(error.message);
