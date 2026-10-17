@@ -149,7 +149,7 @@ export async function processInspection(item: InspectionItem): Promise<void> {
 }
 
 export async function drainInspections(): Promise<number> {
-  const items = await claimInspections(2);
+  const items = await claimInspections(10);
   for (const item of items) await processInspection(item);
   return items.length;
 }
