@@ -77,3 +77,7 @@ Public-form adapters are enabled for Greenhouse, Lever, Ashby, Workable, SmartRe
 Retried: `NETWORK_ERROR`, `FORM_CHANGED`, `FILE_UPLOAD_FAILED`, `UNKNOWN_ERROR`.
 Never retried: `CAPTCHA_PRESENT`, `LOGIN_REQUIRED`, `UNSUPPORTED_FIELD`,
 `AUTOMATION_BLOCKED`.
+
+### Inspection notes
+
+The inspector scores candidate forms and selects the application form with the strongest application-field signals before determining CV upload and required-field support.
