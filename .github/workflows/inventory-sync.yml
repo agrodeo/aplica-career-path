@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inventory-sync.yml"
+      - "scripts/sync-jobs.ts"
+      - "src/lib/job-sync.server.ts"
+      - "src/lib/job-sources/**"
 
 concurrency:
   group: aplica-inventory-sync
