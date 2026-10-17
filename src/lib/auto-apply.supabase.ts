@@ -81,14 +81,22 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
   const schemaIds = jobs.map((job) => job.application_schema_id).filter((id): id is string => Boolean(id));
   if (!jobs.length) return result;
 
-  const [{ data: profile }, { data: experiences }, { data: answers }, { data: schemas }] = await Promise.all([
+  const [{ data: profile }, { data: experiences }, { data: answers }] = await Promise.all([
     supabase.from("profiles").select("first_name,last_name,email,phone,city,country,linkedin_url,portfolio_url,current_title,professional_summary,base_resume_path").eq("user_id", userId).maybeSingle(),
     supabase.from("experiences").select("company,title,achievements").eq("user_id", userId).limit(5),
     supabase.from("application_answers").select("canonical_key,answer_type,boolean_value,text_value,numeric_value,user_confirmed").eq("user_id", userId).eq("user_confirmed", true),
-    schemaIds.length
-      ? supabase.from("application_schemas").select("id,job_id,fields,valid").in("id", schemaIds).then((r) => r.data ?? [])
-      : Promise.resolve([]),
   ]);
+
+  const schemas: Array<Record<string, any>> = [];
+  for (let offset = 0; offset < schemaIds.length; offset += 200) {
+    const ids = schemaIds.slice(offset, offset + 200);
+    const { data, error } = await supabase
+      .from("application_schemas")
+      .select("id,job_id,fields,valid")
+      .in("id", ids);
+    if (error) throw new Error(error.message);
+    schemas.push(...(data ?? []));
+  }
 
   const confirmed = new Set((answers ?? []).map((answer) => answer.canonical_key));
   const answerByKey = new Map((answers ?? []).map((answer) => [answer.canonical_key, answer]));
