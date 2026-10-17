@@ -124,10 +124,14 @@ export async function processInspection(item: InspectionItem): Promise<void> {
         atsType: schema.atsType,
         captchaDetected: schema.captchaDetected,
         loginRequired: schema.loginRequired,
+        adapterVersion: schema.adapterVersion,
+        fields: schema.fields,
         requiredFields: schema.requiredFields,
         mappedFields: schema.fields.filter((f) => f.canonicalKey).map((f) => ({ label: f.label, canonicalKey: f.canonicalKey, type: f.type, required: f.required })),
         unknownFields: schema.fields.filter((f) => !f.canonicalKey).map((f) => ({ label: f.label, type: f.type, required: f.required })),
-        autoApplyEligible: schema.valid && schema.supportsFileUpload && schema.unknownRequiredFields.length === 0,
+        supportsFileUpload: schema.supportsFileUpload,
+        supportsAutoSubmit: schema.supportsAutoSubmit,
+        autoApplyEligible: schema.valid && schema.supportsFileUpload && schema.supportsAutoSubmit && schema.unknownRequiredFields.length === 0,
         reason: schema.captchaDetected
           ? "CAPTCHA detectado"
           : schema.loginRequired
