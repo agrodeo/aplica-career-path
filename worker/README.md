@@ -81,3 +81,5 @@ Never retried: `CAPTCHA_PRESENT`, `LOGIN_REQUIRED`, `UNSUPPORTED_FIELD`,
 ### Inspection notes
 
 The inspector scores candidate forms and selects the application form with the strongest application-field signals before determining CV upload and required-field support.
+
+The production inspection queue prioritizes likely-inspectable ATS families (Greenhouse first) before providers that commonly require CAPTCHA, login, or block browser automation.
