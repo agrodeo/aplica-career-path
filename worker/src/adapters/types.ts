@@ -8,6 +8,7 @@ export const CANONICAL_KEYS = [
   "email",
   "phone",
   "location",
+  "country",
   "linkedin",
   "portfolio",
   "website",
