@@ -21,7 +21,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
 
     if (field.demographic) {
       const decline = field.options ? findDeclineOption(field.options) : null;
-      const stored = storedAnswer(profile, field.label);
+      const stored = storedAnswer(profile, field.answerKey);
       if (stored !== null) answers.push({ field, value: stored, source: "verified_answer" });
       else if (decline) answers.push({ field, value: decline.value, source: "decline" });
       else if (field.required) {
@@ -51,55 +51,110 @@ function storedAnswer(profile: MasterProfile, key: string): string | boolean | n
 
 function resolveValue(field: InspectedField, profile: MasterProfile, job: JobRecord): string | boolean | null {
   const key = field.canonicalKey;
-  if (!key) return null;
+  if (!key) {
+    return normalizeForField(field, storedAnswer(profile, field.answerKey), profile);
+  }
 
-  // Sensitive: explicit stored answers only.
+  // Sensitive answers are never inferred.
   if (SENSITIVE_KEYS.includes(key)) {
-    const stored = storedAnswer(profile, key);
-    if (stored === null) return null;
-    if (field.options && typeof stored === "boolean") {
-      const option = field.options.find((o) => (stored ? /^yes|s[ií]$/i : /^no$/i).test(o.label.trim()));
-      return option ? option.value : null;
-    }
-    return stored;
+    return normalizeForField(field, storedAnswer(profile, key), profile);
   }
 
   const identity = profile.identity;
   const current = profile.experience.find((e) => e.isCurrent) ?? profile.experience[0];
 
+  let value: string | boolean | null;
   switch (key) {
     case "first_name":
-      return identity.firstName || null;
+      value = identity.firstName || null;
+      break;
     case "last_name":
-      return identity.lastName || null;
+      value = identity.lastName || null;
+      break;
     case "full_name":
-      return [identity.firstName, identity.lastName].filter(Boolean).join(" ") || null;
+      value = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || null;
+      break;
     case "email":
-      return identity.email || null;
+      value = identity.email || null;
+      break;
     case "phone":
-      return identity.phone || null;
+      value = identity.phone || null;
+      break;
     case "location":
-      return [identity.city, identity.country].filter(Boolean).join(", ") || null;
+      value = [identity.city, identity.country].filter(Boolean).join(", ") || null;
+      break;
     case "country":
-      return identity.country || null;
+      value = identity.country || null;
+      break;
     case "linkedin":
-      return profile.links.linkedin || null;
+      value = profile.links.linkedin || null;
+      break;
     case "portfolio":
     case "website":
-      return profile.links.portfolio || null;
+      value = profile.links.portfolio || null;
+      break;
     case "current_company":
-      return current?.company ?? null;
+      value = current?.company ?? null;
+      break;
     case "current_title":
-      return identity.currentTitle || current?.title || null;
+      value = identity.currentTitle || current?.title || null;
+      break;
     case "years_experience":
-      return String(yearsOfExperience(profile));
+      value = String(yearsOfExperience(profile));
+      break;
     case "cover_letter":
-      return generatedInterest(profile, job);
-    default: {
-      const stored = storedAnswer(profile, key);
-      return stored;
-    }
+      value = generatedInterest(profile, job);
+      break;
+    default:
+      value = storedAnswer(profile, key);
+      break;
   }
+
+  return normalizeForField(field, value, profile);
+}
+
+/**
+ * Select/radio controls need the ATS option value, not arbitrary profile text.
+ * Match only exact values/labels or exact city/country components; never guess.
+ */
+function normalizeForField(
+  field: InspectedField,
+  value: string | boolean | null,
+  profile: MasterProfile,
+): string | boolean | null {
+  if (value === null || !field.options?.length) return value;
+
+  const options = field.options;
+  if (typeof value === "boolean") {
+    const expected = value ? /^(yes|sí|si|true)$/i : /^(no|false)$/i;
+    const match = options.find(
+      (option) =>
+        expected.test(option.label.trim()) || expected.test(option.value.trim()),
+    );
+    return match?.value ?? null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  const exact = options.find(
+    (option) =>
+      option.value.trim().toLowerCase() === normalized ||
+      option.label.trim().toLowerCase() === normalized,
+  );
+  if (exact) return exact.value;
+
+  if (field.canonicalKey === "location" || field.canonicalKey === "country") {
+    const components = [profile.identity.city, profile.identity.country]
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean);
+    const match = options.find((option) => {
+      const label = option.label.trim().toLowerCase();
+      const optionValue = option.value.trim().toLowerCase();
+      return components.includes(label) || components.includes(optionValue);
+    });
+    return match?.value ?? null;
+  }
+
+  return null;
 }
 
 export function yearsOfExperience(profile: MasterProfile): number {
