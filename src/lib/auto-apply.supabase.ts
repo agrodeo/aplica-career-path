@@ -164,13 +164,40 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
 
 export async function refreshJobMatches() {
   const userId = await currentUserId();
-  const [profile, experiences, skills, preferences, jobs] = await Promise.all([
+  const [profile, experiences, skills, preferences] = await Promise.all([
     supabase.from("profiles").select("current_title,city,country,professional_summary").eq("user_id", userId).maybeSingle(),
     supabase.from("experiences").select("title").eq("user_id", userId),
     supabase.from("skills").select("name").eq("user_id", userId),
     supabase.from("job_preferences").select("*").eq("user_id", userId).maybeSingle(),
-    supabase.from("jobs").select("id,title,description,location,country,remote_type,employment_type,seniority").eq("is_active", true).limit(1000),
   ]);
+
+  // Only match jobs that passed structural Auto Apply inspection. Page through
+  // the inventory instead of silently truncating at PostgREST's first 1,000 rows.
+  const jobs: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    location: string | null;
+    country: string | null;
+    remote_type: string | null;
+    employment_type: string | null;
+    seniority: string | null;
+  }> = [];
+  const PAGE_SIZE = 1000;
+  const MAX_MATCH_INVENTORY = 10000;
+  for (let offset = 0; offset < MAX_MATCH_INVENTORY; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id,title,description,location,country,remote_type,employment_type,seniority")
+      .eq("is_active", true)
+      .eq("auto_apply_eligible", true)
+      .order("discovered_at", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    jobs.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
 
   const pref = preferences.data;
   const targetRoles = pref?.target_roles ?? [];
@@ -179,7 +206,7 @@ export async function refreshJobMatches() {
   const userSkills = (skills.data ?? []).map((x) => x.name).filter(Boolean);
   const targetLocations = pref?.target_locations ?? [];
 
-  const rows = (jobs.data ?? []).map((job) => {
+  const rows = jobs.map((job) => {
     const roleScore = roleCandidates.length ? Math.max(...roleCandidates.map((role) => similarity(role, job.title))) : 50;
     const text = `${job.title} ${job.description ?? ""}`;
     const matchedSkills = userSkills.filter((skill) => includesLoose(text, skill));
@@ -213,8 +240,9 @@ export async function refreshJobMatches() {
     };
   });
 
-  if (rows.length) {
-    const { error } = await supabase.from("job_matches").upsert(rows, { onConflict: "user_id,job_id" });
+  for (let offset = 0; offset < rows.length; offset += 500) {
+    const batch = rows.slice(offset, offset + 500);
+    const { error } = await supabase.from("job_matches").upsert(batch, { onConflict: "user_id,job_id" });
     if (error) throw new Error(error.message);
   }
   return { matched: rows.length };
@@ -222,41 +250,72 @@ export async function refreshJobMatches() {
 
 export async function listAutoApplyJobs() {
   const userId = await currentUserId();
-  const [{ data: jobs }, { data: matches }, { data: preferences }, { data: verifiedAttempts }, { data: queuedApplications }] = await Promise.all([
-    supabase.from("jobs").select("id,title,location,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,discovered_at,application_url,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,last_scanned_at)").eq("is_active", true).order("discovered_at", { ascending: false }).limit(1000),
-    supabase.from("job_matches").select("*").eq("user_id", userId),
+  const [{ data: preferences }, { data: verifiedAttempts }, { data: queuedApplications }] = await Promise.all([
     supabase.from("job_preferences").select("minimum_match_score").eq("user_id", userId).maybeSingle(),
     supabase.from("application_attempts").select("job_id").eq("user_id", userId).eq("status", "verified"),
     supabase.from("application_queue").select("job_id").eq("user_id", userId),
   ]);
   const minimum = Number(preferences?.minimum_match_score ?? 70);
-  const matchByJob = new Map((matches ?? []).map((match) => [match.job_id, match]));
   const unavailable = new Set([...(verifiedAttempts ?? []).map((x) => x.job_id), ...(queuedApplications ?? []).map((x) => x.job_id)]);
 
-  const matched = (jobs ?? []).filter((job) => !unavailable.has(job.id)).map((job) => {
-    const match = matchByJob.get(job.id);
+  const matches: Array<Record<string, any>> = [];
+  const PAGE_SIZE = 1000;
+  const MAX_VISIBLE_MATCHES = 5000;
+  for (let offset = 0; offset < MAX_VISIBLE_MATCHES; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("job_matches")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("hard_requirements_met", true)
+      .gte("match_score", minimum)
+      .order("match_score", { ascending: false })
+      .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+    matches.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  const filteredMatches = matches.filter((match) => !unavailable.has(String(match.job_id)));
+  const matchByJob = new Map(filteredMatches.map((match) => [String(match.job_id), match]));
+  const jobIds = [...matchByJob.keys()];
+  const jobs: Array<Record<string, any>> = [];
+
+  for (let offset = 0; offset < jobIds.length; offset += 300) {
+    const ids = jobIds.slice(offset, offset + 300);
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id,title,location,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,discovered_at,application_url,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,last_scanned_at)")
+      .in("id", ids)
+      .eq("is_active", true)
+      .eq("auto_apply_eligible", true);
+    if (error) throw new Error(error.message);
+    jobs.push(...(data ?? []));
+  }
+
+  const matched = jobs.map((job) => {
+    const match = matchByJob.get(String(job.id));
     return {
       id: job.id, title: job.title, company: job.companies?.name ?? "", logoUrl: job.companies?.logo_url ?? null,
       sourceScannedAt: job.companies?.last_scanned_at ?? null, location: job.location, remoteType: job.remote_type,
       employmentType: job.employment_type, seniority: job.seniority, salaryMin: job.salary_min, salaryMax: job.salary_max,
       salaryCurrency: job.salary_currency, publishedAt: job.published_at, discoveredAt: job.discovered_at,
-      applicationUrl: job.application_url, autoApplyEligible: job.auto_apply_eligible, adapter: job.auto_apply_adapter,
+      applicationUrl: job.application_url, autoApplyEligible: true, adapter: job.auto_apply_adapter,
       applicationSchemaId: job.application_schema_id, matchScore: match ? Number(match.match_score) : null,
-      hardRequirementsMet: match?.hard_requirements_met ?? false, explanation: match?.explanation ?? null,
+      hardRequirementsMet: true, explanation: match?.explanation ?? null,
     };
-  }).filter((job) => job.hardRequirementsMet && job.matchScore !== null && job.matchScore >= minimum)
-    .sort((a,b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
+  }).sort((a,b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
-  const readiness = await applicationReadiness(userId, matched.filter((job) => job.autoApplyEligible).map((job) => ({id:job.id,application_schema_id:job.applicationSchemaId})));
+  const readiness = await applicationReadiness(userId, matched.map((job) => ({id:job.id,application_schema_id:job.applicationSchemaId})));
   const ready = matched.map((job) => {
-    const missingQuestions = job.autoApplyEligible ? readiness.get(job.id) ?? [] : [];
+    const missingQuestions = readiness.get(job.id) ?? [];
     const actionable = missingQuestions.filter((q) => !q.answerKey.startsWith("system:"));
-    return { ...job, missingQuestions, readyForUser: job.autoApplyEligible && missingQuestions.length === 0, needsUserAnswers: job.autoApplyEligible && actionable.length > 0, manualApply: !job.autoApplyEligible && Boolean(job.applicationUrl) };
+    return { ...job, missingQuestions, readyForUser: missingQuestions.length === 0, needsUserAnswers: actionable.length > 0, manualApply: false };
   });
   const inventoryUpdatedAt = ready.map((job) => job.sourceScannedAt).filter((v): v is string => Boolean(v)).sort().at(-1) ?? null;
   return {
     inventoryUpdatedAt, matchedCount: ready.length, readyCount: ready.filter((j) => j.readyForUser).length,
-    manualApplyCount: ready.filter((j) => j.manualApply).length, needsAnswersCount: ready.filter((j) => j.needsUserAnswers).length,
+    manualApplyCount: 0, needsAnswersCount: ready.filter((j) => j.needsUserAnswers).length,
     minimumMatchScore: minimum, jobs: ready,
   };
 }
