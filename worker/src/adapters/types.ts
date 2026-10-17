@@ -44,6 +44,8 @@ export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "radi
 export interface InspectedField {
   selector: string;
   label: string;
+  /** Stable key used to look up an explicit stored answer for this exact form question. */
+  answerKey: string;
   type: FieldType;
   required: boolean;
   options?: { label: string; value: string }[];
