@@ -95,7 +95,11 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     throw new Error(sourceError?.message ?? "No pudimos crear la fuente.");
   }
 
-  const rows = discovery.jobs.map((job) => ({
+  const uniqueJobs = Array.from(
+    new Map(discovery.jobs.map((job) => [job.externalId, job])).values(),
+  );
+
+  const rows = uniqueJobs.map((job) => ({
     external_job_id: job.externalId,
     source_id: source.id,
     company_id: companyId!,
@@ -146,10 +150,10 @@ export async function syncJobSource(input: JobSourceSyncInput) {
 
   if (currentError) throw new Error(currentError.message);
 
-  const discoveredIds = new Set(discovery.jobs.map((job) => job.externalId));
+  const discoveredIds = new Set(uniqueJobs.map((job) => job.externalId));
   const snapshotComplete =
     discovery.reportedTotal == null ||
-    discovery.jobs.length >= discovery.reportedTotal;
+    uniqueJobs.length >= discovery.reportedTotal;
   const staleIds = snapshotComplete
     ? (currentJobs ?? [])
         .filter((job) => !discoveredIds.has(job.external_job_id))
@@ -234,7 +238,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     identifier,
     companyId,
     sourceId: source.id,
-    discovered: discovery.jobs.length,
+    discovered: uniqueJobs.length,
     deactivated: staleIds.length,
     inspectionsQueued,
     reportedTotal: discovery.reportedTotal ?? discovery.jobs.length,
