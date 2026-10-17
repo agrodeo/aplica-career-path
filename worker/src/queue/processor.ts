@@ -152,7 +152,7 @@ export async function processInspection(item: InspectionItem): Promise<void> {
 }
 
 export async function drainInspections(): Promise<number> {
-  const items = await claimInspections(30);
+  const items = await claimInspections(100);
   let cursor = 0;
 
   async function runner() {
@@ -164,7 +164,7 @@ export async function drainInspections(): Promise<number> {
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(4, items.length || 1) }, () => runner()),
+    Array.from({ length: Math.min(8, items.length || 1) }, () => runner()),
   );
   return items.length;
 }
