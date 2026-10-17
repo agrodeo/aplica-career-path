@@ -246,7 +246,7 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
 
 async function markBestApplicationForm(page: Page, selector: string): Promise<string | null> {
   return page.evaluate((candidateSelector) => {
-    for (const old of document.querySelectorAll("[data-aplica-application-form]")) {
+    for (const old of Array.from(document.querySelectorAll("[data-aplica-application-form]"))) {
       old.removeAttribute("data-aplica-application-form");
     }
 
