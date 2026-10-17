@@ -17,6 +17,10 @@ concurrency:
 
 jobs:
   worker:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -31,7 +35,7 @@ jobs:
       DRY_RUN: "false"
       RUN_ONCE: "true"
       MAX_CONCURRENCY: "4"
-      WORKER_ID: github-actions-${{ github.run_id }}
+      WORKER_ID: github-actions-${{ github.run_id }}-${{ matrix.shard }}
       LOG_LEVEL: info
 
     steps:
