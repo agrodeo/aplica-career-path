@@ -332,13 +332,13 @@ export async function getAutoApplyJob({ data }: { data: { jobId: string } }) {
   const userId = await currentUserId();
   const jobId = data.jobId.trim();
   const [{ data: job }, { data: match }, { data: attempts }, { data: queue }] = await Promise.all([
-    supabase.from("jobs").select("id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,discovered_at,application_url,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)").eq("id", jobId).eq("is_active", true).maybeSingle(),
+    supabase.from("jobs").select("id,title,description,location,country,remote_type,employment_type,seniority,salary_min,salary_max,salary_currency,published_at,discovered_at,application_url,auto_apply_eligible,auto_apply_adapter,application_schema_id,companies(name,logo_url,website)").eq("id", jobId).eq("is_active", true).eq("auto_apply_eligible", true).maybeSingle(),
     supabase.from("job_matches").select("match_score,hard_requirements_met,explanation").eq("user_id", userId).eq("job_id", jobId).maybeSingle(),
     supabase.from("application_attempts").select("status,verified_at,queued_at").eq("user_id", userId).eq("job_id", jobId).order("queued_at", { ascending:false }).limit(1),
     supabase.from("application_queue").select("status").eq("user_id", userId).eq("job_id", jobId).maybeSingle(),
   ]);
   if (!job) return null;
-  const readiness = job.auto_apply_eligible ? await applicationReadiness(userId,[{id:job.id,application_schema_id:job.application_schema_id}]) : new Map<string,MissingApplicationQuestion[]>();
+  const readiness = await applicationReadiness(userId,[{id:job.id,application_schema_id:job.application_schema_id}]);
   const missingQuestions = readiness.get(job.id) ?? [];
   const latestAttempt = attempts?.[0] ?? null;
   return {
@@ -347,7 +347,7 @@ export async function getAutoApplyJob({ data }: { data: { jobId: string } }) {
     seniority:job.seniority,salaryMin:job.salary_min,salaryMax:job.salary_max,salaryCurrency:job.salary_currency,publishedAt:job.published_at,
     discoveredAt:job.discovered_at,applicationUrl:job.application_url,autoApplyEligible:job.auto_apply_eligible,adapter:job.auto_apply_adapter,
     matchScore:match?Number(match.match_score):null,hardRequirementsMet:match?.hard_requirements_met ?? false,explanation:match?.explanation ?? null,
-    missingQuestions,readyForUser:job.auto_apply_eligible && missingQuestions.length===0,manualApply:!job.auto_apply_eligible && Boolean(job.application_url),
+    missingQuestions,readyForUser:missingQuestions.length===0,manualApply:false,
     applicationStatus:latestAttempt?.status ?? queue?.status ?? null,verifiedAt:latestAttempt?.verified_at ?? null,
   };
 }
