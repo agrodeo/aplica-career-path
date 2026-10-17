@@ -36,7 +36,7 @@ export async function claimInspections(limit = 1): Promise<InspectionItem[]> {
   const config = loadConfig();
   const { data, error } = await db().rpc("claim_inspection", {
     _worker_id: config.WORKER_ID,
-    _limit: Math.min(Math.max(limit, 1), 10),
+    _limit: Math.min(Math.max(limit, 1), 30),
   });
   if (error) fail(error, "claim_inspection");
   return (data ?? []) as InspectionItem[];
