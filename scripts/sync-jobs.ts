@@ -3,7 +3,7 @@ import { syncAllRegisteredJobSources } from "../src/lib/job-sync.server";
 
 const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
 
-// worldwide inventory wave 4
+// worldwide inventory wave 5
 async function main() {
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
