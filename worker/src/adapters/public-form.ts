@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
+import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { SENSITIVE_KEYS, type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
@@ -78,7 +78,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
       const captchaDetected = await detectCaptcha(page);
       const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
-      const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector) : [];
+      const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector, url) : [];
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
@@ -89,7 +89,15 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
-      const unknownRequiredFields = fields.filter((f) => f.required && !f.canonicalKey).map((f) => f.label);
+      const unknownRequiredFields = fields
+        .filter(
+          (field) =>
+            field.required &&
+            !field.canonicalKey &&
+            (field.type === "unknown" || field.type === "file") &&
+            !(field.demographic && field.options && findDeclineOption(field.options)),
+        )
+        .map((field) => field.label);
       const supportsFileUpload = fields.some((f) => f.type === "file");
 
       return {
@@ -118,20 +126,84 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
       if (!schema.supportsFileUpload) reasons.push("El formulario no acepta subir un CV.");
 
-      // Unknown required field → the job is unsupported. Never invent an answer.
-      const unanswerable: string[] = [...schema.unknownRequiredFields];
+      // Global adapter limitations must stay separate from user-specific answer gaps.
+      // A normal text/select/radio question is structurally supported: Aplica asks
+      // the user once, stores the explicit answer under field.answerKey, and reuses it.
+      const unsupportedFields: string[] = [...schema.unknownRequiredFields];
+      const missingProfileAnswers: string[] = [];
+
       for (const field of schema.fields) {
-        if (!field.required || !field.canonicalKey) continue;
-        if (!canAnswer(field.canonicalKey, profile)) unanswerable.push(field.label);
+        if (!field.required) continue;
+
+        if (field.demographic && field.options && findDeclineOption(field.options)) {
+          continue;
+        }
+
+        if (field.type === "checkbox") {
+          const storedCheckbox = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (
+            !storedCheckbox ||
+            storedCheckbox.answerType !== "boolean" ||
+            storedCheckbox.booleanValue !== true
+          ) {
+            missingProfileAnswers.push(field.label);
+          }
+          continue;
+        }
+
+        if (field.type === "file") {
+          if (field.canonicalKey !== "resume") unsupportedFields.push(field.label);
+          continue;
+        }
+
+        if (!field.canonicalKey) {
+          if (field.type === "unknown") {
+            unsupportedFields.push(field.label);
+            continue;
+          }
+          const custom = profile.verifiedApplicationAnswers.find(
+            (answer) =>
+              answer.canonicalKey === field.answerKey &&
+              answer.userConfirmed,
+          );
+          if (!custom) missingProfileAnswers.push(field.label);
+          continue;
+        }
+
+        if (!canAnswer(field.canonicalKey, profile)) {
+          missingProfileAnswers.push(field.label);
+        }
       }
-      if (unanswerable.length || reasons.length) {
+
+      if (unsupportedFields.length || reasons.length) {
         return {
           eligible: false,
           failureCode: "UNSUPPORTED_FIELD",
-          reasons: [...reasons, ...(unanswerable.length ? [`Preguntas obligatorias sin respuesta verificada: ${unanswerable.join(", ")}`] : [])],
-          unknownRequiredFields: unanswerable,
+          reasons: [
+            ...reasons,
+            ...(unsupportedFields.length
+              ? [`Campos obligatorios no soportados: ${unsupportedFields.join(", ")}`]
+              : []),
+          ],
+          unknownRequiredFields: unsupportedFields,
         };
       }
+
+      if (missingProfileAnswers.length) {
+        return {
+          eligible: false,
+          failureCode: "PROFILE_INCOMPLETE",
+          reasons: [
+            `Faltan respuestas verificadas del usuario: ${missingProfileAnswers.join(", ")}`,
+          ],
+          unknownRequiredFields: missingProfileAnswers,
+        };
+      }
+
       return { eligible: true, reasons: [], unknownRequiredFields: [] };
     },
 
@@ -296,7 +368,7 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
   }, selector);
 }
 
-async function readFields(page: Page, formSelector: string): Promise<InspectedField[]> {
+async function readFields(page: Page, formSelector: string, applicationUrl: string): Promise<InspectedField[]> {
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
     if (!form) return [];
@@ -352,6 +424,7 @@ async function readFields(page: Page, formSelector: string): Promise<InspectedFi
     return {
       selector: field.selector,
       label: field.label,
+      answerKey: answerKeyFor(field.label, applicationUrl),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
