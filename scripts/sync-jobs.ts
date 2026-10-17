@@ -25,7 +25,7 @@ async function main() {
     ...result,
   }, null, 2));
 
-  if (result.failed > 0) process.exitCode = 1;
+  if (result.successful === 0 && result.failed > 0) process.exitCode = 1;
 }
 
 main().catch((error) => {
