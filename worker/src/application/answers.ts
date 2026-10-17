@@ -80,6 +80,8 @@ function resolveValue(field: InspectedField, profile: MasterProfile, job: JobRec
       return identity.phone || null;
     case "location":
       return [identity.city, identity.country].filter(Boolean).join(", ") || null;
+    case "country":
+      return identity.country || null;
     case "linkedin":
       return profile.links.linkedin || null;
     case "portfolio":
