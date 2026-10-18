@@ -37,8 +37,11 @@ async function main() {
     .maybeSingle();
 
   const providers = requestedProviders();
+  const providerConcurrency =
+    providers?.length === 1 && providers[0] === "smartrecruiters" ? 2 : 8;
+
   const result = await syncAllRegisteredJobSources({
-    concurrency: 8,
+    concurrency: providerConcurrency,
     staleAfterMinutes: 10,
     limit: 400,
     providers,
@@ -59,4 +62,4 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
-// inventory sync trigger: LATAM wave 23
+// inventory sync trigger: LATAM wave 26
