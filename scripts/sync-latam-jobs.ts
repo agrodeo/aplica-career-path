@@ -3,46 +3,23 @@ import { syncJobSource } from "../src/lib/job-sync.server";
 import type { AtsProvider } from "../src/lib/job-sources/types";
 
 const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
-const LATAM_COUNTRIES = [
-  "ar","bo","br","cl","co","cr","do","ec","gt","hn","mx","ni","pa","pe","pr","py","sv","uy","ve",
-];
 const SUPPORTED_PROVIDERS = new Set<AtsProvider>([
   "greenhouse","smartrecruiters","workday","lever","ashby","workable","custom",
 ]);
-const PAGE_SIZE = 1000;
 const MAX_COMPANIES_PER_RUN = 160;
 const STALE_AFTER_MINUTES = 10;
 
-async function collectCompanyIds(builder: (from: number, to: number) => PromiseLike<any>) {
-  const ids = new Set<string>();
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await builder(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(error.message);
-    const page = data ?? [];
-    for (const row of page) if (row.company_id) ids.add(row.company_id);
-    if (page.length < PAGE_SIZE) break;
-  }
-  return ids;
-}
-
 async function main() {
-  const priorityCompanyIds = await collectCompanyIds((from, to) =>
-    supabaseAdmin
-      .from("jobs")
-      .select("company_id")
-      .eq("is_active", true)
-      .in("country", LATAM_COUNTRIES)
-      .range(from, to),
-  );
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
 
-  const { data: companies, error } = await supabaseAdmin
-    .from("companies")
-    .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at,created_at")
+  const { data: companies, error } = await (supabaseAdmin
+    .from("companies") as any)
+    .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at,latam_priority")
     .eq("active", true)
     .not("ats_identifier", "is", null)
+    .or("latam_priority.eq.true,last_scanned_at.is.null")
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
-    .limit(1000);
+    .limit(MAX_COMPANIES_PER_RUN);
 
   if (error) throw new Error(error.message);
 
@@ -50,7 +27,7 @@ async function main() {
     .filter((company) => {
       if (!company.ats_identifier || !SUPPORTED_PROVIDERS.has(company.ats_type as AtsProvider)) return false;
       if (company.last_scanned_at == null) return true;
-      if (!priorityCompanyIds.has(company.id)) return false;
+      if (!company.latam_priority) return false;
       const scannedAt = new Date(company.last_scanned_at).getTime();
       return !Number.isFinite(scannedAt) || scannedAt < cutoff;
     })
@@ -101,7 +78,7 @@ async function main() {
 
   const summary = {
     syncedAt: new Date().toISOString(),
-    knownLatamCompanies: priorityCompanyIds.size,
+    knownLatamCompanies: (companies ?? []).filter((company: any) => company.latam_priority).length,
     queuedCompanies: queue.length,
     successful: results.filter((row) => row.ok).length,
     failed: results.filter((row) => !row.ok).length,
