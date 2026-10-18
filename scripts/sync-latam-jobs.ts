@@ -6,8 +6,8 @@ const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
 const SUPPORTED_PROVIDERS = new Set<AtsProvider>([
   "greenhouse","smartrecruiters","workday","lever","ashby","workable","custom",
 ]);
-const MAX_COMPANIES_PER_RUN = 160;
-const STALE_AFTER_MINUTES = 10;
+const MAX_COMPANIES_PER_RUN = 60;
+const STALE_AFTER_MINUTES = 30;
 
 async function main() {
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
