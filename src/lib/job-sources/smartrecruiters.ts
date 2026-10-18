@@ -13,8 +13,12 @@ import type {
 } from "@/lib/job-sources/types";
 
 const PAGE_SIZE = 100;
-const MAX_JOBS_PER_BOARD = 2_000;
+const MAX_JOBS_PER_BOARD = 30_000;
 const DETAIL_CONCURRENCY = 4;
+// Listing discovery must finish even for large hospital, hotel and retail
+// networks. Only enrich a bounded sample here; remaining descriptions stay
+// empty (and detail_loaded=false), never fabricated from listing metadata.
+const DETAIL_SAMPLE_SIZE = 20;
 
 type SmartRecruitersLocation = {
   country?: string | null;
@@ -41,10 +45,7 @@ type SmartRecruitersPostingDetail = SmartRecruitersPosting & {
   applyUrl?: string | null;
   active?: boolean | null;
   jobAd?: {
-    sections?: Record<
-      string,
-      { title?: string | null; text?: string | null } | null
-    > | null;
+    sections?: Record<string, { title?: string | null; text?: string | null } | null> | null;
   } | null;
 };
 
@@ -52,7 +53,6 @@ type SmartRecruitersList = {
   totalFound?: number | null;
   content?: SmartRecruitersPosting[] | null;
 };
-
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,9 +75,10 @@ async function fetchSmartRecruiters(url: string) {
     if (response.status !== 429) return response;
 
     const retryAfter = Number(response.headers.get("retry-after"));
-    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-      ? Math.min(retryAfter * 1000, 15_000)
-      : Math.min(750 * 2 ** attempt, 6_000);
+    const waitMs =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 15_000)
+        : Math.min(750 * 2 ** attempt, 6_000);
     await sleep(waitMs);
   }
 
@@ -108,11 +109,7 @@ function detailDescription(detail: SmartRecruitersPostingDetail | null) {
   return values.join("\n\n").trim();
 }
 
-async function mapConcurrent<T, R>(
-  values: T[],
-  limit: number,
-  fn: (value: T) => Promise<R>,
-) {
+async function mapConcurrent<T, R>(values: T[], limit: number, fn: (value: T) => Promise<R>) {
   const results = new Array<R>(values.length);
   let cursor = 0;
 
@@ -120,20 +117,15 @@ async function mapConcurrent<T, R>(
     while (true) {
       const index = cursor++;
       if (index >= values.length) return;
-      results[index] = await fn(values[index]);
+      results[index] = await fn(values[index]!);
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(limit, values.length || 1) }, () => runner()),
-  );
+  await Promise.all(Array.from({ length: Math.min(limit, values.length || 1) }, () => runner()));
   return results;
 }
 
-async function fetchDetail(
-  companyIdentifier: string,
-  posting: SmartRecruitersPosting,
-) {
+async function fetchDetail(companyIdentifier: string, posting: SmartRecruitersPosting) {
   const postingId = posting.id ?? posting.uuid;
   if (!postingId) return null;
 
@@ -175,14 +167,8 @@ function normalizePosting(
     location,
     country: normalizeCountryCode(source.location?.country, location),
     remoteType,
-    employmentType: inferEmploymentType(
-      title,
-      description,
-      employmentLabel,
-    ),
-    seniority:
-      seniorityLabel?.trim() ||
-      inferSeniority(title),
+    employmentType: inferEmploymentType(title, description, employmentLabel),
+    seniority: seniorityLabel?.trim() || inferSeniority(title),
     salaryMin: null,
     salaryMax: null,
     salaryCurrency: null,
@@ -220,11 +206,7 @@ export const smartRecruitersProvider: JobSourceProvider = {
     const listings: SmartRecruitersPosting[] = [];
     let reportedTotal: number | null = null;
 
-    for (
-      let offset = 0;
-      offset < MAX_JOBS_PER_BOARD;
-      offset += PAGE_SIZE
-    ) {
+    for (let offset = 0; offset < MAX_JOBS_PER_BOARD; offset += PAGE_SIZE) {
       const url = new URL(endpoint);
       url.searchParams.set("limit", String(PAGE_SIZE));
       url.searchParams.set("offset", String(offset));
@@ -233,9 +215,7 @@ export const smartRecruitersProvider: JobSourceProvider = {
       const response = await fetchSmartRecruiters(url.toString());
 
       if (!response.ok) {
-        throw new Error(
-          `SmartRecruiters ${companyIdentifier} respondió ${response.status}.`,
-        );
+        throw new Error(`SmartRecruiters ${companyIdentifier} respondió ${response.status}.`);
       }
 
       const payload = (await response.json()) as SmartRecruitersList;
@@ -253,15 +233,13 @@ export const smartRecruitersProvider: JobSourceProvider = {
 
     const capped = listings.slice(0, MAX_JOBS_PER_BOARD);
     const details = await mapConcurrent(
-      capped,
+      capped.slice(0, DETAIL_SAMPLE_SIZE),
       DETAIL_CONCURRENCY,
       (posting) => fetchDetail(companyIdentifier, posting),
     );
 
     const jobs = capped
-      .map((posting, index) =>
-        normalizePosting(companyIdentifier, posting, details[index]),
-      )
+      .map((posting, index) => normalizePosting(companyIdentifier, posting, details[index] ?? null))
       .filter((job): job is NormalizedJob => Boolean(job));
 
     return {
