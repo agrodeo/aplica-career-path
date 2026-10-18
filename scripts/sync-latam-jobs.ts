@@ -3,19 +3,34 @@ import { syncJobSource } from "../src/lib/job-sync.server";
 import type { AtsProvider } from "../src/lib/job-sources/types";
 
 const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
-const SUPPORTED_PROVIDERS = new Set<AtsProvider>([
+const ALL_PROVIDERS: AtsProvider[] = [
   "greenhouse","smartrecruiters","workday","lever","ashby","workable","custom",
-]);
+];
+const SUPPORTED_PROVIDERS = new Set<AtsProvider>(ALL_PROVIDERS);
+
+function requestedProviders(): AtsProvider[] {
+  const raw = process.env.SYNC_PROVIDERS?.trim();
+  if (!raw) return ALL_PROVIDERS;
+  const providers = raw
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value): value is AtsProvider =>
+      SUPPORTED_PROVIDERS.has(value as AtsProvider),
+    );
+  return providers.length ? providers : ALL_PROVIDERS;
+}
 const MAX_COMPANIES_PER_RUN = 60;
 const STALE_AFTER_MINUTES = 30;
 
 async function main() {
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
+  const providers = requestedProviders();
 
   const { data: companies, error } = await (supabaseAdmin
     .from("companies") as any)
     .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at,latam_priority")
     .eq("active", true)
+    .in("ats_type", providers)
     .not("ats_identifier", "is", null)
     .or("latam_priority.eq.true,last_scanned_at.is.null")
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
@@ -74,10 +89,15 @@ async function main() {
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(4, queue.length || 1) }, () => runner()));
+  const concurrency =
+    providers.length === 1 && providers[0] === "smartrecruiters" ? 2 : 4;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => runner()),
+  );
 
   const summary = {
     syncedAt: new Date().toISOString(),
+    providers,
     knownLatamCompanies: (companies ?? []).filter((company: any) => company.latam_priority).length,
     queuedCompanies: queue.length,
     successful: results.filter((row) => row.ok).length,
