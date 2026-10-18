@@ -2,7 +2,7 @@ import { createPublicFormAdapter } from "./public-form.js";
 
 export const smartRecruitersPublicAdapter = createPublicFormAdapter({
   id: "smartrecruiters_public_form",
-  version: "0.1.1",
+  version: "0.2.0",
   atsType: "smartrecruiters",
   hostPatterns: [/^jobs\.smartrecruiters\.com$/i, /^careers\.smartrecruiters\.com$/i],
   formSelector: "form[action*='apply'], form",

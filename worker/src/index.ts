@@ -8,12 +8,10 @@ let running = true;
 
 async function runCycle() {
   const config = loadConfig();
-  const inspected = await drainInspections();
   const items = await claimApplications(config.MAX_CONCURRENCY);
-  for (const item of items) {
-    if (!running) break;
-    await processApplication(item);
-  }
+  // Process authorized applications before the large inspection backlog.
+  await Promise.all(items.map((item) => running ? processApplication(item) : Promise.resolve()));
+  const inspected = running ? await drainInspections() : 0;
   return { inspected, processed: items.length };
 }
 

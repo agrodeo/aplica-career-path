@@ -31,13 +31,14 @@ export interface ResumeArtifact {
  */
 export async function getOrCreateResume(job: JobRecord, profile: MasterProfile): Promise<ResumeArtifact> {
   const supabase = db();
-  const { data: cached } = await supabase
+  const { data: cached, error: cacheError } = await supabase
     .from("resume_variants")
     .select("id, pdf_path, structured_resume, validation_status")
     .eq("user_id", profile.userId)
     .eq("job_id", job.id)
     .eq("master_profile_version", profile.masterProfileVersion)
     .maybeSingle();
+  if (cacheError) throw new ApplicationError("NETWORK_ERROR", `Could not load cached resume: ${cacheError.message}`);
 
   if (cached?.pdf_path && cached.validation_status === "passed") {
     const localPath = await downloadResume(cached.pdf_path);
@@ -47,7 +48,7 @@ export async function getOrCreateResume(job: JobRecord, profile: MasterProfile):
   const structured = buildStructuredResume(job, profile);
   const validation = validateAgainstProfile(structured, profile);
   if (!validation.passed) {
-    throw new ApplicationError("UNSUPPORTED_FIELD", `Resume validation failed: ${validation.issues.join("; ")}`);
+    throw new ApplicationError("PROFILE_INCOMPLETE", `Resume validation failed: ${validation.issues.join("; ")}`);
   }
 
   const html = renderAtsHtml(structured, profile);
