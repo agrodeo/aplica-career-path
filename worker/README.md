@@ -34,6 +34,9 @@ to the user as "Enviada".
 | `DRY_RUN` | `true` fills everything and stops before the final Submit. Must be `false` in production |
 | `WORKER_ID` | optional identifier used when claiming work |
 | `RUN_ONCE` | `true` processes one queue cycle and exits; used by GitHub Actions |
+| `INSPECTION_BATCH_SIZE`, `INSPECTION_MAX_BATCHES` | Lease at most 20 forms per wave by default; Actions processes up to five waves |
+| `INSPECTION_RUN_BUDGET_MS` | Stop claiming new waves after 12 minutes, leaving time for checkpoints |
+| `INSPECTION_OUTBOX_DIR` | Pending public inspection reports; defaults to `.inspection-outbox` |
 | `POLL_INTERVAL_MS`, `MAX_CONCURRENCY`, `LOG_LEVEL` | optional tuning |
 
 `WORKER_MODE=production` with `DRY_RUN=true` refuses to start: production must
@@ -83,3 +86,7 @@ Never retried: `CAPTCHA_PRESENT`, `LOGIN_REQUIRED`, `UNSUPPORTED_FIELD`,
 The inspector scores candidate forms and selects the application form with the strongest application-field signals before determining CV upload and required-field support.
 
 The production inspection queue prioritizes likely-inspectable ATS families (Greenhouse first) before providers that commonly require CAPTCHA, login, or block browser automation.
+
+Inspection and result delivery have separate failure handling. Each result is written atomically to the local outbox before its idempotent database RPC. A database outage never changes a completed result into a form/network failure. After a delivery failure the batch stops starting more forms and waits for all in-flight reports before closing the browser.
+
+Actions restores pending reports by provider shard and replays them with their original worker lease before claiming new forms. It saves the outbox even after a failed worker step and keeps a 14-day artifact copy of pending reports. These files contain public form schemas, never applicant profiles, CVs or credentials. GitHub caches can be evicted: if a checkpoint is unavailable, the existing expired-lease recovery requeues the form for inspection. Checkpoints older than 24 hours or belonging to a newer lease are discarded instead of overwriting fresher eligibility.

@@ -8,6 +8,8 @@ import { markJobUnsupported, storeEvidence, storeSnapshot } from "../application
 import { ApplicationError, isRetryable, makesJobUnsupported, toApplicationError } from "../utils/errors.js";
 import { logger } from "../utils/logger.js";
 import { claimInspections, reportFailure, reportInspection, reportStatus, reportSubmission, type InspectionItem, type QueueItem } from "./claim.js";
+import { createInspectionOutbox } from "./inspection-outbox.js";
+import { runInspectionBatch } from "./inspection-batch.js";
 
 /**
  * One application, start to finish:
@@ -108,16 +110,16 @@ export async function processApplication(item: QueueItem): Promise<void> {
 /** Admin adapter test console: inspect a URL, optionally as a dry run. */
 export async function processInspection(item: InspectionItem): Promise<void> {
   const log = logger.child({ inspectionId: item.id });
+  const config = loadConfig();
+  const outbox = createInspectionOutbox(config.INSPECTION_OUTBOX_DIR, config.WORKER_ID, reportInspection);
+  let payload: Record<string, unknown>;
   try {
     const adapter = resolveAdapter(item.url);
     if (adapter.id === "unsupported") {
-      await reportInspection(item.id, { status: "completed", adapter: "unsupported", atsType: "unknown", autoApplyEligible: false, reason: "Ningún adaptador habilitado soporta esta URL." });
-      return;
-    }
-
-    await withIsolatedPage(async (page) => {
+      payload = { status: "completed", adapter: "unsupported", atsType: "unknown", autoApplyEligible: false, reason: "Ningún adaptador habilitado soporta esta URL." };
+    } else payload = await withIsolatedPage(async (page) => {
       const schema = await adapter.inspect(item.url, page);
-      await reportInspection(item.id, {
+      return {
         status: "completed",
         adapter: adapter.id,
         adapterVersion: schema.adapterVersion,
@@ -137,35 +139,37 @@ export async function processInspection(item: InspectionItem): Promise<void> {
             ? "Requiere iniciar sesión"
             : schema.unknownRequiredFields.length
               ? `Preguntas obligatorias no soportadas: ${schema.unknownRequiredFields.join(", ")}`
+              : !schema.fields.length
+                ? "No se encontró un formulario de postulación compatible"
               : !schema.supportsFileUpload
                 ? "El formulario no acepta subir un CV"
                 : !schema.submitSelector
                   ? "No se encontró el control de envío"
                   : null,
-      });
+      };
     });
   } catch (error) {
     const appError = toApplicationError(error);
     log.error({ code: appError.code }, "inspection failed");
-    await reportInspection(item.id, { status: "failed", errorCode: appError.code, errorMessage: appError.message, autoApplyEligible: false });
+    payload = { status: "failed", errorCode: appError.code, errorMessage: appError.message, autoApplyEligible: false };
   }
+  // A storage outage is not a form failure. Save the original result before
+  // delivery and never replace a completed inspection with NETWORK_ERROR.
+  await outbox.report(item.id, payload);
 }
 
 export async function drainInspections(): Promise<number> {
   const config = loadConfig();
-  const items = await claimInspections(config.INSPECTION_BATCH_SIZE);
-  let cursor = 0;
-
-  async function runner() {
-    while (true) {
-      const item = items[cursor++];
-      if (!item) return;
-      await processInspection(item);
-    }
+  const deadline = Date.now() + config.INSPECTION_RUN_BUDGET_MS;
+  const outbox = createInspectionOutbox(config.INSPECTION_OUTBOX_DIR, config.WORKER_ID, reportInspection);
+  const replayed = await outbox.replay();
+  if (replayed) logger.info({ replayed }, "inspection checkpoints acknowledged before claiming new work");
+  let inspected = 0;
+  for (let batch = 0; batch < config.INSPECTION_MAX_BATCHES && Date.now() < deadline; batch++) {
+    const items = await claimInspections(config.INSPECTION_BATCH_SIZE);
+    if (!items.length) break;
+    inspected += await runInspectionBatch(items, config.INSPECTION_CONCURRENCY, processInspection);
+    logger.info({ inspected, batch: batch + 1 }, "inspection batch persisted");
   }
-
-  await Promise.all(
-    Array.from({ length: Math.min(config.INSPECTION_CONCURRENCY, items.length || 1) }, () => runner()),
-  );
-  return items.length;
+  return inspected;
 }

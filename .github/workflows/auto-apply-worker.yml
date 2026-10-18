@@ -54,31 +54,31 @@ jobs:
         include:
           - shard: greenhouse-1
             provider: greenhouse
-            batch: 100
+            batch: 20
             concurrency: 4
           - shard: greenhouse-2
             provider: greenhouse
-            batch: 100
+            batch: 20
             concurrency: 4
           - shard: ashby
             provider: ashby
-            batch: 50
+            batch: 10
             concurrency: 2
           - shard: workable
             provider: workable
-            batch: 50
+            batch: 10
             concurrency: 2
           - shard: smartrecruiters
             provider: smartrecruiters
-            batch: 15
+            batch: 3
             concurrency: 1
           - shard: workday
             provider: workday
-            batch: 15
+            batch: 3
             concurrency: 1
           - shard: lever
             provider: lever
-            batch: 15
+            batch: 3
             concurrency: 1
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -96,14 +96,37 @@ jobs:
       RUN_TARGET: inspections
       INSPECTION_PROVIDER: ${{ matrix.provider }}
       INSPECTION_BATCH_SIZE: ${{ matrix.batch }}
+      INSPECTION_MAX_BATCHES: "5"
+      INSPECTION_RUN_BUDGET_MS: "720000"
       INSPECTION_CONCURRENCY: ${{ matrix.concurrency }}
       WORKER_ID: github-actions-${{ github.run_id }}-${{ matrix.shard }}
       LOG_LEVEL: info
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pending inspection reports
+        id: outbox-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: worker/.inspection-outbox
+          key: inspection-outbox-v1-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: inspection-outbox-v1-${{ matrix.shard }}-
       - name: Install worker dependencies
         run: npm ci
       - name: Build worker
         run: npm run build
       - name: Inspect pending application forms
         run: npm start
+      - name: Save pending inspection reports for the next execution
+        if: always() && steps.outbox-restore.outcome == 'success'
+        uses: actions/cache/save@v5
+        with:
+          path: worker/.inspection-outbox
+          key: inspection-outbox-v1-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Keep an audit copy of unacknowledged inspection reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspection-outbox-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: worker/.inspection-outbox/*.json
+          if-no-files-found: ignore
+          retention-days: 14
