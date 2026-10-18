@@ -4,7 +4,13 @@ import type { AtsProvider } from "../src/lib/job-sources/types";
 
 const SYSTEM_INSPECTION_REQUESTER = "00000000-0000-0000-0000-000000000001";
 const ALL_PROVIDERS: AtsProvider[] = [
-  "greenhouse","smartrecruiters","workday","lever","ashby","workable","custom",
+  "greenhouse",
+  "smartrecruiters",
+  "workday",
+  "lever",
+  "ashby",
+  "workable",
+  "custom",
 ];
 const SUPPORTED_PROVIDERS = new Set<AtsProvider>(ALL_PROVIDERS);
 
@@ -14,9 +20,7 @@ function requestedProviders(): AtsProvider[] {
   const providers = raw
     .split(",")
     .map((value) => value.trim().toLowerCase())
-    .filter((value): value is AtsProvider =>
-      SUPPORTED_PROVIDERS.has(value as AtsProvider),
-    );
+    .filter((value): value is AtsProvider => SUPPORTED_PROVIDERS.has(value as AtsProvider));
   return providers.length ? providers : ALL_PROVIDERS;
 }
 const MAX_COMPANIES_PER_RUN = 60;
@@ -26,12 +30,9 @@ async function main() {
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
   const providers = requestedProviders();
   const companyLimit =
-    providers.length === 1 && providers[0] === "smartrecruiters"
-      ? 20
-      : MAX_COMPANIES_PER_RUN;
+    providers.length === 1 && providers[0] === "smartrecruiters" ? 20 : MAX_COMPANIES_PER_RUN;
 
-  const { data: companies, error } = await (supabaseAdmin
-    .from("companies") as any)
+  const { data: companies, error } = await (supabaseAdmin.from("companies") as any)
     .select("id,name,careers_url,ats_type,ats_identifier,last_scanned_at,latam_priority")
     .eq("active", true)
     .in("ats_type", providers)
@@ -42,9 +43,18 @@ async function main() {
 
   if (error) throw new Error(error.message);
 
-  const queue = (companies ?? [])
+  const uniqueCompanies = [
+    ...new Map(
+      (companies ?? []).map((company) => [
+        `${company.ats_type}:${company.ats_identifier?.trim()}`,
+        company,
+      ]),
+    ).values(),
+  ];
+  const queue = uniqueCompanies
     .filter((company) => {
-      if (!company.ats_identifier || !SUPPORTED_PROVIDERS.has(company.ats_type as AtsProvider)) return false;
+      if (!company.ats_identifier || !SUPPORTED_PROVIDERS.has(company.ats_type as AtsProvider))
+        return false;
       if (company.last_scanned_at == null) return true;
       if (!company.latam_priority) return false;
       const scannedAt = new Date(company.last_scanned_at).getTime();
@@ -93,8 +103,7 @@ async function main() {
     }
   }
 
-  const concurrency =
-    providers.length === 1 && providers[0] === "smartrecruiters" ? 2 : 4;
+  const concurrency = providers.length === 1 && providers[0] === "smartrecruiters" ? 2 : 4;
   await Promise.all(
     Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => runner()),
   );
@@ -106,8 +115,14 @@ async function main() {
     queuedCompanies: queue.length,
     successful: results.filter((row) => row.ok).length,
     failed: results.filter((row) => !row.ok).length,
-    discovered: results.reduce((sum, row) => sum + (typeof row.discovered === "number" ? row.discovered : 0), 0),
-    inspectionsQueued: results.reduce((sum, row) => sum + (typeof row.inspectionsQueued === "number" ? row.inspectionsQueued : 0), 0),
+    discovered: results.reduce(
+      (sum, row) => sum + (typeof row.discovered === "number" ? row.discovered : 0),
+      0,
+    ),
+    inspectionsQueued: results.reduce(
+      (sum, row) => sum + (typeof row.inspectionsQueued === "number" ? row.inspectionsQueued : 0),
+      0,
+    ),
     results,
   };
 

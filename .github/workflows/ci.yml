@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun test src/lib/job-sources/registry.test.ts src/lib/job-sources/normalization.test.ts
+      - run: bun test src/lib/job-sources/
       - run: bun run build
 
   worker-typecheck:

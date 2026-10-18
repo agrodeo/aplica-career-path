@@ -1,12 +1,27 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  getJobSourceProvider,
-  supportedAtsProviders,
-} from "@/lib/job-sources/registry";
+import { getJobSourceProvider, supportedAtsProviders } from "@/lib/job-sources/registry";
 import type { AtsProvider } from "@/lib/job-sources/types";
 
 const LATAM_COUNTRY_CODES = new Set([
-  "ar","bo","br","cl","co","cr","do","ec","gt","hn","mx","ni","pa","pe","pr","py","sv","uy","ve",
+  "ar",
+  "bo",
+  "br",
+  "cl",
+  "co",
+  "cr",
+  "do",
+  "ec",
+  "gt",
+  "hn",
+  "mx",
+  "ni",
+  "pa",
+  "pe",
+  "pr",
+  "py",
+  "sv",
+  "uy",
+  "ve",
 ]);
 
 function isLatamJob(country: string | null, location: string | null) {
@@ -38,12 +53,16 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   const discovery = await provider.fetchJobs(identifier);
   const now = new Date().toISOString();
 
-  const { data: existingCompany } = await supabaseAdmin
+  const { data: existingCompany, error: companyLookupError } = await supabaseAdmin
     .from("companies")
     .select("id")
     .eq("ats_type", provider.type)
     .eq("ats_identifier", identifier)
+    .eq("active", true)
+    .order("id")
+    .limit(1)
     .maybeSingle();
+  if (companyLookupError) throw new Error(companyLookupError.message);
 
   let companyId = existingCompany?.id ?? null;
   const autoApplySupported = Boolean(provider.submissionAdapter);
@@ -62,10 +81,23 @@ export async function syncJobSource(input: JobSourceSyncInput) {
       .select("id")
       .single();
 
-    if (error || !company) {
-      throw new Error(error?.message ?? "No pudimos crear la empresa.");
+    if (error?.code === "23505") {
+      // Two scheduler lanes may discover the same board concurrently. The
+      // database keeps one active company; use the winner of that insert.
+      const { data: winner, error: winnerError } = await supabaseAdmin
+        .from("companies")
+        .select("id")
+        .eq("ats_type", provider.type)
+        .eq("ats_identifier", identifier)
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+      if (winnerError || !winner) throw new Error(winnerError?.message ?? error.message);
+      companyId = winner.id;
+    } else {
+      if (error || !company) throw new Error(error?.message ?? "No pudimos crear la empresa.");
+      companyId = company.id;
     }
-    companyId = company.id;
   } else {
     const { error } = await supabaseAdmin
       .from("companies")
@@ -88,8 +120,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         name: sourceName,
         type: provider.sourceType,
         base_url: discovery.endpoint,
-        adapter_name:
-          provider.submissionAdapter ?? provider.discoveryAdapter,
+        adapter_name: provider.submissionAdapter ?? provider.discoveryAdapter,
         discovery_enabled: true,
         submission_enabled: autoApplySupported,
         requires_credentials: false,
@@ -108,16 +139,14 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   const uniqueJobs = Array.from(
     new Map(discovery.jobs.map((job) => [job.externalId, job])).values(),
   );
-  const latamPriority = uniqueJobs.some((job) =>
-    isLatamJob(job.country, job.location),
-  );
+  const latamPriority = uniqueJobs.some((job) => isLatamJob(job.country, job.location));
 
   const rows = uniqueJobs.map((job) => ({
     external_job_id: job.externalId,
     source_id: source.id,
     company_id: companyId!,
     title: job.title,
-    description: job.description,
+    ...(job.description?.trim() ? { description: job.description } : {}),
     location: job.location,
     country: job.country,
     remote_type: job.remoteType,
@@ -151,13 +180,19 @@ export async function syncJobSource(input: JobSourceSyncInput) {
 
   // Large public boards can expose thousands of openings. Keep writes below
   // PostgREST payload limits and never rely on the default 1,000-row response cap.
-  for (let index = 0; index < rows.length; index += 500) {
-    const { error } = await supabaseAdmin
-      .from("jobs")
-      .upsert(rows.slice(index, index + 500), {
+  // Keep listing-only batches separate: omitting description from every row
+  // preserves previously enriched descriptions on conflict, while new rows
+  // retain the database's null default.
+  for (const batch of [
+    rows.filter((row) => "description" in row),
+    rows.filter((row) => !("description" in row)),
+  ]) {
+    for (let index = 0; index < batch.length; index += 500) {
+      const { error } = await supabaseAdmin.from("jobs").upsert(batch.slice(index, index + 500), {
         onConflict: "source_id,external_job_id",
       });
-    if (error) throw new Error(error.message);
+      if (error) throw new Error(error.message);
+    }
   }
 
   const currentJobs: Array<{
@@ -183,12 +218,9 @@ export async function syncJobSource(input: JobSourceSyncInput) {
 
   const discoveredIds = new Set(uniqueJobs.map((job) => job.externalId));
   const snapshotComplete =
-    discovery.reportedTotal == null ||
-    uniqueJobs.length >= discovery.reportedTotal;
+    discovery.reportedTotal == null || uniqueJobs.length >= discovery.reportedTotal;
   const staleIds = snapshotComplete
-    ? currentJobs
-        .filter((job) => !discoveredIds.has(job.external_job_id))
-        .map((job) => job.id)
+    ? currentJobs.filter((job) => !discoveredIds.has(job.external_job_id)).map((job) => job.id)
     : [];
 
   for (let index = 0; index < staleIds.length; index += 100) {
@@ -208,10 +240,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         .filter((job) => {
           if (!job.application_url) return false;
           if (!job.last_verified_at) return true;
-          return (
-            Date.now() - new Date(job.last_verified_at).getTime() >
-            24 * 60 * 60 * 1000
-          );
+          return Date.now() - new Date(job.last_verified_at).getTime() > 24 * 60 * 60 * 1000;
         })
         .slice(0, 1000)
     : [];
@@ -260,8 +289,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     }
   }
 
-  const { error: scannedAtError } = await (supabaseAdmin
-    .from("companies") as any)
+  const { error: scannedAtError } = await (supabaseAdmin.from("companies") as any)
     .update({ last_scanned_at: now, latam_priority: latamPriority })
     .eq("id", companyId);
   if (scannedAtError) throw new Error(scannedAtError.message);
@@ -302,9 +330,7 @@ export async function syncAllRegisteredJobSources(options?: {
   staleAfterMinutes?: number;
   limit?: number;
 }) {
-  const providers = options?.providers?.length
-    ? options.providers
-    : supportedAtsProviders;
+  const providers = options?.providers?.length ? options.providers : supportedAtsProviders;
 
   let companyQuery = supabaseAdmin
     .from("companies")
@@ -320,33 +346,33 @@ export async function syncAllRegisteredJobSources(options?: {
       : null;
 
   if (staleAfterMinutes != null) {
-    const cutoff = new Date(
-      Date.now() - staleAfterMinutes * 60_000,
-    ).toISOString();
-    companyQuery = companyQuery.or(
-      `last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`,
-    );
+    const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000).toISOString();
+    companyQuery = companyQuery.or(`last_scanned_at.is.null,last_scanned_at.lt.${cutoff}`);
   }
 
   if (options?.limit != null) {
-    companyQuery = companyQuery.limit(
-      Math.max(1, Math.min(Math.floor(options.limit), 1000)),
-    );
+    companyQuery = companyQuery.limit(Math.max(1, Math.min(Math.floor(options.limit), 1000)));
   }
 
   const { data: companies, error } = await companyQuery;
 
   if (error) throw new Error(error.message);
 
-  const queue = (companies ?? []).filter(
+  const uniqueCompanies = [
+    ...new Map(
+      (companies ?? []).map((company) => [
+        `${company.ats_type}:${company.ats_identifier?.trim()}`,
+        company,
+      ]),
+    ).values(),
+  ];
+  const queue = uniqueCompanies.filter(
     (
       company,
     ): company is typeof company & {
       ats_type: AtsProvider;
       ats_identifier: string;
-    } =>
-      Boolean(company.ats_identifier) &&
-      providers.includes(company.ats_type as AtsProvider),
+    } => Boolean(company.ats_identifier) && providers.includes(company.ats_type as AtsProvider),
   );
 
   const concurrency = Math.max(1, Math.min(options?.concurrency ?? 4, 8));
@@ -402,9 +428,7 @@ export async function syncAllRegisteredJobSources(options?: {
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, queue.length || 1) }, () =>
-      runner(),
-    ),
+    Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => runner()),
   );
 
   return {
@@ -412,14 +436,8 @@ export async function syncAllRegisteredJobSources(options?: {
     staleAfterMinutes,
     successful: results.filter((result) => result.ok).length,
     failed: results.filter((result) => !result.ok).length,
-    discovered: results.reduce(
-      (total, result) => total + (result.discovered ?? 0),
-      0,
-    ),
-    deactivated: results.reduce(
-      (total, result) => total + (result.deactivated ?? 0),
-      0,
-    ),
+    discovered: results.reduce((total, result) => total + (result.discovered ?? 0), 0),
+    deactivated: results.reduce((total, result) => total + (result.deactivated ?? 0), 0),
     inspectionsQueued: results.reduce(
       (total, result) => total + (result.inspectionsQueued ?? 0),
       0,
@@ -438,9 +456,7 @@ export function syncAllRegisteredGreenhouseSources(options?: {
   });
 }
 
-let refreshPromise: Promise<
-  Awaited<ReturnType<typeof syncAllRegisteredJobSources>>
-> | null = null;
+let refreshPromise: Promise<Awaited<ReturnType<typeof syncAllRegisteredJobSources>>> | null = null;
 
 /**
  * Self-healing freshness guard used by authenticated inventory reads.

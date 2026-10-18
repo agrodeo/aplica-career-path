@@ -1,0 +1,317 @@
+[
+  {
+    "name": "BESIX",
+    "provider": "smartrecruiters",
+    "identifier": "BESIX",
+    "careersUrl": "https://jobs.smartrecruiters.com/BESIX",
+    "sector": "construction",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 364
+  },
+  {
+    "name": "Chandos",
+    "provider": "smartrecruiters",
+    "identifier": "Chandos",
+    "careersUrl": "https://jobs.smartrecruiters.com/Chandos",
+    "sector": "construction",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 59
+  },
+  {
+    "name": "Education Development Center",
+    "provider": "smartrecruiters",
+    "identifier": "EducationDevelopmentCenter",
+    "careersUrl": "https://jobs.smartrecruiters.com/EducationDevelopmentCenter",
+    "sector": "education",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 4
+  },
+  {
+    "name": "KIPP",
+    "provider": "smartrecruiters",
+    "identifier": "KIPP",
+    "careersUrl": "https://jobs.smartrecruiters.com/KIPP",
+    "sector": "education",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 511
+  },
+  {
+    "name": "Uncommon Schools",
+    "provider": "smartrecruiters",
+    "identifier": "UncommonSchools",
+    "careersUrl": "https://jobs.smartrecruiters.com/UncommonSchools",
+    "sector": "education",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 102
+  },
+  {
+    "name": "Vattenfall",
+    "provider": "smartrecruiters",
+    "identifier": "Vattenfall",
+    "careersUrl": "https://jobs.smartrecruiters.com/Vattenfall",
+    "sector": "energy",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 362
+  },
+  {
+    "name": "AECOM",
+    "provider": "smartrecruiters",
+    "identifier": "AECOM2",
+    "careersUrl": "https://jobs.smartrecruiters.com/AECOM2",
+    "sector": "engineering",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 5447
+  },
+  {
+    "name": "Ghobash Group",
+    "provider": "smartrecruiters",
+    "identifier": "GhobashGroup",
+    "careersUrl": "https://jobs.smartrecruiters.com/GhobashGroup",
+    "sector": "engineering",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 135
+  },
+  {
+    "name": "Rentokil Initial",
+    "provider": "smartrecruiters",
+    "identifier": "RentokilInitial1",
+    "careersUrl": "https://jobs.smartrecruiters.com/RentokilInitial1",
+    "sector": "facilities",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 168
+  },
+  {
+    "name": "Sodexo",
+    "provider": "smartrecruiters",
+    "identifier": "Sodexo",
+    "careersUrl": "https://jobs.smartrecruiters.com/Sodexo",
+    "sector": "facilities",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 154
+  },
+  {
+    "name": "Domino's",
+    "provider": "smartrecruiters",
+    "identifier": "Dominos",
+    "careersUrl": "https://jobs.smartrecruiters.com/Dominos",
+    "sector": "food_service",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 24867
+  },
+  {
+    "name": "Eataly North America",
+    "provider": "smartrecruiters",
+    "identifier": "Eataly",
+    "careersUrl": "https://jobs.smartrecruiters.com/Eataly",
+    "sector": "food_service",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 228
+  },
+  {
+    "name": "Dungarvin",
+    "provider": "smartrecruiters",
+    "identifier": "Dungarvin",
+    "careersUrl": "https://jobs.smartrecruiters.com/Dungarvin",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 301
+  },
+  {
+    "name": "Kittitas Valley Healthcare",
+    "provider": "smartrecruiters",
+    "identifier": "KittitasValleyHealthcare",
+    "careersUrl": "https://jobs.smartrecruiters.com/KittitasValleyHealthcare",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 46
+  },
+  {
+    "name": "La Rabida Children's Hospital",
+    "provider": "smartrecruiters",
+    "identifier": "LaRabidaChildrensHospital",
+    "careersUrl": "https://jobs.smartrecruiters.com/LaRabidaChildrensHospital",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 28
+  },
+  {
+    "name": "Northwestern Memorial Healthcare",
+    "provider": "smartrecruiters",
+    "identifier": "NorthwesternMedicine",
+    "careersUrl": "https://jobs.smartrecruiters.com/NorthwesternMedicine",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 1428
+  },
+  {
+    "name": "Ramsay Health Care",
+    "provider": "smartrecruiters",
+    "identifier": "RamsayHealthCare1",
+    "careersUrl": "https://jobs.smartrecruiters.com/RamsayHealthCare1",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 290
+  },
+  {
+    "name": "University Health Network",
+    "provider": "smartrecruiters",
+    "identifier": "UniversityHealthNetwork",
+    "careersUrl": "https://jobs.smartrecruiters.com/UniversityHealthNetwork",
+    "sector": "healthcare",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 166
+  },
+  {
+    "name": "Accor Hotels",
+    "provider": "smartrecruiters",
+    "identifier": "AccorHotel",
+    "careersUrl": "https://jobs.smartrecruiters.com/AccorHotel",
+    "sector": "hospitality",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 6337
+  },
+  {
+    "name": "Minor International",
+    "provider": "smartrecruiters",
+    "identifier": "MinorInternational",
+    "careersUrl": "https://jobs.smartrecruiters.com/MinorInternational",
+    "sector": "hospitality",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 140
+  },
+  {
+    "name": "Konecranes",
+    "provider": "smartrecruiters",
+    "identifier": "Konecranes",
+    "careersUrl": "https://jobs.smartrecruiters.com/Konecranes",
+    "sector": "industrial",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 411
+  },
+  {
+    "name": "Rotork",
+    "provider": "smartrecruiters",
+    "identifier": "Rotork",
+    "careersUrl": "https://jobs.smartrecruiters.com/Rotork",
+    "sector": "industrial",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 5
+  },
+  {
+    "name": "Culina Group",
+    "provider": "smartrecruiters",
+    "identifier": "CulinaGroup1",
+    "careersUrl": "https://jobs.smartrecruiters.com/CulinaGroup1",
+    "sector": "logistics",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 251
+  },
+  {
+    "name": "Expeditors",
+    "provider": "smartrecruiters",
+    "identifier": "Expeditors",
+    "careersUrl": "https://jobs.smartrecruiters.com/Expeditors",
+    "sector": "logistics",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 493
+  },
+  {
+    "name": "Anglo American / De Beers Group",
+    "provider": "smartrecruiters",
+    "identifier": "AngloAmericanDeBeersGroup",
+    "careersUrl": "https://jobs.smartrecruiters.com/AngloAmericanDeBeersGroup",
+    "sector": "mining",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 81
+  },
+  {
+    "name": "AbbVie",
+    "provider": "smartrecruiters",
+    "identifier": "AbbVie",
+    "careersUrl": "https://jobs.smartrecruiters.com/AbbVie",
+    "sector": "pharmaceuticals",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 1913
+  },
+  {
+    "name": "Colliers",
+    "provider": "smartrecruiters",
+    "identifier": "Colliers",
+    "careersUrl": "https://jobs.smartrecruiters.com/Colliers",
+    "sector": "real_estate",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 100
+  },
+  {
+    "name": "Farm Boy Inc.",
+    "provider": "smartrecruiters",
+    "identifier": "FarmBoyInc",
+    "careersUrl": "https://jobs.smartrecruiters.com/FarmBoyInc",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 294
+  },
+  {
+    "name": "Frasers Group",
+    "provider": "smartrecruiters",
+    "identifier": "FrasersGroup",
+    "careersUrl": "https://jobs.smartrecruiters.com/FrasersGroup",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 509
+  },
+  {
+    "name": "Inter IKEA Group",
+    "provider": "smartrecruiters",
+    "identifier": "InterIKEAGroup",
+    "careersUrl": "https://jobs.smartrecruiters.com/InterIKEAGroup",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 90
+  },
+  {
+    "name": "Red Wing Shoe Company",
+    "provider": "smartrecruiters",
+    "identifier": "RedWingShoeCompany",
+    "careersUrl": "https://jobs.smartrecruiters.com/RedWingShoeCompany",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 66
+  },
+  {
+    "name": "Rituals",
+    "provider": "smartrecruiters",
+    "identifier": "Rituals1",
+    "careersUrl": "https://jobs.smartrecruiters.com/Rituals1",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 254
+  },
+  {
+    "name": "Walmart Inc.",
+    "provider": "smartrecruiters",
+    "identifier": "WalmartInc",
+    "careersUrl": "https://jobs.smartrecruiters.com/WalmartInc",
+    "sector": "retail",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 87
+  },
+  {
+    "name": "Securitas",
+    "provider": "smartrecruiters",
+    "identifier": "Securitas",
+    "careersUrl": "https://jobs.smartrecruiters.com/Securitas",
+    "sector": "security",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 1227
+  },
+  {
+    "name": "SIXT",
+    "provider": "smartrecruiters",
+    "identifier": "SIXT",
+    "careersUrl": "https://jobs.smartrecruiters.com/SIXT",
+    "sector": "travel",
+    "verifiedAt": "2026-10-18",
+    "reportedJobsAtVerification": 506
+  }
+]
