@@ -71,7 +71,7 @@ export const leverProvider: JobSourceProvider = {
             title,
             description,
             location,
-            country: null,
+            country: normalizeCountryCode(null, location),
             remoteType: inferRemoteType(
               title,
               location,
