@@ -30,6 +30,8 @@ jobs:
             providers: smartrecruiters
           - shard: workday
             providers: workday
+          - shard: custom
+            providers: custom
           - shard: other
             providers: lever,ashby,workable
     env:
