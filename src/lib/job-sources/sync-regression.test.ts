@@ -6,7 +6,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function fixture(mode: "existing" | "lookup-error" | "insert-race") {
+function fixture(mode: "existing" | "lookup-error" | "insert-race" | "pending-error") {
   process.env["SUPABASE_URL"] = "https://fixture.supabase.co";
   process.env["SUPABASE_SERVICE_ROLE_KEY"] = "sb_secret_offline_test_only_not_a_credential";
   const calls: { path: string; method: string; query: URLSearchParams; body: any }[] = [];
@@ -41,7 +41,11 @@ function fixture(mode: "existing" | "lookup-error" | "insert-race") {
     if (url.pathname === "/rest/v1/companies" && method === "POST")
       return Response.json({ message: "Duplicate board", code: "23505" }, { status: 409 });
     if (url.pathname === "/rest/v1/job_sources") return Response.json({ id: "source-1" });
-    if (url.pathname === "/rest/v1/jobs" && method === "GET") return Response.json([]);
+    if (url.pathname === "/rest/v1/jobs" && method === "GET") return Response.json(mode === "pending-error" ? [{
+      id: "job-1", external_job_id: "0", application_url: "https://jobs.smartrecruiters.com/Hospital/0", last_verified_at: null,
+    }] : []);
+    if (url.pathname === "/rest/v1/adapter_inspections" && method === "GET")
+      return Response.json({ message: "Inspection queue unavailable", code: "PGRST002" }, { status: 503 });
     if (method === "PATCH" || method === "POST") return new Response(null, { status: 204 });
     throw new Error(`Unexpected fixture request: ${method} ${url.pathname}`);
   }) as typeof fetch;
@@ -55,6 +59,11 @@ const input = {
 };
 
 describe("inventory registry and description regressions", () => {
+  test("an unavailable inspection lookup cannot create duplicate pending inspections", async () => {
+    const calls = fixture("pending-error");
+    await expect(syncJobSource({ ...input, requestedBy: "00000000-0000-0000-0000-000000000001" })).rejects.toThrow("Inspection queue unavailable");
+    expect(calls.some(call => call.path.endsWith("adapter_inspections") && call.method === "POST")).toBe(false);
+  }, 15000);
   test("chooses one active company and keeps unenriched jobs out of description-writing batches", async () => {
     const calls = fixture("existing");
     await syncJobSource(input);

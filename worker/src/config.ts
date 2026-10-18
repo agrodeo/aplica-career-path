@@ -19,7 +19,7 @@ const schema = z.object({
   INSPECTION_PROVIDER: z.enum(["all", "greenhouse", "ashby", "workable", "smartrecruiters", "workday", "lever"]).default("all"),
   INSPECTION_BATCH_SIZE: z.coerce.number().int().min(1).max(120).default(100),
   INSPECTION_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(4),
-  SUPABASE_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+  SUPABASE_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(60000),
   LOG_LEVEL: z.string().default("info"),
 });
 
