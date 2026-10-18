@@ -14,15 +14,26 @@ on:
 
 concurrency:
   group: aplica-inventory-sync
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: greenhouse
+            providers: greenhouse
+          - shard: smartrecruiters
+            providers: smartrecruiters
+          - shard: other
+            providers: workday,lever,ashby,workable
     env:
       SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SYNC_PROVIDERS: ${{ matrix.providers }}
 
     steps:
       - uses: actions/checkout@v4
