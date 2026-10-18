@@ -37,6 +37,47 @@ test("profile persistence is atomic, repeatable, isolated by RLS and requires ex
   } finally { await db.close(); }
 });
 
+test("inspection leases and atomic reports survive retries and reject stale workers", async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
+      create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;`);
+    await db.exec((await migration("0000_auto_apply_core_schema")).split("-- ============ REALTIME ============")[0]);
+    await db.exec((await migration("0001_auto_apply_first_submission")).replace(/ALTER PUBLICATION[^;]+;/g, ""));
+    await db.exec(await migration("20261018054754_atomic_inspection_reporting"));
+    await db.exec(`insert into jobs(external_job_id,title,application_url) values('fixture','Nurse','https://boards.greenhouse.io/test/1');
+      insert into adapter_inspections(requested_by,url,ats_type,status) values
+        ('00000000-0000-0000-0000-000000000011','https://boards.greenhouse.io/test/1','greenhouse','queued'),
+        ('00000000-0000-0000-0000-000000000011','https://jobs.ashbyhq.com/test/2','ashby','queued');`);
+    const claim = (await db.query("select * from claim_inspection_batch('first',1,'greenhouse')")).rows[0];
+    const retried = (await db.query("select * from claim_inspection_batch('first',1,'greenhouse')")).rows[0];
+    assert.equal(claim.id, retried.id);
+    assert.equal((await db.query("select * from claim_inspection_batch('second',1,'greenhouse')")).rows.length, 0);
+    assert.equal((await db.query("select * from claim_inspection_batch('other-provider',1,'ashby')")).rows.length, 1);
+    const payload = { status: "completed", adapter: "fixture", adapterVersion: "2", atsType: "greenhouse", fields: [], requiredFields: [], supportsFileUpload: true, supportsAutoSubmit: true, autoApplyEligible: true };
+    await assert.rejects(db.query("select report_inspection_result($1,'wrong-worker',$2)", [claim.id, JSON.stringify(payload)]));
+    await db.exec(`create function reject_fixture_update() returns trigger language plpgsql as $$ begin raise exception 'fixture failure';end;$$;
+      create trigger reject_job_update before update on jobs for each row execute function reject_fixture_update();`);
+    await assert.rejects(db.query("select report_inspection_result($1,'first',$2)", [claim.id, JSON.stringify(payload)]));
+    assert.equal((await db.query("select count(*)::int n from application_schemas")).rows[0].n, 0);
+    assert.equal((await db.query("select status from adapter_inspections where id=$1", [claim.id])).rows[0].status, "running");
+    await db.exec("drop trigger reject_job_update on jobs");
+    await db.query("select report_inspection_result($1,'first',$2)", [claim.id, JSON.stringify(payload)]);
+    await db.query("select report_inspection_result($1,'first',$2)", [claim.id, JSON.stringify(payload)]);
+    assert.equal((await db.query("select count(*)::int n from application_schemas")).rows[0].n, 1);
+    assert.equal((await db.query("select auto_apply_eligible from jobs")).rows[0].auto_apply_eligible, true);
+    assert.equal((await db.query("select status from adapter_inspections where id=$1", [claim.id])).rows[0].status, "completed");
+    await db.exec(`insert into adapter_inspections(id,requested_by,url,ats_type,status,worker_id,locked_at)
+      values('00000000-0000-0000-0000-000000000099','00000000-0000-0000-0000-000000000011','https://boards.greenhouse.io/test/1','greenhouse','running','network-failure',now());`);
+    await db.query("select report_inspection_result('00000000-0000-0000-0000-000000000099','network-failure',$1)",
+      [JSON.stringify({ status: "failed", errorCode: "NETWORK_ERROR", autoApplyEligible: false })]);
+    assert.equal((await db.query("select auto_apply_eligible from jobs")).rows[0].auto_apply_eligible, true);
+    await db.exec("set role authenticated");
+    await assert.rejects(db.query("select claim_inspection_batch('untrusted',1,'greenhouse')"));
+    await assert.rejects(db.query("select report_inspection_result($1,'first',$2)", [claim.id, JSON.stringify(payload)]));
+  } finally { await db.close(); }
+});
+
 test("inspection claims honor priority, do not reclaim live leases and recover abandoned leases", async () => {
   const db = new PGlite();
   try {

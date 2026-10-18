@@ -8,17 +8,17 @@ let running = true;
 
 async function runCycle() {
   const config = loadConfig();
-  const items = await claimApplications(config.MAX_CONCURRENCY);
+  const items = config.RUN_TARGET === "inspections" ? [] : await claimApplications(config.MAX_CONCURRENCY);
   // Process authorized applications before the large inspection backlog.
   await Promise.all(items.map((item) => running ? processApplication(item) : Promise.resolve()));
-  const inspected = running ? await drainInspections() : 0;
+  const inspected = running && config.RUN_TARGET !== "applications" ? await drainInspections() : 0;
   return { inspected, processed: items.length };
 }
 
 async function main() {
   const config = loadConfig();
   logger.info(
-    { workerId: config.WORKER_ID, mode: config.WORKER_MODE, dryRun: config.DRY_RUN, runOnce: config.RUN_ONCE },
+    { workerId: config.WORKER_ID, mode: config.WORKER_MODE, target: config.RUN_TARGET, provider: config.INSPECTION_PROVIDER, dryRun: config.DRY_RUN, runOnce: config.RUN_ONCE },
     "worker started",
   );
 

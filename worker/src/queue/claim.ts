@@ -1,6 +1,7 @@
 import { loadConfig } from "../config.js";
 import { db } from "../supabase.js";
 import { ApplicationError } from "../utils/errors.js";
+import { recoverableDatabaseCall } from "../utils/database-retry.js";
 
 export interface QueueItem {
   id: string;
@@ -34,10 +35,11 @@ export async function claimApplications(limit = 1): Promise<QueueItem[]> {
 
 export async function claimInspections(limit = 1): Promise<InspectionItem[]> {
   const config = loadConfig();
-  const { data, error } = await db().rpc("claim_inspection", {
+  const { data, error } = await recoverableDatabaseCall(() => db().rpc("claim_inspection_batch", {
     _worker_id: config.WORKER_ID,
     _limit: Math.min(Math.max(limit, 1), 120),
-  });
+    _ats_type: config.INSPECTION_PROVIDER === "all" ? null : config.INSPECTION_PROVIDER,
+  }), "claim_inspection_batch");
   if (error) fail(error, "claim_inspection");
   return (data ?? []) as InspectionItem[];
 }
@@ -114,93 +116,11 @@ export async function reportFailure(queueId: string, payload: Record<string, unk
 }
 
 export async function reportInspection(inspectionId: string, payload: Record<string, unknown>): Promise<void> {
-  const completedAt = new Date().toISOString();
-  const status = String(payload["status"] ?? "completed");
-
-  const { data: inspection, error: inspectionError } = await db()
-    .from("adapter_inspections")
-    .select("url")
-    .eq("id", inspectionId)
-    .maybeSingle();
-  if (inspectionError) fail(inspectionError, "load inspection");
-
-  const { error } = await db()
-    .from("adapter_inspections")
-    .update({
-      status,
-      adapter: payload["adapter"] ? String(payload["adapter"]) : null,
-      ats_type: payload["atsType"] ? String(payload["atsType"]) : null,
-      auto_apply_eligible: typeof payload["autoApplyEligible"] === "boolean" ? payload["autoApplyEligible"] : null,
-      captcha_detected: typeof payload["captchaDetected"] === "boolean" ? payload["captchaDetected"] : null,
-      login_required: typeof payload["loginRequired"] === "boolean" ? payload["loginRequired"] : null,
-      required_fields: (payload["requiredFields"] ?? []) as never,
-      mapped_fields: (payload["mappedFields"] ?? []) as never,
-      unknown_fields: (payload["unknownFields"] ?? []) as never,
-      reason: payload["reason"] ? String(payload["reason"]) : null,
-      error_code: payload["errorCode"] ? String(payload["errorCode"]) : null,
-      error_message: payload["errorMessage"] ? String(payload["errorMessage"]) : null,
-      completed_at: completedAt,
-    })
-    .eq("id", inspectionId);
-  if (error) fail(error, "report inspection");
-
-  // A failed infrastructure/network inspection should be retried later and must
-  // not change job eligibility. Only a completed inspection is authoritative.
-  if (status !== "completed" || !inspection?.url) return;
-
-  const adapter = payload["adapter"] ? String(payload["adapter"]) : "unsupported";
-  const eligible = payload["autoApplyEligible"] === true;
-  const reason = payload["reason"] ? String(payload["reason"]) : eligible ? null : "FORM_NOT_SUPPORTED";
-
-  const { data: jobs, error: jobsError } = await db()
-    .from("jobs")
-    .select("id,application_schema_id")
-    .eq("application_url", inspection.url)
-    .eq("is_active", true);
-  if (jobsError) fail(jobsError, "load inspected jobs");
-
-  for (const job of jobs ?? []) {
-    let schemaId = job.application_schema_id as string | null;
-
-    const schemaRow = {
-      job_id: job.id,
-      adapter,
-      schema_version: String(payload["adapterVersion"] ?? "1"),
-      fields: (payload["fields"] ?? []) as never,
-      required_fields: (payload["requiredFields"] ?? []) as never,
-      supports_file_upload: payload["supportsFileUpload"] === true,
-      supports_auto_submit: payload["supportsAutoSubmit"] === true,
-      last_verified_at: completedAt,
-      valid: eligible,
-    };
-
-    if (schemaId) {
-      const { error: schemaError } = await db()
-        .from("application_schemas")
-        .update(schemaRow)
-        .eq("id", schemaId);
-      if (schemaError) fail(schemaError, "update application schema");
-    } else {
-      const { data: schema, error: schemaError } = await db()
-        .from("application_schemas")
-        .insert(schemaRow)
-        .select("id")
-        .single();
-      if (schemaError || !schema) fail(schemaError, "create application schema");
-      schemaId = schema.id;
-    }
-
-    const { error: jobError } = await db()
-      .from("jobs")
-      .update({
-        auto_apply_eligible: eligible,
-        auto_apply_adapter: adapter === "unsupported" ? null : adapter,
-        application_schema_id: schemaId,
-        last_verified_at: completedAt,
-        submission_mechanism: eligible ? "public_form" : "manual",
-        ineligibility_reason: eligible ? null : reason,
-      })
-      .eq("id", job.id);
-    if (jobError) fail(jobError, "update inspected job");
-  }
+  const config = loadConfig();
+  const { error } = await recoverableDatabaseCall(() => db().rpc("report_inspection_result", {
+    _inspection_id: inspectionId,
+    _worker_id: config.WORKER_ID,
+    _payload: payload,
+  }), "report_inspection_result");
+  if (error) fail(error, "report_inspection_result");
 }
