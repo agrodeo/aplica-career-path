@@ -10,6 +10,7 @@ const ALL_PROVIDERS: AtsProvider[] = [
   "lever",
   "ashby",
   "workable",
+  "custom",
 ];
 
 function requestedProviders(): AtsProvider[] | undefined {
@@ -26,7 +27,7 @@ function requestedProviders(): AtsProvider[] | undefined {
   return requested.length ? requested : undefined;
 }
 
-// worldwide inventory wave 21 + Argentina/LATAM expansion
+// worldwide inventory wave 22 + Argentina/LATAM custom portals
 async function main() {
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
