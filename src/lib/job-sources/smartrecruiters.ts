@@ -148,7 +148,7 @@ function normalizePosting(
     title: title.slice(0, 500),
     description,
     location,
-    country: source.location?.country ?? null,
+    country: normalizeCountryCode(source.location?.country, location),
     remoteType,
     employmentType: inferEmploymentType(
       title,
