@@ -83,7 +83,7 @@ export const workableProvider: JobSourceProvider = {
           title: title.slice(0, 500),
           description,
           location,
-          country: job.country?.trim() || null,
+          country: normalizeCountryCode(job.country, location),
           remoteType,
           employmentType: inferEmploymentType(
             title,
