@@ -97,7 +97,7 @@ function listingToJob(
     title: title.slice(0, 500),
     description,
     location,
-    country: null,
+    country: normalizeCountryCode(null, location),
     remoteType: inferRemoteType(title, location, description),
     employmentType: inferEmploymentType(title, description),
     seniority: inferSeniority(title),
