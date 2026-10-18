@@ -12,7 +12,7 @@ on:
       - "drizzle/migrations/**"
 
 concurrency:
-  group: aplica-latam-inventory-sync
+  group: aplica-latam-inventory-sync-v2
   cancel-in-progress: true
 
 jobs:
