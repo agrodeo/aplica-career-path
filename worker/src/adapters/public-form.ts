@@ -115,8 +115,8 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         .filter(
           (field) =>
             field.required &&
-            !field.canonicalKey &&
-            (field.type === "unknown" || field.type === "file") &&
+            ((field.type === "file" && field.canonicalKey !== "resume") ||
+              (field.type === "unknown" && !field.canonicalKey)) &&
             !(field.demographic && field.options && findDeclineOption(field.options)),
         )
         .map((field) => field.label);
@@ -430,7 +430,8 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
+        if (inputType === "radio") label = el.closest("fieldset")?.querySelector("legend")?.textContent?.trim() ?? "";
+        if (!label && id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();

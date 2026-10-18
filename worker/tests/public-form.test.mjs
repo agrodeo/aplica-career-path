@@ -85,6 +85,13 @@ test("generic or cover-letter-only uploads do not count as resume support", asyn
   }
 });
 
+test("required non-resume uploads remain structurally unsupported", async () => {
+  await inspect(`<form>${identity}${resume}<input type="file" required aria-label="Cover letter">${submit}</form>`, async (schema) => {
+    assert.equal(schema.supportsFileUpload, true);
+    assert.deepEqual(schema.unknownRequiredFields, ["Cover letter"]);
+  });
+});
+
 test("keeps real CAPTCHA and login requirements blocked", async () => {
   await inspect(`${application}<div data-sitekey="fixture"></div>`, async (schema) => {
     assert.equal(schema.captchaDetected, true);
@@ -100,6 +107,8 @@ test("preserves radio groups and handles names containing quotes", async () => {
   await inspect(`<form>${identity}${resume}<fieldset><legend>Preferred shift *</legend><label><input type="radio" name='shift"name' value="day">Day</label><label><input type="radio" name='shift"name' value="night">Night</label></fieldset>${submit}</form>`, async (schema, page) => {
     const radio = schema.fields.find((field) => field.type === "radio");
     assert.ok(radio);
+    assert.equal(radio.label, "Preferred shift *");
+    assert.equal(radio.required, true);
     assert.equal(await page.locator(radio.selector).count(), 2);
     await page.locator(`${radio.selector}[value="night"]`).check();
     assert.equal(await page.locator(`${radio.selector}[value="night"]`).isChecked(), true);
