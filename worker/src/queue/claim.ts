@@ -2,6 +2,7 @@ import { loadConfig } from "../config.js";
 import { db } from "../supabase.js";
 import { ApplicationError } from "../utils/errors.js";
 import { recoverableDatabaseCall } from "../utils/database-retry.js";
+import { InspectionLeaseLostError } from "./inspection-outbox.js";
 
 export interface QueueItem {
   id: string;
@@ -115,12 +116,15 @@ export async function reportFailure(queueId: string, payload: Record<string, unk
   if (error) fail(error, "fail_application");
 }
 
-export async function reportInspection(inspectionId: string, payload: Record<string, unknown>): Promise<void> {
+export async function reportInspection(inspectionId: string, payload: Record<string, unknown>, workerId?: string): Promise<void> {
   const config = loadConfig();
   const { error } = await recoverableDatabaseCall(() => db().rpc("report_inspection_result", {
     _inspection_id: inspectionId,
-    _worker_id: config.WORKER_ID,
+    _worker_id: workerId ?? config.WORKER_ID,
     _payload: payload,
   }), "report_inspection_result");
+  if (error?.code === "P0001" && /Inspection (?:lease is not owned|not found|is not running)/i.test(error.message)) {
+    throw new InspectionLeaseLostError(error.message);
+  }
   if (error) fail(error, "report_inspection_result");
 }
