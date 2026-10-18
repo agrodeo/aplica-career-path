@@ -26,7 +26,7 @@ function requestedProviders(): AtsProvider[] | undefined {
   return requested.length ? requested : undefined;
 }
 
-// worldwide inventory wave 16 + Argentina/LATAM expansion
+// worldwide inventory wave 17 + Argentina/LATAM expansion
 async function main() {
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
