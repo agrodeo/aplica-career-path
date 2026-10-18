@@ -43,7 +43,9 @@ test("inspection claims honor priority, do not reclaim live leases and recover a
     await db.exec(`create role anon; create role authenticated; create role service_role;
       create table adapter_inspections(id uuid primary key default gen_random_uuid(),url text,status text,created_at timestamptz default now(),locked_at timestamptz,worker_id text);
       create table jobs(application_url text,is_active boolean,country text,location text);`);
+    await db.exec("create index adapter_inspections_claim_idx on adapter_inspections(status,created_at)");
     await db.exec(await migration("20261018042058_bound_auto_apply_inspection_claims"));
+    await db.exec(await migration("20261018043718_claim_inspections_with_existing_queue_index"));
     await db.exec(`insert into adapter_inspections(url,status) values('https://boards.greenhouse.io/test/1','queued'),('https://jobs.ashbyhq.com/test/2','queued'),('https://jobs.lever.co/test/3','queued');`);
     const first = (await db.query("select * from claim_inspection('first',2)")).rows;
     assert.equal(first.length, 2);
