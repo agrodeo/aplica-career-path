@@ -82,6 +82,7 @@ describe("Auto Apply capability", () => {
       greenhouse: "greenhouse_public_form",
       lever: "lever_public_form",
       ashby: "ashby_public_form",
+      custom: null,
       workday: "workday_public_form",
       smartrecruiters: "smartrecruiters_public_form",
       workable: "workable_public_form",
