@@ -4,6 +4,7 @@ import { leverProvider } from "@/lib/job-sources/lever";
 import { workdayProvider } from "@/lib/job-sources/workday";
 import { smartRecruitersProvider } from "@/lib/job-sources/smartrecruiters";
 import { workableProvider } from "@/lib/job-sources/workable";
+import { customProvider } from "@/lib/job-sources/custom";
 import type {
   AtsProvider,
   JobSourceProvider,
@@ -16,6 +17,7 @@ export const jobSourceProviders: Record<AtsProvider, JobSourceProvider> = {
   workday: workdayProvider,
   smartrecruiters: smartRecruitersProvider,
   workable: workableProvider,
+  custom: customProvider,
 };
 
 export const supportedAtsProviders = Object.keys(
@@ -46,6 +48,24 @@ export function detectJobBoardUrl(value: string) {
       identifier,
       companyName: prettyCompanyName(identifier),
       careersUrl: url.toString(),
+    };
+  }
+
+  if (host === "careers.rappi.com") {
+    return {
+      provider: "custom" as const,
+      identifier: "rappi",
+      companyName: "Rappi",
+      careersUrl: "https://careers.rappi.com/es/careers",
+    };
+  }
+
+  if (host === "www.ua.la" || host === "ua.la") {
+    return {
+      provider: "custom" as const,
+      identifier: "uala",
+      companyName: "Ualá",
+      careersUrl: "https://www.ua.la/sumate",
     };
   }
 
@@ -125,7 +145,7 @@ export function detectJobBoardUrl(value: string) {
   }
 
   throw new Error(
-    "URL no soportada todavía. Usá un board público de Greenhouse, Lever, Ashby, Workable, SmartRecruiters o Workday.",
+    "URL no soportada todavía. Usá un board público de Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Workday o un portal LATAM compatible.",
   );
 }
 
