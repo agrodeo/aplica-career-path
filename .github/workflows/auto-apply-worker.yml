@@ -16,11 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  worker:
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
+  applications:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -35,7 +31,8 @@ jobs:
       DRY_RUN: "false"
       RUN_ONCE: "true"
       MAX_CONCURRENCY: "4"
-      WORKER_ID: github-actions-${{ github.run_id }}-${{ matrix.shard }}
+      RUN_TARGET: applications
+      WORKER_ID: github-actions-${{ github.run_id }}-applications
       LOG_LEVEL: info
 
     steps:
@@ -48,4 +45,65 @@ jobs:
         run: npm run build
 
       - name: Process pending applications
+        run: npm start
+
+  inspections:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: greenhouse-1
+            provider: greenhouse
+            batch: 100
+            concurrency: 4
+          - shard: greenhouse-2
+            provider: greenhouse
+            batch: 100
+            concurrency: 4
+          - shard: ashby
+            provider: ashby
+            batch: 50
+            concurrency: 2
+          - shard: workable
+            provider: workable
+            batch: 50
+            concurrency: 2
+          - shard: smartrecruiters
+            provider: smartrecruiters
+            batch: 15
+            concurrency: 1
+          - shard: workday
+            provider: workday
+            batch: 15
+            concurrency: 1
+          - shard: lever
+            provider: lever
+            batch: 15
+            concurrency: 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+    defaults:
+      run:
+        working-directory: worker
+    env:
+      SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      WORKER_MODE: production
+      DRY_RUN: "false"
+      RUN_ONCE: "true"
+      RUN_TARGET: inspections
+      INSPECTION_PROVIDER: ${{ matrix.provider }}
+      INSPECTION_BATCH_SIZE: ${{ matrix.batch }}
+      INSPECTION_CONCURRENCY: ${{ matrix.concurrency }}
+      WORKER_ID: github-actions-${{ github.run_id }}-${{ matrix.shard }}
+      LOG_LEVEL: info
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install worker dependencies
+        run: npm ci
+      - name: Build worker
+        run: npm run build
+      - name: Inspect pending application forms
         run: npm start
