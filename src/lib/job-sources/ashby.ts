@@ -86,7 +86,11 @@ export const ashbyProvider: JobSourceProvider = {
             title,
             description,
             location,
-            country: job.address?.postalAddress?.addressCountry ?? null,
+            country: normalizeCountryCode(
+              job.address?.postalAddress?.addressCountry ?? null,
+              location,
+              ...(job.secondaryLocations ?? []).map((item) => item.location ?? null),
+            ),
             remoteType: inferRemoteType(
               title,
               location,
