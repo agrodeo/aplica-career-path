@@ -187,8 +187,8 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     rows.filter((row) => "description" in row),
     rows.filter((row) => !("description" in row)),
   ]) {
-    for (let index = 0; index < batch.length; index += 500) {
-      const { error } = await supabaseAdmin.from("jobs").upsert(batch.slice(index, index + 500), {
+    for (let index = 0; index < batch.length; index += 50) {
+      const { error } = await supabaseAdmin.from("jobs").upsert(batch.slice(index, index + 50), {
         onConflict: "source_id,external_job_id",
       });
       if (error) throw new Error(error.message);
@@ -260,22 +260,27 @@ export async function syncJobSource(input: JobSourceSyncInput) {
       if (error) throw new Error(error.message);
     }
 
-    const urls = inspectionCandidates
+    const urls = [...new Set(inspectionCandidates
       .map((job) => job.application_url)
-      .filter((url): url is string => Boolean(url));
+      .filter((url): url is string => Boolean(url)))];
 
-    const { data: pending } = await supabaseAdmin
-      .from("adapter_inspections")
-      .select("url")
-      .in("url", urls)
-      .in("status", ["queued", "running"]);
-
-    const pendingUrls = new Set((pending ?? []).map((row) => row.url));
+    const pendingUrls = new Set<string>();
+    for (let index = 0; index < urls.length; index += 100) {
+      const { data: pending, error } = await supabaseAdmin
+        .from("adapter_inspections")
+        .select("url")
+        .in("url", urls.slice(index, index + 100))
+        .in("status", ["queued", "running"]);
+      // A failed lookup is not an empty queue: inserting in that case creates
+      // duplicates on every inventory refresh during an API outage.
+      if (error) throw new Error(error.message);
+      for (const row of pending ?? []) pendingUrls.add(row.url);
+    }
     const toInspect = urls.filter((url) => !pendingUrls.has(url));
 
-    if (toInspect.length) {
+    for (let index = 0; index < toInspect.length; index += 100) {
       const { error } = await supabaseAdmin.from("adapter_inspections").insert(
-        toInspect.map((url) => ({
+        toInspect.slice(index, index + 100).map((url) => ({
           requested_by: input.requestedBy!,
           url,
           mode: "inspect",
@@ -285,7 +290,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
         })),
       );
       if (error) throw new Error(error.message);
-      inspectionsQueued = toInspect.length;
+      inspectionsQueued += Math.min(100, toInspect.length - index);
     }
   }
 
