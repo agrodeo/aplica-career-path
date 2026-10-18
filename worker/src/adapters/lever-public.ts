@@ -7,7 +7,7 @@ import { createPublicFormAdapter } from "./public-form.js";
  */
 export const leverPublicAdapter = createPublicFormAdapter({
   id: "lever_public_form",
-  version: "0.1.0",
+  version: "0.1.1",
   atsType: "lever",
   hostPatterns: [/^jobs\.lever\.co$/i, /^jobs\.eu\.lever\.co$/i],
   formSelector: "form.application-form, form[action*='apply']",

@@ -2,7 +2,7 @@ import { createPublicFormAdapter } from "./public-form.js";
 
 export const workdayPublicAdapter = createPublicFormAdapter({
   id: "workday_public_form",
-  version: "0.1.0",
+  version: "0.1.1",
   atsType: "workday",
   hostPatterns: [/^[a-z0-9-]+\.wd\d+\.myworkdayjobs\.com$/i],
   formSelector: "form",
