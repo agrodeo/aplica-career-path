@@ -59,4 +59,4 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
-// inventory sync trigger: LATAM wave 15
+// inventory sync trigger: LATAM wave 23
