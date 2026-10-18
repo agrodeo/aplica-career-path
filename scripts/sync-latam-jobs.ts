@@ -25,6 +25,10 @@ const STALE_AFTER_MINUTES = 30;
 async function main() {
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
   const providers = requestedProviders();
+  const companyLimit =
+    providers.length === 1 && providers[0] === "smartrecruiters"
+      ? 20
+      : MAX_COMPANIES_PER_RUN;
 
   const { data: companies, error } = await (supabaseAdmin
     .from("companies") as any)
@@ -34,7 +38,7 @@ async function main() {
     .not("ats_identifier", "is", null)
     .or("latam_priority.eq.true,last_scanned_at.is.null")
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
-    .limit(MAX_COMPANIES_PER_RUN);
+    .limit(companyLimit);
 
   if (error) throw new Error(error.message);
 
@@ -46,7 +50,7 @@ async function main() {
       const scannedAt = new Date(company.last_scanned_at).getTime();
       return !Number.isFinite(scannedAt) || scannedAt < cutoff;
     })
-    .slice(0, MAX_COMPANIES_PER_RUN);
+    .slice(0, companyLimit);
 
   const { data: adminRole } = await supabaseAdmin
     .from("user_roles")
