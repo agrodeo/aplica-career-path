@@ -103,7 +103,9 @@ async function main() {
     }
   }
 
-  const concurrency = providers.length === 1 && providers[0] === "smartrecruiters" ? 2 : 4;
+  const concurrency = providers.length === 1 && providers[0] === "custom" ? 1
+    : providers.length === 1 && ["smartrecruiters", "workday"].includes(providers[0] ?? "") ? 2
+    : 4;
   await Promise.all(
     Array.from({ length: Math.min(concurrency, queue.length || 1) }, () => runner()),
   );

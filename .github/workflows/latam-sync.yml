@@ -17,6 +17,9 @@ concurrency:
 
 jobs:
   sync-latam:
+    concurrency:
+      group: aplica-provider-sync-${{ matrix.shard }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:

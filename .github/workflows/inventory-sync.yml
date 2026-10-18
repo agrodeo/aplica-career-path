@@ -18,6 +18,9 @@ concurrency:
 
 jobs:
   sync:
+    concurrency:
+      group: aplica-provider-sync-${{ matrix.shard }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
