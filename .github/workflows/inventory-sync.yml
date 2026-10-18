@@ -28,8 +28,10 @@ jobs:
             providers: greenhouse
           - shard: smartrecruiters
             providers: smartrecruiters
+          - shard: workday
+            providers: workday
           - shard: other
-            providers: workday,lever,ashby,workable
+            providers: lever,ashby,workable
     env:
       SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
