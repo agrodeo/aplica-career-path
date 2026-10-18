@@ -111,3 +111,102 @@ export function parseHumanPostedAt(
 
   return safeIsoDate(value);
 }
+
+
+const COUNTRY_ALIAS_RULES: Array<[RegExp, string]> = [
+  [/\bargentina\b|\bbuenos aires\b/, "ar"],
+  [/\bbrazil\b|\bbrasil\b|\bsao paulo\b|\brio de janeiro\b/, "br"],
+  [/\bmexico\b|\bmexico city\b|\bciudad de mexico\b/, "mx"],
+  [/\bcolombia\b|\bbogota\b|\bmedellin\b/, "co"],
+  [/\bchile\b/, "cl"],
+  [/\bperu\b|\blima\b/, "pe"],
+  [/\buruguay\b|\bmontevideo\b/, "uy"],
+  [/\becuador\b|\bquito\b|\bguayaquil\b/, "ec"],
+  [/\bparaguay\b|\basuncion\b/, "py"],
+  [/\bbolivia\b/, "bo"],
+  [/\bcosta rica\b/, "cr"],
+  [/\bpanama\b/, "pa"],
+  [/\bguatemala\b/, "gt"],
+  [/\bhonduras\b/, "hn"],
+  [/\bel salvador\b/, "sv"],
+  [/\bnicaragua\b/, "ni"],
+  [/\bdominican republic\b|\brepublica dominicana\b/, "do"],
+  [/\bpuerto rico\b/, "pr"],
+  [/\bunited states\b|\busa\b|\bu\.s\.a\b/, "us"],
+  [/\bunited kingdom\b|\bgreat britain\b|\bengland\b|\bscotland\b|\bwales\b/, "gb"],
+  [/\bfrance\b/, "fr"],
+  [/\bgermany\b|\bdeutschland\b/, "de"],
+  [/\bindia\b/, "in"],
+  [/\bnetherlands\b/, "nl"],
+  [/\bspain\b|\bespana\b/, "es"],
+  [/\bcanada\b/, "ca"],
+  [/\bchina\b/, "cn"],
+  [/\bmalaysia\b/, "my"],
+  [/\bbelgium\b/, "be"],
+  [/\bpoland\b/, "pl"],
+  [/\bjapan\b/, "jp"],
+  [/\bromania\b/, "ro"],
+  [/\bportugal\b/, "pt"],
+  [/\bsweden\b/, "se"],
+  [/\bitaly\b|\bitalia\b/, "it"],
+  [/\bphilippines\b/, "ph"],
+  [/\bhungary\b/, "hu"],
+  [/\baustralia\b/, "au"],
+  [/\bnorway\b/, "no"],
+  [/\bvietnam\b|\bviet nam\b/, "vn"],
+  [/\bsingapore\b/, "sg"],
+  [/\bswitzerland\b/, "ch"],
+  [/\bireland\b/, "ie"],
+  [/\bdenmark\b/, "dk"],
+  [/\begypt\b/, "eg"],
+  [/\baustria\b/, "at"],
+  [/\bbulgaria\b/, "bg"],
+  [/\bthailand\b/, "th"],
+  [/\bsouth korea\b|\brepublic of korea\b/, "kr"],
+  [/\bczech republic\b|\bczechia\b/, "cz"],
+  [/\bukraine\b/, "ua"],
+  [/\btaiwan\b/, "tw"],
+  [/\bindonesia\b/, "id"],
+  [/\bmorocco\b/, "ma"],
+  [/\btunisia\b/, "tn"],
+  [/\bfinland\b/, "fi"],
+  [/\bsaudi arabia\b/, "sa"],
+  [/\bturkey\b|\bturkiye\b/, "tr"],
+  [/\bgreece\b/, "gr"],
+  [/\bestonia\b/, "ee"],
+  [/\bunited arab emirates\b|\buae\b/, "ae"],
+];
+
+function normalizedGeoText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, " ")
+    .replace(/[^a-z0-9.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Normalize a country to an ISO-3166 alpha-2-ish lowercase code.
+ * The first argument is the ATS country field and may already be a 2-letter
+ * code. Additional hints are free-form location strings.
+ */
+export function normalizeCountryCode(
+  country: string | null | undefined,
+  ...locationHints: Array<string | null | undefined>
+) {
+  const direct = country?.trim().toLowerCase() ?? "";
+  if (/^[a-z]{2}$/.test(direct)) return direct;
+
+  const combined = [country, ...locationHints]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map(normalizedGeoText)
+    .join(" ");
+
+  if (!combined) return null;
+  for (const [pattern, code] of COUNTRY_ALIAS_RULES) {
+    if (pattern.test(combined)) return code;
+  }
+  return null;
+}
