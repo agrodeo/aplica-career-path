@@ -26,26 +26,14 @@ async function collectCompanyIds(builder: (from: number, to: number) => PromiseL
 }
 
 async function main() {
-  const [countryIds, regionalLocationIds] = await Promise.all([
-    collectCompanyIds((from, to) =>
-      supabaseAdmin
-        .from("jobs")
-        .select("company_id")
-        .eq("is_active", true)
-        .in("country", LATAM_COUNTRIES)
-        .range(from, to),
-    ),
-    collectCompanyIds((from, to) =>
-      supabaseAdmin
-        .from("jobs")
-        .select("company_id")
-        .eq("is_active", true)
-        .or("location.ilike.%LATAM%,location.ilike.%Latin America%,location.ilike.%South America%")
-        .range(from, to),
-    ),
-  ]);
-
-  const priorityCompanyIds = new Set([...countryIds, ...regionalLocationIds]);
+  const priorityCompanyIds = await collectCompanyIds((from, to) =>
+    supabaseAdmin
+      .from("jobs")
+      .select("company_id")
+      .eq("is_active", true)
+      .in("country", LATAM_COUNTRIES)
+      .range(from, to),
+  );
   const cutoff = Date.now() - STALE_AFTER_MINUTES * 60_000;
 
   const { data: companies, error } = await supabaseAdmin
