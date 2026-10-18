@@ -349,6 +349,9 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
 
     return controls
       .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      // React Select adds an invisible required-input proxy. Its visible ARIA
+      // combobox owns the answer; filling the proxy would invent a second field.
+      .filter((el) => !(el.matches('input[aria-hidden="true"][tabindex="-1"]') && el.parentElement?.querySelector('[role="combobox"]')))
       .map((el, index) => {
         const id = el.getAttribute("id");
         const name = el.getAttribute("name") ?? "";
@@ -367,6 +370,15 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
         if (!label) label = el.getAttribute("aria-label") ?? "";
+        const uploadGroup = inputType === "file" ? el.closest('[role="group"][aria-labelledby], fieldset') : null;
+        if (uploadGroup && uploadGroup.querySelectorAll('input[type="file"]').length === 1) {
+          // Greenhouse labels the file button "Attach" and puts Resume/CV on
+          // the owning group, several wrappers above the actual native input.
+          const groupLabel = (uploadGroup.getAttribute("aria-labelledby") ?? "").split(/\s+/)
+            .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim()
+            || uploadGroup.querySelector("legend")?.textContent?.trim();
+          if (groupLabel) label = groupLabel;
+        }
         if (!label && inputType === "file") {
           // Unnamed/hidden native inputs remain uploadable with setInputFiles.
           // Only use a local widget's label, never infer "resume" from all page text.
@@ -383,7 +395,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
         if (!label) label = el.getAttribute("placeholder") || name || id || el.getAttribute("data-testid") || "";
 
-        const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /\*/.test(label);
+        const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || uploadGroup?.getAttribute("aria-required") === "true" || /\*/.test(label);
 
         const options =
           el instanceof HTMLSelectElement
