@@ -33,6 +33,8 @@ jobs:
       - name: Build SPA
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_zJbJzLx3w_DFhTCjcldXVA_hZ0rMU_q
         run: bun run build
 
       - name: Prepare SPA fallback

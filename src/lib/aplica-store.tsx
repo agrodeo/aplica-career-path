@@ -19,14 +19,14 @@ interface AplicaState {
 }
 
 const AplicaContext = createContext<AplicaState | undefined>(undefined);
-const STORAGE_KEY = "aplica-demo-state";
+const STORAGE_KEY = "aplica-user-draft-v1";
 
 export function AplicaProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
-  const [name, setName] = useState("Sofía");
+  const [name, setName] = useState("");
   const [searchPreferences, setSearchPreferences] = useState({ role: "", location: "", mode: "Remoto" });
 
   useEffect(() => {

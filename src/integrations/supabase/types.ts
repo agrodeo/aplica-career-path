@@ -1245,6 +1245,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      save_onboarding_profile: {
+        Args: { _data: Json }
+        Returns: undefined
+      }
       claim_application: {
         Args: { _limit?: number; _worker_id: string }
         Returns: {

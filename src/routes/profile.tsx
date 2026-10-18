@@ -1,8 +1,33 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, FileText } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 import { useAplica } from "@/lib/aplica-store";
-export const Route = createFileRoute("/profile")({ head: () => ({ meta: [{ title: "Tu perfil — aplica" }, { name: "description", content: "Mantené actualizada la información usada en tus aplicaciones." }, { property: "og:title", content: "Tu perfil — aplica" }, { property: "og:description", content: "Tu experiencia y preferencias en un solo lugar." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }), component: Profile });
-const sections = [["Datos personales", "Sofía Fernández · Argentina"], ["CV base", "CV_Sofia_Fernandez.pdf"], ["Experiencia", "2 puestos"], ["Estudios", "1 estudio"], ["Habilidades", "Marketing, SQL, Excel y 4 más"], ["Idiomas", "Español nativo · Inglés profesional"], ["Preferencias laborales", "Growth · Remoto o híbrido"], ["Salario", "Desde USD 3.200/mes"], ["Ubicación", "Buenos Aires · Remoto global"], ["Autorización laboral", "2 respuestas guardadas"], ["Respuestas de aplicaciones", "4 de 9 completas"], ["WhatsApp", "+54 9 11 •••• 8901"]];
-function Profile() { const { name } = useAplica(); return <div className="min-h-screen"><SiteHeader/><PageShell className="max-w-[900px]"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Perfil de</p><h1 className="mt-1 text-3xl font-medium tracking-normal">{name} Fernández</h1></div><div className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground font-medium text-background">SF</div></div><div className="mt-10 border-t border-border">{sections.map(([title, value]) => <button key={title} className="flex w-full items-center justify-between border-b border-border py-5 text-left"><span><span className="block text-sm font-medium">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{value}</span></span><ChevronRight className="h-4 w-4 text-muted-foreground"/></button>)}</div><div className="mt-8 flex items-center gap-3 rounded-lg bg-surface p-4"><FileText className="text-primary"/><p className="flex-1 text-sm">Tu perfil está completo y listo para adaptar a cada trabajo.</p></div><Button asChild variant="outline" className="mt-8"><Link to="/settings">Privacidad y configuración</Link></Button></PageShell></div>; }
+export const Route = createFileRoute("/profile")({ component: Profile });
+function Profile() {
+  const { setOnboardingStep } = useAplica();
+  const query = useQuery({ queryKey: ["career-profile"], queryFn: async () => {
+    const auth = await supabase.auth.getUser();
+    if (auth.error || !auth.data.user) throw new Error("Ingresá para consultar tu perfil.");
+    const id = auth.data.user.id;
+    const responses = await Promise.all([
+      supabase.from("profiles").select("first_name,last_name,email,current_title,city,country").eq("user_id", id).maybeSingle(),
+      supabase.from("experiences").select("id", { count: "exact", head: true }).eq("user_id", id),
+      supabase.from("educations").select("id", { count: "exact", head: true }).eq("user_id", id),
+      supabase.from("skills").select("name").eq("user_id", id),
+    ]);
+    for (const response of responses) if (response.error) throw new Error(response.error.message);
+    return { profile: responses[0].data, experience: responses[1].count, education: responses[2].count, skills: responses[3].data };
+  } });
+  const profile = query.data?.profile;
+  return <div className="min-h-screen"><SiteHeader /><PageShell className="max-w-[900px]">
+    <h1 className="text-3xl font-medium">Tu perfil</h1>
+    {query.isPending ? <p role="status">Cargando tu información…</p> : query.error ? <p role="alert">{query.error.message}</p> : profile ? <div className="mt-8 space-y-4">
+      <p>{[profile.first_name, profile.last_name].filter(Boolean).join(" ")}</p><p>{profile.email}</p><p>{profile.current_title}</p><p>{[profile.city, profile.country].filter(Boolean).join(", ")}</p>
+      <p>{query.data?.experience ?? 0} experiencias · {query.data?.education ?? 0} estudios</p>
+      <p>{query.data?.skills?.map((skill) => skill.name).join(", ") || "Sin habilidades guardadas"}</p>
+    </div> : <p className="mt-6">Completá tu perfil para preparar postulaciones con información real.</p>}
+    <Button asChild className="mt-8"><Link to="/onboarding" onClick={() => setOnboardingStep(3)}>Revisar y editar perfil</Link></Button>
+  </PageShell></div>;
+}
