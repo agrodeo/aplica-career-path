@@ -344,7 +344,7 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
 
 async function setNativeChoice(control: Locator, checked: boolean) {
   if (await control.isChecked() === checked) return;
-  if (await control.isVisible()) await control.setChecked(checked);
+  if (await control.getAttribute("aria-hidden") !== "true" && await control.isVisible()) await control.setChecked(checked);
   else {
     // Workable renders a visible label around a hidden native radio/checkbox.
     // Use its ordinary click behavior, then verify the real input state.
@@ -405,6 +405,9 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
           const group = el.closest('fieldset,[role="radiogroup"]');
           label = group?.querySelector("legend")?.textContent?.trim() || labelledText(group) || group?.getAttribute("aria-label") || "";
         }
+        // ARIA's explicit label references outrank decorative native labels.
+        // Workable's native label may contain only an SVG fallback title.
+        if (!label) label = labelledText(el);
         if (!label && id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)

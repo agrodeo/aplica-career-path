@@ -2,7 +2,7 @@ import { createPublicFormAdapter } from "./public-form.js";
 
 export const workablePublicAdapter = createPublicFormAdapter({
   id: "workable_public_form",
-  version: "0.3.0",
+  version: "0.3.1",
   atsType: "workable",
   hostPatterns: [/^apply\.workable\.com$/i],
   formSelector: "form[action*='apply'], form",

@@ -42,7 +42,7 @@ test("declines optional cookies before opening a Workable-style application over
 });
 
 test("Workable ARIA radio questions keep separate answer keys and select hidden inputs through labels", async () => {
-  const radios = (name, question) => `<span id="${name}-label">${question}</span><fieldset role="radiogroup" aria-labelledby="${name}-label"><label>YES<input style="display:none" type="radio" required name="${name}" value="true"></label><label>NO<input style="display:none" type="radio" required name="${name}" value="false"></label></fieldset>`;
+  const radios = (name, question) => `<span id="${name}-label">${question}</span><fieldset role="radiogroup" aria-labelledby="${name}-label"><label>YES<input aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:13px;height:13px" type="radio" required name="${name}" value="true"></label><label>NO<input aria-hidden="true" style="position:absolute;opacity:0;pointer-events:none;width:13px;height:13px" type="radio" required name="${name}" value="false"></label></fieldset>`;
   await inspect(`<form>${identity}${resume}${radios("history", "Have you worked here before?")}${radios("schedule", "Can you work full time?")}<label>Confirm consent<input style="display:none" type="checkbox" required></label>${submit}</form>`, async (schema, page) => {
     const questions = schema.fields.filter(field => field.type === "radio");
     assert.equal(questions[0].label, "Have you worked here before?");
@@ -65,6 +65,19 @@ test("required multi-choice checkbox groups cannot be mistaken for independent c
   await inspect(`<form>${identity}${resume}<span id="skills-label">Which skills do you have?</span><div role="group" aria-labelledby="skills-label"><label>Sales<input type="checkbox" required></label><label>Support<input type="checkbox" required></label></div>${submit}</form>`, async schema => {
     assert.deepEqual(schema.unknownRequiredFields, ["Which skills do you have?"]);
     assert.equal((await adapter.canSubmit(schema, profile)).eligible, false);
+  });
+});
+
+test("Workable ARIA labels outrank decorative SVG titles for resume and required questions", async () => {
+  await inspect(`<form>${identity}<span id="cv-label">*Resume</span><span id="cv-description">Choose file</span><label for="cv"><svg><title>SVGs not supported by this browser.</title></svg></label><input id="cv" type="file" required aria-labelledby="cv-label cv-description"><span id="area-label">*Which work area?</span><label for="area"><svg><title>SVGs not supported by this browser.</title></svg></label><button id="area" type="button" role="combobox" aria-labelledby="area-label" aria-controls="areas" onclick="document.getElementById('areas').hidden=false" onkeydown="if(event.key==='Escape')document.getElementById('areas').hidden=true">Select</button><div id="areas" role="listbox" hidden><div role="option">Sales</div></div>${submit}</form>`, async (schema, page) => {
+    assert.equal(schema.supportsFileUpload, true);
+    const cv = schema.fields.find(field => field.canonicalKey === "resume");
+    assert.equal(cv.label, "*Resume Choose file");
+    await page.locator(cv.selector).setInputFiles({ name: "resume.pdf", mimeType: "application/pdf", buffer: Buffer.from("fixture") });
+    assert.equal(await page.locator(cv.selector).evaluate(input => input.files[0].name), "resume.pdf");
+    const question = schema.fields.find(field => field.type === "combobox");
+    assert.equal(question.label, "*Which work area?");
+    assert.equal(question.required, true);
   });
 });
 
