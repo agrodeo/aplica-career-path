@@ -26,3 +26,16 @@ describe("job posting freshness parsing", () => {
     );
   });
 });
+
+
+describe("country normalization", () => {
+  test("normalizes LATAM country hints", async () => {
+    const { normalizeCountryCode } = await import("./normalization");
+    expect(normalizeCountryCode("AR")).toBe("ar");
+    expect(normalizeCountryCode(null, "Buenos Aires, Argentina")).toBe("ar");
+    expect(normalizeCountryCode("São Paulo, São Paulo, Brazil")).toBe("br");
+    expect(normalizeCountryCode("México")).toBe("mx");
+    expect(normalizeCountryCode(null, "Bogotá, Colombia")).toBe("co");
+    expect(normalizeCountryCode(null, "Montevideo")).toBe("uy");
+  });
+});
