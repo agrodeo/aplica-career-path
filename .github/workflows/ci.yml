@@ -25,6 +25,12 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun test src/lib/job-sources/
       - run: bun run build
+        env:
+          VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture_for_browser_tests
+      - run: npm ci --prefix worker
+      - run: npx --prefix worker playwright install --with-deps chromium
+      - run: node scripts/verify-browser-flow.mjs
 
   worker-typecheck:
     runs-on: ubuntu-latest
