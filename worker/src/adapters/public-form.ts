@@ -370,14 +370,15 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
         if (!label) label = el.getAttribute("aria-label") ?? "";
-        const uploadGroup = inputType === "file" ? el.closest('[role="group"][aria-labelledby], fieldset') : null;
-        if (uploadGroup && uploadGroup.querySelectorAll('input[type="file"]').length === 1) {
+        const candidateUploadGroup = inputType === "file" ? el.closest('[role="group"][aria-labelledby], fieldset') : null;
+        const uploadGroup = candidateUploadGroup?.querySelectorAll('input[type="file"]').length === 1 ? candidateUploadGroup : null;
+        if (uploadGroup) {
           // Greenhouse labels the file button "Attach" and puts Resume/CV on
           // the owning group, several wrappers above the actual native input.
           const groupLabel = (uploadGroup.getAttribute("aria-labelledby") ?? "").split(/\s+/)
             .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim()
             || uploadGroup.querySelector("legend")?.textContent?.trim();
-          if (groupLabel) label = groupLabel;
+          if (groupLabel && !/resume|\bcv\b|curr[ií]culum|cover\s*letter/i.test(label)) label = groupLabel;
         }
         if (!label && inputType === "file") {
           // Unnamed/hidden native inputs remain uploadable with setInputFiles.
