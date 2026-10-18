@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Page, Locator } from "playwright";
 import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { prepareAnswers } from "../application/answers.js";
 import { type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
@@ -24,6 +24,7 @@ export interface PublicFormAdapterOptions {
   formSelector: string;
   submitSelectors: string[];
   activateSelectors?: string[];
+  cookieDeclineSelectors?: string[];
 }
 
 /**
@@ -62,6 +63,15 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       // ATS clients hydrate after DOMContentLoaded. Wait for application controls,
       // rather than treating the initial HTML shell as the finished form.
       await waitForApplicationControls(page, options.formSelector);
+      // Only provider-specific, explicit optional-cookie rejection controls.
+      // A consent overlay can otherwise intercept the application's Apply link.
+      for (const selector of options.cookieDeclineSelectors ?? []) {
+        const decline = page.locator(selector);
+        if (await decline.count() === 1 && await decline.isVisible()) {
+          await decline.click({ timeout: 3000 });
+          break;
+        }
+      }
       let selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
       let form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
       let formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
@@ -201,13 +211,13 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
               await selectComboboxOption(page, answer.field, String(answer.value));
               break;
             case "checkbox":
-              await locator.setChecked(answer.value === true);
+              await setNativeChoice(locator, answer.value === true);
               break;
             case "radio":
               await page.locator(answer.field.selector).evaluateAll((elements, value) => {
                 for (const el of elements) el.toggleAttribute("data-aplica-radio-choice", (el as HTMLInputElement).value === value);
               }, String(answer.value));
-              await page.locator(`${answer.field.selector}[data-aplica-radio-choice]`).first().check();
+              await setNativeChoice(page.locator(`${answer.field.selector}[data-aplica-radio-choice]`).first(), true);
               break;
             default:
               await locator.fill(String(answer.value));
@@ -332,6 +342,19 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
   }, selector);
 }
 
+async function setNativeChoice(control: Locator, checked: boolean) {
+  if (await control.isChecked() === checked) return;
+  if (await control.isVisible()) await control.setChecked(checked);
+  else {
+    // Workable renders a visible label around a hidden native radio/checkbox.
+    // Use its ordinary click behavior, then verify the real input state.
+    const label = control.locator("xpath=ancestor::label[1]");
+    if (await label.count() !== 1) throw new ApplicationError("FORM_CHANGED", "No visible label for the choice control.");
+    await label.click();
+  }
+  if (await control.isChecked() !== checked) throw new ApplicationError("FORM_CHANGED", "The choice control did not retain the selected answer.");
+}
+
 async function readFields(page: Page, formSelector: string, applicationUrl: string): Promise<InspectedField[]> {
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
@@ -344,6 +367,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
       .filter((el) => !el.parentElement?.closest('[role="combobox"]'));
 
     const seenRadioNames = new Set<string>();
+    const seenCheckboxGroups = new Set<Element>();
 
     for (const el of controls) el.removeAttribute("data-aplica-field");
 
@@ -356,7 +380,19 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         const id = el.getAttribute("id");
         const name = el.getAttribute("name") ?? "";
         const tag = el.tagName.toLowerCase();
-        const inputType = el.getAttribute("role") === "combobox" ? "combobox" : el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : tag === "select" ? "select" : "unknown";
+        let inputType = el.getAttribute("role") === "combobox" ? "combobox" : el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : tag === "select" ? "select" : "unknown";
+        const labelledText = (node: Element | null) => (node?.getAttribute("aria-labelledby") ?? "").split(/\s+/)
+          .map(labelId => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
+        const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('[role="group"][aria-labelledby]') : null;
+        const groupCheckboxes = Array.from(candidateCheckboxGroup?.querySelectorAll('input[type="checkbox"]') ?? []);
+        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true") ? candidateCheckboxGroup : null;
+        if (unsupportedCheckboxGroup) {
+          if (seenCheckboxGroups.has(unsupportedCheckboxGroup)) return null;
+          seenCheckboxGroups.add(unsupportedCheckboxGroup);
+          // A required multi-choice group is not a set of independent consent
+          // boxes. Do not require every option or pretend one boolean answers it.
+          inputType = "unknown";
+        }
 
         if (inputType === "radio") {
           if (seenRadioNames.has(name)) return null;
@@ -364,7 +400,11 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (inputType === "radio") label = el.closest("fieldset")?.querySelector("legend")?.textContent?.trim() ?? "";
+        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup);
+        if (inputType === "radio") {
+          const group = el.closest('fieldset,[role="radiogroup"]');
+          label = group?.querySelector("legend")?.textContent?.trim() || labelledText(group) || group?.getAttribute("aria-label") || "";
+        }
         if (!label && id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
@@ -396,7 +436,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
         if (!label) label = el.getAttribute("placeholder") || name || id || el.getAttribute("data-testid") || "";
 
-        const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || uploadGroup?.getAttribute("aria-required") === "true" || /\*/.test(label);
+        const required = Boolean(unsupportedCheckboxGroup) || el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || uploadGroup?.getAttribute("aria-required") === "true" || /\*/.test(label);
 
         const options =
           el instanceof HTMLSelectElement
