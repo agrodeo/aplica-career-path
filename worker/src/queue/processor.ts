@@ -46,7 +46,7 @@ export async function processApplication(item: QueueItem): Promise<void> {
       for (const answer of freeText) {
         const validation = validateGeneratedAnswer(String(answer.value), profile, job);
         if (!validation.valid) {
-          throw new ApplicationError("UNSUPPORTED_FIELD", `Generated answer contains unsupported claims: ${validation.unsupportedClaims.join(", ")}`);
+          throw new ApplicationError("PROFILE_INCOMPLETE", `Generated answer contains unsupported claims: ${validation.unsupportedClaims.join(", ")}`);
         }
       }
       void generatedInterest;

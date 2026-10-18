@@ -9,7 +9,7 @@ export async function loadJob(jobId: string): Promise<JobRecord> {
     .select("id, title, description, location, application_url, ats_type, is_active, auto_apply_eligible, companies(name)")
     .eq("id", jobId)
     .maybeSingle();
-  if (error) throw new ApplicationError("UNKNOWN_ERROR", error.message);
+  if (error) throw new ApplicationError("NETWORK_ERROR", error.message);
   if (!data || !data.is_active) throw new ApplicationError("JOB_EXPIRED", "The job is no longer active.");
   if (!data.application_url) throw new ApplicationError("UNSUPPORTED_FIELD", "The job has no public application URL.");
   if (!data.auto_apply_eligible) throw new ApplicationError("UNSUPPORTED_FIELD", "The job is not Auto Apply eligible.");
@@ -37,8 +37,11 @@ export async function loadMasterProfile(userId: string): Promise<MasterProfile> 
     supabase.from("application_answers").select("*").eq("user_id", userId),
   ]);
 
+  for (const result of [profile, experiences, educations, skills, languages, answers]) {
+    if (result.error) throw new ApplicationError("NETWORK_ERROR", `Could not load the complete career profile: ${result.error.message}`);
+  }
   const p = profile.data;
-  if (!p) throw new ApplicationError("UNSUPPORTED_FIELD", "The user has no career profile yet.");
+  if (!p) throw new ApplicationError("PROFILE_INCOMPLETE", "The user has no career profile yet.");
 
   return {
     userId,
@@ -87,12 +90,14 @@ export async function loadMasterProfile(userId: string): Promise<MasterProfile> 
 
 /** Guards against a second application to the same job for the same user. */
 export async function assertNotDuplicate(userId: string, jobId: string): Promise<void> {
-  const { data } = await db()
+  const { data, error } = await db()
     .from("application_attempts")
     .select("id")
     .eq("user_id", userId)
     .eq("job_id", jobId)
     .eq("status", "verified")
+    .limit(1)
     .maybeSingle();
+  if (error) throw new ApplicationError("NETWORK_ERROR", `Could not check previous applications: ${error.message}`);
   if (data) throw new ApplicationError("DUPLICATE_APPLICATION", "A verified application already exists for this job.");
 }

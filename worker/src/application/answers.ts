@@ -13,7 +13,7 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
 
   for (const field of schema.fields) {
     if (field.type === "file") {
-      if (field.canonicalKey === "resume" || /resume|cv|curr/i.test(field.label)) {
+      if (field.canonicalKey === "resume") {
         answers.push({ field, value: "@resume", source: "profile" });
       }
       continue;
@@ -22,20 +22,24 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
     if (field.demographic) {
       const decline = field.options ? findDeclineOption(field.options) : null;
       const stored = storedAnswer(profile, field.answerKey);
-      if (stored !== null) answers.push({ field, value: stored, source: "verified_answer" });
+      const normalized = normalizeForField(field, stored, profile);
+      if (normalized !== null) answers.push({ field, value: normalized, source: "verified_answer" });
       else if (decline) answers.push({ field, value: decline.value, source: "decline" });
       else if (field.required) {
-        throw new ApplicationError("UNSUPPORTED_FIELD", `Required demographic question without a decline option: ${field.label}`);
+        throw new ApplicationError("PROFILE_INCOMPLETE", `Required demographic question without a verified answer or decline option: ${field.label}`);
       }
       continue;
     }
 
     const value = resolveValue(field, profile, job);
+    if (field.type === "checkbox" && field.required && value !== true) {
+      throw new ApplicationError("PROFILE_INCOMPLETE", `Required consent has not been confirmed: ${field.label}`);
+    }
     if (value !== null) {
       answers.push({ field, value, source: field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey) ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
       continue;
     }
-    if (field.required) throw new ApplicationError("UNSUPPORTED_FIELD", `Required question without a verified answer: ${field.label}`);
+    if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Required question without a matching verified answer: ${field.label}`);
   }
 
   return answers;
@@ -51,6 +55,10 @@ function storedAnswer(profile: MasterProfile, key: string): string | boolean | n
 
 function resolveValue(field: InspectedField, profile: MasterProfile, job: JobRecord): string | boolean | null {
   const key = field.canonicalKey;
+  if (["select", "radio", "combobox"].includes(field.type)) {
+    const explicit = storedAnswer(profile, field.answerKey);
+    if (explicit !== null) return normalizeForField(field, explicit, profile);
+  }
   if (!key) {
     return normalizeForField(field, storedAnswer(profile, field.answerKey), profile);
   }
@@ -176,7 +184,7 @@ export function generatedInterest(profile: MasterProfile, job: JobRecord): strin
   const skills = profile.skills.slice(0, 4).map((s) => s.name);
   const parts = [
     `Me interesa el puesto de ${job.title}${job.company ? ` en ${job.company}` : ""}.`,
-    current ? `Actualmente trabajo como ${current.title} en ${current.company}.` : null,
+    current ? `${current.isCurrent ? "Actualmente trabajo" : "Trabajé"} como ${current.title} en ${current.company}.` : null,
     skills.length ? `Mi experiencia incluye ${skills.join(", ")}.` : null,
     profile.identity.professionalSummary ? profile.identity.professionalSummary.trim() : null,
   ].filter(Boolean);
@@ -193,6 +201,8 @@ export interface AnswerValidation {
  * skill and number in it must appear in MasterProfile or the job itself.
  */
 export function validateGeneratedAnswer(answer: string, profile: MasterProfile, job: JobRecord): AnswerValidation {
+  // This deterministic template contains only source facts and fixed prose.
+  if (answer === generatedInterest(profile, job)) return { valid: true, unsupportedClaims: [] };
   const allowed = [
     job.title,
     job.company,

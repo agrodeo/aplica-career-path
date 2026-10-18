@@ -162,11 +162,13 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
   const schemaIds = jobs.map((job) => job.application_schema_id).filter((id): id is string => Boolean(id));
   if (!jobs.length) return result;
 
-  const [{ data: profile }, { data: experiences }, { data: answers }] = await Promise.all([
+  const profileResults = await Promise.all([
     supabase.from("profiles").select("first_name,last_name,email,phone,city,country,linkedin_url,portfolio_url,current_title,professional_summary,base_resume_path").eq("user_id", userId).maybeSingle(),
     supabase.from("experiences").select("company,title,achievements").eq("user_id", userId).limit(5),
     supabase.from("application_answers").select("canonical_key,answer_type,boolean_value,text_value,numeric_value,user_confirmed").eq("user_id", userId).eq("user_confirmed", true),
   ]);
+  for (const response of profileResults) if (response.error) throw new Error(response.error.message);
+  const [{ data: profile }, { data: experiences }, { data: answers }] = profileResults;
 
   const schemas: Array<Record<string, any>> = [];
   for (let offset = 0; offset < schemaIds.length; offset += 200) {
@@ -182,6 +184,26 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
   const confirmed = new Set((answers ?? []).map((answer) => answer.canonical_key));
   const answerByKey = new Map((answers ?? []).map((answer) => [answer.canonical_key, answer]));
   const currentExperience = experiences?.[0] ?? null;
+  const profileValues: Record<string, string | null | undefined> = {
+    first_name: profile?.first_name, last_name: profile?.last_name,
+    full_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(" "),
+    email: profile?.email, phone: profile?.phone, country: profile?.country,
+    location: [profile?.city, profile?.country].filter(Boolean).join(", "),
+    linkedin: profile?.linkedin_url, portfolio: profile?.portfolio_url, website: profile?.portfolio_url,
+    current_company: currentExperience?.company, current_title: profile?.current_title || currentExperience?.title,
+  };
+  const matchesOption = (field: StoredField, key: string) => {
+    if (!field.options?.length) return true;
+    const saved = answerByKey.get(key);
+    const value = saved
+      ? saved.answer_type === "boolean" ? saved.boolean_value : saved.answer_type === "numeric" ? saved.numeric_value : saved.text_value
+      : profileValues[key];
+    if (value === null || value === undefined || value === "") return false;
+    const labels = field.options.flatMap((option) => [option.label ?? "", option.value ?? ""]).map((text) => text.trim().toLowerCase());
+    if (typeof value === "boolean") return labels.some((label) => (value ? /^(yes|sí|si|true)$/ : /^(no|false)$/).test(label));
+    if (labels.includes(String(value).trim().toLowerCase())) return true;
+    return ["location", "country"].includes(key) && [profile?.city, profile?.country].some((part) => Boolean(part) && labels.includes(part!.trim().toLowerCase()));
+  };
   const schemaById = new Map((schemas ?? []).map((schema) => [schema.id, schema]));
 
   const covered = (key: string) => {
@@ -226,7 +248,7 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
       if (field.type === "checkbox") {
         const saved = answerByKey.get(answerKey);
         if (saved?.answer_type === "boolean" && saved.boolean_value === true) continue;
-      } else if ((canonicalKey && covered(canonicalKey)) || (!canonicalKey && confirmed.has(answerKey))) {
+      } else if (((canonicalKey && covered(canonicalKey)) || confirmed.has(answerKey)) && matchesOption(field, answerKey)) {
         continue;
       }
 

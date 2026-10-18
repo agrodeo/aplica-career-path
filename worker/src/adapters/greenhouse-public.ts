@@ -7,7 +7,7 @@ import { createPublicFormAdapter } from "./public-form.js";
  */
 export const greenhousePublicAdapter = createPublicFormAdapter({
   id: "greenhouse_public_form",
-  version: "1.0.1",
+  version: "1.1.0",
   atsType: "greenhouse",
   hostPatterns: [/^job-boards\.greenhouse\.io$/i, /^boards\.greenhouse\.io$/i, /^job-boards\.eu\.greenhouse\.io$/i],
   formSelector: "form#application-form, form[id*='application'], main form",

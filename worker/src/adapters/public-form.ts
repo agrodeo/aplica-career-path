@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
-import { SENSITIVE_KEYS, type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
+import { prepareAnswers } from "../application/answers.js";
+import { type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
 const CAPTCHA_SIGNALS = ["iframe[src*='recaptcha']", "iframe[src*='hcaptcha']", ".g-recaptcha", "[data-sitekey]", "iframe[title*='challenge']", "#cf-challenge-running"];
@@ -116,7 +117,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           (field) =>
             field.required &&
             ((field.type === "file" && field.canonicalKey !== "resume") ||
-              (field.type === "unknown" && !field.canonicalKey)) &&
+              field.type === "unknown") &&
             !(field.demographic && field.options && findDeclineOption(field.options)),
         )
         .map((field) => field.label);
@@ -152,53 +153,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       // A normal text/select/radio question is structurally supported: Aplica asks
       // the user once, stores the explicit answer under field.answerKey, and reuses it.
       const unsupportedFields: string[] = [...schema.unknownRequiredFields];
-      const missingProfileAnswers: string[] = [];
-
       for (const field of schema.fields) {
         if (!field.required) continue;
-
-        if (field.demographic && field.options && findDeclineOption(field.options)) {
-          continue;
-        }
-
-        if (field.type === "checkbox") {
-          const storedCheckbox = profile.verifiedApplicationAnswers.find(
-            (answer) =>
-              answer.canonicalKey === field.answerKey &&
-              answer.userConfirmed,
-          );
-          if (
-            !storedCheckbox ||
-            storedCheckbox.answerType !== "boolean" ||
-            storedCheckbox.booleanValue !== true
-          ) {
-            missingProfileAnswers.push(field.label);
-          }
-          continue;
-        }
-
-        if (field.type === "file") {
-          if (field.canonicalKey !== "resume") unsupportedFields.push(field.label);
-          continue;
-        }
-
-        if (!field.canonicalKey) {
-          if (field.type === "unknown") {
-            unsupportedFields.push(field.label);
-            continue;
-          }
-          const custom = profile.verifiedApplicationAnswers.find(
-            (answer) =>
-              answer.canonicalKey === field.answerKey &&
-              answer.userConfirmed,
-          );
-          if (!custom) missingProfileAnswers.push(field.label);
-          continue;
-        }
-
-        if (!canAnswer(field.canonicalKey, profile)) {
-          missingProfileAnswers.push(field.label);
-        }
+        if ((field.type === "file" && field.canonicalKey !== "resume") || field.type === "unknown") unsupportedFields.push(field.label);
       }
 
       if (unsupportedFields.length || reasons.length) {
@@ -215,15 +172,12 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         };
       }
 
-      if (missingProfileAnswers.length) {
-        return {
-          eligible: false,
-          failureCode: "PROFILE_INCOMPLETE",
-          reasons: [
-            `Faltan respuestas verificadas del usuario: ${missingProfileAnswers.join(", ")}`,
-          ],
-          unknownRequiredFields: missingProfileAnswers,
-        };
+      // Match submission's resolver, including exact option matching.
+      try {
+        prepareAnswers(schema, profile, { id: "eligibility", title: "", description: "", company: "", location: null, applicationUrl: schema.url, atsType: schema.atsType });
+      } catch (error) {
+        if (!(error instanceof ApplicationError)) throw error;
+        return { eligible: false, failureCode: error.code, reasons: [error.message], unknownRequiredFields: [] };
       }
 
       return { eligible: true, reasons: [], unknownRequiredFields: [] };
@@ -243,11 +197,17 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
             case "select":
               await locator.selectOption({ value: String(answer.value) });
               break;
+            case "combobox":
+              await selectComboboxOption(page, answer.field, String(answer.value));
+              break;
             case "checkbox":
-              if (answer.value === true) await locator.check();
+              await locator.setChecked(answer.value === true);
               break;
             case "radio":
-              await page.locator(`${answer.field.selector}[value="${String(answer.value)}"]`).first().check();
+              await page.locator(answer.field.selector).evaluateAll((elements, value) => {
+                for (const el of elements) el.toggleAttribute("data-aplica-radio-choice", (el as HTMLInputElement).value === value);
+              }, String(answer.value));
+              await page.locator(`${answer.field.selector}[data-aplica-radio-choice]`).first().check();
               break;
             default:
               await locator.fill(String(answer.value));
@@ -267,10 +227,17 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
       if (!schema.submitSelector) throw new ApplicationError("UNSUPPORTED_FIELD", "No submit control found.");
 
+      const priorPageText = await page.locator("body").innerText();
+      const priorUrl = page.url();
       await page.locator(schema.submitSelector).first().click();
       await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => undefined);
+      // SPAs can acknowledge submission after the first network-idle interval.
+      await page.waitForFunction(({ patterns, before, url }) => {
+        const text = document.body.innerText;
+        return patterns.some((source) => new RegExp(source, "i").test(text) && !new RegExp(source, "i").test(before)) || location.href !== url;
+      }, { patterns: [...SUCCESS_PATTERNS, APPLICATION_ID_PATTERN].map((pattern) => pattern.source), before: priorPageText, url: priorUrl }, { timeout: 10000 }).catch(() => undefined);
       const pageText = (await page.locator("body").innerText().catch(() => "")) ?? "";
-      return { submitted: true, dryRun: false, page, adapter: options.id, adapterVersion: options.version, responseUrl: page.url(), pageText };
+      return { submitted: true, dryRun: false, page, adapter: options.id, adapterVersion: options.version, responseUrl: page.url(), pageText, priorPageText, priorUrl };
     },
 
     async verify(result: SubmissionResult): Promise<VerificationResult> {
@@ -278,15 +245,15 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const text = result.pageText ?? "";
       const identifier = text.match(APPLICATION_ID_PATTERN);
-      if (identifier?.[3]) {
+      if (identifier?.[3] && identifier[3] !== result.priorPageText?.match(APPLICATION_ID_PATTERN)?.[3]) {
         return { verified: true, verificationType: "application_identifier", verificationValue: identifier[3], screenshot: await result.page.screenshot({ fullPage: true }) };
       }
-      const success = SUCCESS_PATTERNS.find((pattern) => pattern.test(text));
+      const success = SUCCESS_PATTERNS.find((pattern) => pattern.test(text) && !pattern.test(result.priorPageText ?? ""));
       if (success) {
         const matched = text.match(success)?.[0] ?? "confirmation";
         return { verified: true, verificationType: "success_message", verificationValue: matched.slice(0, 200), screenshot: await result.page.screenshot({ fullPage: true }) };
       }
-      if (/confirmation|thank you|gracias/i.test(result.responseUrl ?? "")) {
+      if (result.responseUrl !== result.priorUrl && /\/(?:confirmation|thank[-_%\s]*you|gracias)(?:[/?#]|$)/i.test(result.responseUrl ?? "")) {
         return { verified: true, verificationType: "confirmation_page", verificationValue: result.responseUrl, screenshot: await result.page.screenshot({ fullPage: true }) };
       }
       return { verified: false, verificationType: "none", verificationValue: null, screenshot: await result.page.screenshot({ fullPage: true }).catch(() => null) };
@@ -299,43 +266,6 @@ async function detectCaptcha(page: Page) {
     if ((await page.locator(selector).count()) > 0) return true;
   }
   return false;
-}
-
-function canAnswer(key: string, profile: MasterProfile): boolean {
-  const stored = profile.verifiedApplicationAnswers.find((a) => a.canonicalKey === key && a.userConfirmed);
-  if (SENSITIVE_KEYS.includes(key)) return Boolean(stored); // never inferred
-  switch (key) {
-    case "first_name":
-      return Boolean(profile.identity.firstName);
-    case "last_name":
-      return Boolean(profile.identity.lastName);
-    case "full_name":
-      return Boolean(profile.identity.firstName && profile.identity.lastName);
-    case "email":
-      return Boolean(profile.identity.email);
-    case "phone":
-      return Boolean(profile.identity.phone);
-    case "location":
-      return Boolean(profile.identity.city || profile.identity.country);
-    case "country":
-      return Boolean(profile.identity.country);
-    case "linkedin":
-      return Boolean(profile.links.linkedin);
-    case "portfolio":
-    case "website":
-      return Boolean(profile.links.portfolio);
-    case "current_title":
-      return Boolean(profile.identity.currentTitle || profile.experience[0]?.title);
-    case "current_company":
-      return Boolean(profile.experience[0]?.company);
-    case "years_experience":
-      return profile.experience.length > 0;
-    case "resume":
-    case "cover_letter":
-      return true;
-    default:
-      return Boolean(stored);
-  }
 }
 
 async function waitForApplicationControls(page: Page, selector: string): Promise<void> {
@@ -408,21 +338,22 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
     if (!form) return [];
     // Native form.elements also includes inputs associated with form="..."
     // outside the form subtree, a common pattern for hidden upload widgets.
-    const controls = Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input, textarea, select"))
-      .filter((el): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
-        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement,
-      );
+    const nativeControls = Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input, textarea, select"));
+    const controls = Array.from(new Set([...nativeControls, ...Array.from(form.querySelectorAll('[role="combobox"]'))]))
+      .filter((el): el is HTMLElement => el instanceof HTMLElement && el.matches('input, textarea, select, [role="combobox"]'))
+      .filter((el) => !el.parentElement?.closest('[role="combobox"]'));
+
     const seenRadioNames = new Set<string>();
 
     for (const el of controls) el.removeAttribute("data-aplica-field");
 
     return controls
-      .filter((el) => !el.matches(":disabled") && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
       .map((el, index) => {
         const id = el.getAttribute("id");
         const name = el.getAttribute("name") ?? "";
         const tag = el.tagName.toLowerCase();
-        const inputType = el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : "select";
+        const inputType = el.getAttribute("role") === "combobox" ? "combobox" : el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : tag === "select" ? "select" : "unknown";
 
         if (inputType === "radio") {
           if (seenRadioNames.has(name)) return null;
@@ -480,7 +411,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
       .filter((field): field is NonNullable<typeof field> => Boolean(field && field.selector));
   }, formSelector);
 
-  return raw.map((field) => {
+  const fields: InspectedField[] = raw.map((field) => {
     const type = normalizeType(field.type);
     return {
       selector: field.selector,
@@ -493,10 +424,56 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
       demographic: isDemographicQuestion(field.label),
     } satisfies InspectedField;
   });
+  for (const field of fields) {
+    if (field.type !== "combobox") continue;
+    const control = page.locator(field.selector).first();
+    try {
+      await control.click({ timeout: 3000 });
+      const list = await comboboxList(page, field.selector);
+      if (list) {
+        await list.getByRole("option").first().waitFor({ state: "visible", timeout: 2000 }).catch(() => undefined);
+        field.options = await list.getByRole("option").evaluateAll((elements) => elements
+          .filter((el) => el.getAttribute("aria-disabled") !== "true")
+          .map((el) => ({ label: el.textContent?.trim() ?? "", value: el.textContent?.trim() ?? "" }))
+          .filter((option) => Boolean(option.label)));
+      }
+    } finally {
+      await control.press("Escape").catch(() => undefined);
+    }
+  }
+  return fields;
+}
+
+// ARIA widgets may render their listbox in a portal outside the form.
+async function comboboxList(page: Page, selector: string) {
+  const control = page.locator(selector).first();
+  const ownedId = (await control.getAttribute("aria-controls")) || (await control.getAttribute("aria-owns"));
+  if (ownedId) {
+    const owned = page.locator(`[id=${JSON.stringify(ownedId.split(/\s+/)[0])}]`);
+    await owned.waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+    if (await owned.isVisible()) return owned;
+  }
+  const visible = page.getByRole("listbox");
+  await visible.first().waitFor({ state: "visible", timeout: 3000 }).catch(() => undefined);
+  return await visible.count() === 1 ? visible : null;
+}
+
+async function selectComboboxOption(page: Page, field: InspectedField, value: string) {
+  const control = page.locator(field.selector).first();
+  const label = field.options?.find((option) => option.value === value)?.label ?? value;
+  await control.click();
+  const editable = await control.evaluate((el) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement).isContentEditable);
+  if (editable) await control.fill(label);
+  const list = await comboboxList(page, field.selector);
+  if (!list) throw new ApplicationError("FORM_CHANGED", `No unique option list for ${field.label}`);
+  const option = list.getByRole("option", { name: label, exact: true });
+  await option.first().waitFor({ state: "visible", timeout: 5000 });
+  if (await option.count() !== 1) throw new ApplicationError("FORM_CHANGED", `Ambiguous option for ${field.label}`);
+  await option.click();
 }
 
 function normalizeType(type: string): FieldType {
-  if (["text", "email", "tel", "textarea", "select", "radio", "checkbox", "file"].includes(type)) return type as FieldType;
+  if (["text", "email", "tel", "textarea", "select", "combobox", "radio", "checkbox", "file"].includes(type)) return type as FieldType;
   if (type === "url" || type === "search") return "text";
   if (type === "number") return "text";
   return "unknown";

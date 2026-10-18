@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 import { createPublicFormAdapter } from "../dist/adapters/public-form.js";
+import { prepareAnswers } from "../dist/application/answers.js";
+import { profile, job } from "./fixtures.mjs";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const adapter = createPublicFormAdapter({
   id: "fixture", version: "test", atsType: "fixture", hostPatterns: [/example\.com/],
@@ -9,7 +14,7 @@ const adapter = createPublicFormAdapter({
   activateSelectors: ['button[data-open-application]'],
 });
 let browser;
-before(async () => { browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] }); });
+before(async () => { browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH, args: ["--no-sandbox"] }); });
 after(async () => { await browser?.close(); });
 
 async function inspect(html, check) {
@@ -119,5 +124,43 @@ test("excludes disabled controls but retains hidden native uploads", async () =>
   await inspect(`<form>${identity}${resume}<input disabled required aria-label="Internal reference">${submit}</form>`, async (schema) => {
     assert.equal(schema.fields.some((field) => field.label === "Internal reference"), false);
     assert.equal(schema.supportsFileUpload, true);
+  });
+});
+
+const countryWidget = `<label id="country-label">Country *</label>
+  <input id="country" role="combobox" aria-labelledby="country-label" aria-controls="countries" aria-expanded="false" onfocus="countries.hidden=false;this.setAttribute('aria-expanded','true')" onclick="countries.hidden=false" onkeydown="if(event.key==='Escape'){countries.hidden=true;this.setAttribute('aria-expanded','false')}">
+  <input type="hidden" name="country_code" id="country-code">
+  <div id="countries" role="listbox" hidden><div role="option" onclick="document.querySelector('#country-code').value='AR';document.querySelector('#country').value='Argentina';this.parentElement.hidden=true">Argentina</div><div role="option">Chile</div></div>`;
+
+test("custom combobox commits an exact option, uploads PDF and verifies fixture submission", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "aplica-test-"));
+  const resumePath = join(directory, "resume.pdf");
+  await writeFile(resumePath, "%PDF-1.4 fixture");
+  try {
+    await inspect(`<form onsubmit="event.preventDefault();if(document.querySelector('#country-code').value==='AR' && document.querySelector('input[type=file]').files.length && document.querySelector('input[type=email]').value==='ana@example.com') document.body.innerHTML='<h1>Application received</h1><p>Confirmation ID: FIXTURE123</p>'">${identity}${resume}${countryWidget}${submit}</form>`, async (schema, page) => {
+      const combo = schema.fields.find((field) => field.type === "combobox");
+      assert.deepEqual(combo.options.map((option) => option.label), ["Argentina", "Chile"]);
+      assert.equal((await adapter.canSubmit(schema, profile)).eligible, true);
+      const result = await adapter.submit({ page, schema, profile, job, answers: prepareAnswers(schema, profile, job), resumePath, dryRun: false });
+      const verified = await adapter.verify(result);
+      assert.equal(verified.verified, true);
+      assert.equal(verified.verificationValue, "FIXTURE123");
+    });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("unmatched select answers fail eligibility without disabling the form for others", async () => {
+  await inspect(`<form>${identity}${resume}<label>Country<select required><option value="CL">Chile</option></select></label>${submit}</form>`, async (schema) => {
+    assert.equal(schema.valid, true);
+    assert.equal((await adapter.canSubmit(schema, profile)).failureCode, "PROFILE_INCOMPLETE");
+  });
+});
+
+test("preexisting confirmation text never verifies a rejected application", async () => {
+  await inspect(`${application}<p>Application received</p><p>Confirmation ID: OLDREF123</p>`, async (schema, page) => {
+    const text = await page.locator("body").innerText();
+    const result = { submitted: true, dryRun: false, page, responseUrl: page.url(), priorUrl: page.url(), pageText: text, priorPageText: text };
+    assert.equal((await adapter.verify(result)).verified, false);
+    assert.equal((await adapter.verify({ ...result, dryRun: true, pageText: "Application received NEW" })).verified, false);
   });
 });
