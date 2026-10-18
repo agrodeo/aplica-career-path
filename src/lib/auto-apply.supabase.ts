@@ -42,6 +42,87 @@ function normalizeMode(value: string | null) {
   return "unknown";
 }
 
+
+const LATAM_COUNTRY_CODES = new Set([
+  "ar","bo","br","cl","co","cr","do","ec","gt","hn","mx","ni","pa","pe","pr","py","sv","uy","ve",
+]);
+
+const LOCATION_ALIASES: Record<string, string[]> = {
+  argentina: ["ar", "argentina", "buenos aires"],
+  ar: ["ar", "argentina", "buenos aires"],
+  brazil: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
+  brasil: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
+  br: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
+  mexico: ["mx", "mexico", "mexico city", "ciudad de mexico"],
+  mx: ["mx", "mexico", "mexico city", "ciudad de mexico"],
+  colombia: ["co", "colombia", "bogota", "medellin"],
+  co: ["co", "colombia", "bogota", "medellin"],
+  chile: ["cl", "chile"],
+  cl: ["cl", "chile"],
+  peru: ["pe", "peru", "lima"],
+  pe: ["pe", "peru", "lima"],
+  uruguay: ["uy", "uruguay", "montevideo"],
+  uy: ["uy", "uruguay", "montevideo"],
+  ecuador: ["ec", "ecuador", "quito", "guayaquil"],
+  ec: ["ec", "ecuador", "quito", "guayaquil"],
+  paraguay: ["py", "paraguay", "asuncion"],
+  py: ["py", "paraguay", "asuncion"],
+  bolivia: ["bo", "bolivia"],
+  bo: ["bo", "bolivia"],
+  "costa rica": ["cr", "costa rica"],
+  cr: ["cr", "costa rica"],
+  panama: ["pa", "panama"],
+  pa: ["pa", "panama"],
+};
+
+function geoText(location: string | null | undefined, country: string | null | undefined) {
+  return normalizeText(`${location ?? ""} ${country ?? ""}`);
+}
+
+function isLatamGeo(location: string | null | undefined, country: string | null | undefined) {
+  const code = normalizeText(country ?? "");
+  if (LATAM_COUNTRY_CODES.has(code)) return true;
+  const text = geoText(location, country);
+  return /\blatam\b|latin america|south america|argentina|brazil|brasil|mexico|colombia|chile|peru|uruguay|ecuador|paraguay|bolivia|costa rica|panama|guatemala|honduras|el salvador|nicaragua|dominican republic|puerto rico|buenos aires|sao paulo|bogota|medellin|montevideo|lima|quito|guayaquil|asuncion/.test(text);
+}
+
+function hasExplicitGeoRestriction(location: string | null | undefined, country: string | null | undefined) {
+  if (country?.trim()) return true;
+  const text = normalizeText(location ?? "");
+  if (!text) return false;
+  return !/^(remote|remoto|anywhere|worldwide|global|work from home)$/.test(text);
+}
+
+function locationMatchesTarget(
+  location: string | null | undefined,
+  country: string | null | undefined,
+  target: string,
+) {
+  if (includesLoose(location, target) || includesLoose(country, target)) return true;
+
+  const normalizedTarget = normalizeText(target);
+  if (/^(latam|latin america|south america)$/.test(normalizedTarget)) {
+    return isLatamGeo(location, country);
+  }
+
+  const aliases = LOCATION_ALIASES[normalizedTarget] ?? [];
+  const text = geoText(location, country);
+  if (aliases.some((alias) => {
+    const normalizedAlias = normalizeText(alias);
+    return text === normalizedAlias || text.includes(` ${normalizedAlias} `) || text.startsWith(`${normalizedAlias} `) || text.endsWith(` ${normalizedAlias}`);
+  })) {
+    return true;
+  }
+
+  // A role explicitly open to LATAM/South America is compatible with any
+  // individual LATAM-country preference.
+  if (aliases.length && /\blatam\b|latin america|south america/.test(text)) {
+    return true;
+  }
+
+  return false;
+}
+
 async function currentUserId() {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new Error("Sesión no válida.");
@@ -221,7 +302,14 @@ export async function refreshJobMatches() {
     const skillsScore = userSkills.length ? Math.min(100, Math.round((matchedSkills.length / Math.min(userSkills.length, 8)) * 100)) : 55;
     const mode = normalizeMode(job.remote_type);
     const modeAllowed = mode === "remote" ? pref?.remote_allowed !== false : mode === "hybrid" ? pref?.hybrid_allowed !== false : mode === "onsite" ? pref?.onsite_allowed === true : true;
-    const locationMatched = mode === "remote" || !targetLocations.length || targetLocations.some((location) => includesLoose(job.location, location) || includesLoose(job.country, location));
+    const targetLocationMatched = !targetLocations.length || targetLocations.some((location) =>
+      locationMatchesTarget(job.location, job.country, location),
+    );
+    const locationMatched =
+      targetLocationMatched ||
+      (mode === "remote" &&
+        targetLocations.length > 0 &&
+        !hasExplicitGeoRestriction(job.location, job.country));
     const locationScore = locationMatched ? 100 : 30;
     const hardRequirementsMet = modeAllowed && (roleCandidates.length === 0 || roleScore >= 30) && (locationMatched || pref?.willing_to_relocate === true);
     const matchScore = Math.round(Math.max(0, Math.min(100, roleScore * 0.55 + skillsScore * 0.25 + locationScore * 0.2)));
