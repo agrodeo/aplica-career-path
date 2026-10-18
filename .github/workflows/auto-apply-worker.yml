@@ -11,12 +11,11 @@ on:
       - "worker/**"
       - ".github/workflows/auto-apply-worker.yml"
 
-concurrency:
-  group: aplica-auto-apply-worker-v2
-  cancel-in-progress: false
-
 jobs:
   applications:
+    concurrency:
+      group: aplica-authorized-applications
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -48,6 +47,9 @@ jobs:
         run: npm start
 
   inspections:
+    concurrency:
+      group: aplica-inspection-${{ matrix.shard }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
