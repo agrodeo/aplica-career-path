@@ -9,6 +9,7 @@ on:
     paths:
       - ".github/workflows/latam-sync.yml"
       - "scripts/sync-latam-jobs.ts"
+      - "drizzle/migrations/**"
 
 concurrency:
   group: aplica-latam-inventory-sync
