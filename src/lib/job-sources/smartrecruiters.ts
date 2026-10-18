@@ -14,7 +14,7 @@ import type {
 
 const PAGE_SIZE = 100;
 const MAX_JOBS_PER_BOARD = 2_000;
-const DETAIL_CONCURRENCY = 12;
+const DETAIL_CONCURRENCY = 4;
 
 type SmartRecruitersLocation = {
   country?: string | null;
@@ -52,6 +52,37 @@ type SmartRecruitersList = {
   totalFound?: number | null;
   content?: SmartRecruitersPosting[] | null;
 };
+
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchSmartRecruiters(url: string) {
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "accept-language": "en",
+        "user-agent": "AplicaJobDiscovery/3.0 (+https://aplica.lat)",
+      },
+      signal: AbortSignal.timeout(25_000),
+    });
+
+    lastResponse = response;
+    if (response.status !== 429) return response;
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 15_000)
+      : Math.min(750 * 2 ** attempt, 6_000);
+    await sleep(waitMs);
+  }
+
+  return lastResponse!;
+}
 
 function locationText(location?: SmartRecruitersLocation | null) {
   const values = [
@@ -111,14 +142,7 @@ async function fetchDetail(
   )}/postings/${encodeURIComponent(postingId)}`;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        accept: "application/json",
-        "accept-language": "en",
-        "user-agent": "AplicaJobDiscovery/3.0 (+https://aplica.lat)",
-      },
-      signal: AbortSignal.timeout(20_000),
-    });
+    const response = await fetchSmartRecruiters(url);
     if (!response.ok) return null;
     return (await response.json()) as SmartRecruitersPostingDetail;
   } catch {
@@ -206,14 +230,7 @@ export const smartRecruitersProvider: JobSourceProvider = {
       url.searchParams.set("offset", String(offset));
       url.searchParams.set("destination", "PUBLIC");
 
-      const response = await fetch(url, {
-        headers: {
-          accept: "application/json",
-          "accept-language": "en",
-          "user-agent": "AplicaJobDiscovery/3.0 (+https://aplica.lat)",
-        },
-        signal: AbortSignal.timeout(25_000),
-      });
+      const response = await fetchSmartRecruiters(url.toString());
 
       if (!response.ok) {
         throw new Error(
