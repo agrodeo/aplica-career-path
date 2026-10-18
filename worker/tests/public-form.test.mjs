@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 import { createPublicFormAdapter } from "../dist/adapters/public-form.js";
 import { prepareAnswers } from "../dist/application/answers.js";
+import { canonicalKeyFor } from "../dist/adapters/field-map.js";
 import { profile, job } from "./fixtures.mjs";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -30,6 +31,35 @@ const identity = '<label>Email<input type="email" required></label>';
 const resume = '<div><label>Resume *</label><div><input type="file" style="display:none"></div></div>';
 const submit = '<button type="submit">Submit application</button>';
 const application = `<form>${identity}${resume}${submit}</form>`;
+
+test("Greenhouse grouped Attach inputs distinguish required CV from optional cover letter", async () => {
+  const upload = (id, label, required) => `<div role="group" aria-labelledby="upload-label-${id}" aria-required="${required}"><div id="upload-label-${id}">${label}</div><div><div><div><div><button type="button">Attach</button><label for="${id}">Attach</label><input id="${id}" type="file" style="display:none"></div></div></div></div></div>`;
+  await inspect(`<form>${identity}${upload("resume", "Resume/CV", true)}${upload("cover_letter", "Cover Letter", false)}${submit}</form>`, async (schema, page) => {
+    assert.equal(schema.supportsFileUpload, true);
+    const cv = schema.fields.find(field => field.canonicalKey === "resume");
+    const cover = schema.fields.find(field => field.canonicalKey === "cover_letter");
+    assert.equal(cv.required, true);
+    assert.equal(cover.required, false);
+    await page.locator(cv.selector).setInputFiles({ name: "resume.pdf", mimeType: "application/pdf", buffer: Buffer.from("fixture") });
+    assert.equal(await page.locator(cv.selector).evaluate(input => input.files[0].name), "resume.pdf");
+    assert.equal(await page.locator(cover.selector).evaluate(input => input.files.length), 0);
+  });
+});
+
+test("does not duplicate a combobox with its hidden required validation proxy", async () => {
+  await inspect(`<form>${identity}${resume}<div><label for="question">Question</label><input id="question" role="combobox" aria-required="true"><input required tabindex="-1" aria-hidden="true"></div>${submit}</form>`, async schema => {
+    assert.equal(schema.fields.filter(field => field.label === "Question").length, 1);
+    assert.equal(schema.fields.some(field => !field.label), false);
+  });
+});
+
+test("employment restrictions and visa questions never reuse company or location answers", () => {
+  assert.equal(canonicalKeyFor("Are you subject to any employment agreements and/or post-employment restrictions with your current employer or a past employer?*"), null);
+  assert.equal(canonicalKeyFor("Will you now or in the future require sponsorship for a visa to remain in your current location?*"), "sponsorship");
+  assert.equal(canonicalKeyFor("This role is open to candidates in Poland. Are you currently located in this location?*"), null);
+  assert.equal(canonicalKeyFor("Current employer"), "current_company");
+  assert.equal(canonicalKeyFor("Location (City)"), "location");
+});
 
 test("waits for client-rendered application controls", async () => {
   await inspect(`<main></main><script>setTimeout(() => document.querySelector('main').innerHTML = ${JSON.stringify(application)}, 200)</script>`, async (schema) => {
