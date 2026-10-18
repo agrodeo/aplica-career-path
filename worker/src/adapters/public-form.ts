@@ -58,6 +58,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
       }
 
+      // ATS clients hydrate after DOMContentLoaded. Wait for application controls,
+      // rather than treating the initial HTML shell as the finished form.
+      await waitForApplicationControls(page, options.formSelector);
       let selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
       let form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
       let formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
@@ -67,12 +70,22 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           const trigger = page.locator(selector).first();
           if ((await trigger.count()) === 0 || !(await trigger.isVisible().catch(() => false))) continue;
           await trigger.click().catch(() => undefined);
-          await page.waitForTimeout(800);
+          await waitForApplicationControls(page, options.formSelector);
           selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
           form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
           formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
           if (formExists) break;
         }
+      }
+
+      if (formExists && selectedFormSelector) {
+        // Upload components can mount after the identity fields. Include native
+        // controls associated from outside the form when waiting for them.
+        await page.waitForFunction((selector) => {
+          const candidate = document.querySelector(selector);
+          const controls = candidate instanceof HTMLFormElement ? Array.from(candidate.elements) : Array.from(candidate?.querySelectorAll('input[type="file"]') ?? []);
+          return controls.some((el) => el instanceof HTMLInputElement && el.type === "file");
+        }, selectedFormSelector, { timeout: 3000 }).catch(() => undefined);
       }
 
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
@@ -82,10 +95,19 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       let submitSelector: string | null = null;
       for (const selector of options.submitSelectors) {
-        if ((await page.locator(selector).count()) > 0) {
-          submitSelector = selector;
+        if (!selectedFormSelector) break;
+        const buttons = page.locator(selectedFormSelector).locator(selector);
+        for (let index = 0; index < await buttons.count(); index++) {
+          const button = buttons.nth(index);
+          const label = (await button.textContent()) || (await button.getAttribute("value")) || "";
+          // A multi-step wizard's Next button is not a final submission control.
+          if (/^(next|continue|save|siguiente|continuar)\b/i.test(label.trim())) continue;
+          if (!(await button.isVisible())) continue;
+          await button.evaluate((element) => element.setAttribute("data-aplica-submit", "true"));
+          submitSelector = `${selectedFormSelector} [data-aplica-submit="true"]`;
           break;
         }
+        if (submitSelector) break;
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
@@ -93,12 +115,12 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         .filter(
           (field) =>
             field.required &&
-            !field.canonicalKey &&
-            (field.type === "unknown" || field.type === "file") &&
+            ((field.type === "file" && field.canonicalKey !== "resume") ||
+              (field.type === "unknown" && !field.canonicalKey)) &&
             !(field.demographic && field.options && findDeclineOption(field.options)),
         )
         .map((field) => field.label);
-      const supportsFileUpload = fields.some((f) => f.type === "file");
+      const supportsFileUpload = fields.some((f) => f.type === "file" && f.canonicalKey === "resume");
 
       return {
         url,
@@ -316,6 +338,16 @@ function canAnswer(key: string, profile: MasterProfile): boolean {
   }
 }
 
+async function waitForApplicationControls(page: Page, selector: string): Promise<void> {
+  await page.waitForFunction((candidateSelector) => {
+    return Array.from(document.querySelectorAll(candidateSelector)).some((form) => {
+      const controls = Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input, textarea, select"));
+      return controls.some((el) => el instanceof HTMLInputElement && el.type === "file") ||
+        controls.filter((el) => el.matches('input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="search"]), textarea, select')).length >= 2;
+    });
+  }, selector, { timeout: 5000 }).catch(() => undefined);
+}
+
 async function markBestApplicationForm(page: Page, selector: string): Promise<string | null> {
   return page.evaluate((candidateSelector) => {
     for (const old of Array.from(document.querySelectorAll("[data-aplica-application-form]"))) {
@@ -326,7 +358,8 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
     if (!candidates.length) return null;
 
     const scored = candidates.map((candidate, index) => {
-      const controls = Array.from(candidate.querySelectorAll("input, textarea, select")) as HTMLInputElement[];
+      const controls = Array.from(candidate instanceof HTMLFormElement ? candidate.elements : candidate.querySelectorAll("input, textarea, select"))
+        .filter((el) => el.matches("input, textarea, select")) as HTMLInputElement[];
       const fileInputs = controls.filter((el) => el instanceof HTMLInputElement && el.type === "file").length;
       const usefulInputs = controls.filter((el) => {
         if (!(el instanceof HTMLInputElement)) return true;
@@ -357,11 +390,12 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
         (/apply|application|candidate|job/i.test(metadata) ? 80 : 0) -
         (usefulInputs <= 1 ? 50 : 0);
 
-      return { candidate, index, score };
+      return { candidate, index, score, usable: fileInputs > 0 || usefulInputs >= 2 };
     });
 
-    scored.sort((a, b) => b.score - a.score || a.index - b.index);
-    const best = scored[0]?.candidate;
+    const usable = scored.filter((entry) => entry.usable);
+    usable.sort((a, b) => b.score - a.score || a.index - b.index);
+    const best = usable[0]?.candidate;
     if (!best) return null;
     best.setAttribute("data-aplica-application-form", "true");
     return '[data-aplica-application-form="true"]';
@@ -372,12 +406,19 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
   const raw = await page.evaluate((selector) => {
     const form = document.querySelector(selector);
     if (!form) return [];
-    const controls = Array.from(form.querySelectorAll("input, textarea, select")) as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
+    // Native form.elements also includes inputs associated with form="..."
+    // outside the form subtree, a common pattern for hidden upload widgets.
+    const controls = Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input, textarea, select"))
+      .filter((el): el is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement =>
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement,
+      );
     const seenRadioNames = new Set<string>();
 
+    for (const el of controls) el.removeAttribute("data-aplica-field");
+
     return controls
-      .filter((el) => !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
-      .map((el) => {
+      .filter((el) => !el.matches(":disabled") && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      .map((el, index) => {
         const id = el.getAttribute("id");
         const name = el.getAttribute("name") ?? "";
         const tag = el.tagName.toLowerCase();
@@ -389,10 +430,27 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
+        if (inputType === "radio") label = el.closest("fieldset")?.querySelector("legend")?.textContent?.trim() ?? "";
+        if (!label && id) label = document.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent?.trim() ?? "";
         if (!label) label = el.closest("label")?.textContent?.trim() ?? "";
+        if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
+          .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
+        if (!label) label = el.getAttribute("aria-label") ?? "";
+        if (!label && inputType === "file") {
+          // Unnamed/hidden native inputs remain uploadable with setInputFiles.
+          // Only use a local widget's label, never infer "resume" from all page text.
+          let widget = el.parentElement;
+          for (let depth = 0; widget && widget !== form && depth < 3; depth++, widget = widget.parentElement) {
+            if (widget.querySelectorAll('input[type="file"]').length > 1) break;
+            label = widget.querySelector("label,legend")?.textContent?.trim() ?? "";
+            if (!label && /resume|\bcv\b|curr[ií]culum|cover\s*letter/i.test(widget.textContent ?? "")) {
+              label = widget.textContent?.trim().slice(0, 300) ?? "";
+            }
+            if (label) break;
+          }
+        }
         if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
-        if (!label) label = el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? name;
+        if (!label) label = el.getAttribute("placeholder") || name || id || el.getAttribute("data-testid") || "";
 
         const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /\*/.test(label);
 
@@ -408,13 +466,16 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
                 })
               : undefined;
 
-        const selector = id ? `#${CSS.escape(id)}` : name ? `${selector0(tag, inputType)}[name="${name}"]` : "";
-        return { selector, label: label.replace(/\s+/g, " ").trim(), type: inputType, required, options };
-
-        function selector0(tagName: string, type: string) {
-          if (tagName === "select" || tagName === "textarea") return tagName;
-          return `input[type="${type}"]`;
+        const fieldId = String(index);
+        el.setAttribute("data-aplica-field", fieldId);
+        if (inputType === "radio" && name) {
+          for (const radio of controls) {
+            if (radio instanceof HTMLInputElement && radio.type === "radio" && radio.name === name) {
+              radio.setAttribute("data-aplica-field", fieldId);
+            }
+          }
         }
+        return { selector: `[data-aplica-field="${fieldId}"]`, label: label.replace(/\s+/g, " ").trim(), type: inputType, required, options };
       })
       .filter((field): field is NonNullable<typeof field> => Boolean(field && field.selector));
   }, formSelector);
