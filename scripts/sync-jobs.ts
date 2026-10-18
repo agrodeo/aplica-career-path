@@ -39,8 +39,7 @@ async function main() {
   const providers = requestedProviders();
   const providerConcurrency =
     providers?.length === 1 && providers[0] === "custom" ? 1
-    : providers?.length === 1 && ["smartrecruiters", "workday"].includes(providers[0] ?? "") ? 2
-    : 4;
+    : 2;
 
   const result = await syncAllRegisteredJobSources({
     concurrency: providerConcurrency,
