@@ -1,0 +1,30 @@
+name: LATAM Inventory Sync
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/latam-sync.yml"
+      - "scripts/sync-latam-jobs.ts"
+
+concurrency:
+  group: aplica-latam-inventory-sync
+  cancel-in-progress: true
+
+jobs:
+  sync-latam:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Refresh LATAM and newly added boards
+        run: bun scripts/sync-latam-jobs.ts
