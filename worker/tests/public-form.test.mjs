@@ -53,6 +53,14 @@ test("does not duplicate a combobox with its hidden required validation proxy", 
   });
 });
 
+test("upload groups preserve explicit file labels and do not make sibling files required", async () => {
+  await inspect(`<form>${identity}<div role="group" aria-labelledby="documents"><span id="documents">Documents</span><input type="file" aria-label="Resume"></div><fieldset aria-required="true"><legend>Extra documents</legend><input type="file" aria-label="Portfolio"><input type="file" aria-label="Cover Letter"></fieldset>${submit}</form>`, async schema => {
+    assert.equal(schema.supportsFileUpload, true);
+    assert.equal(schema.fields.find(field => field.canonicalKey === "resume").label, "Resume");
+    assert.equal(schema.fields.find(field => field.canonicalKey === "cover_letter").required, false);
+  });
+});
+
 test("employment restrictions and visa questions never reuse company or location answers", () => {
   assert.equal(canonicalKeyFor("Are you subject to any employment agreements and/or post-employment restrictions with your current employer or a past employer?*"), null);
   assert.equal(canonicalKeyFor("Will you now or in the future require sponsorship for a visa to remain in your current location?*"), "sponsorship");
