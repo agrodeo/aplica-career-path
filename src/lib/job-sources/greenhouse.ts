@@ -60,8 +60,11 @@ export const greenhouseProvider: JobSourceProvider = {
           title: job.title.trim().slice(0, 500),
           description,
           location,
-          country:
+          country: normalizeCountryCode(
             job.offices?.find((office) => office.location)?.location ?? null,
+            location,
+            ...(job.offices ?? []).map((office) => office.location ?? null),
+          ),
           remoteType: inferRemoteType(job.title, location, description),
           employmentType: inferEmploymentType(job.title, description),
           seniority: inferSeniority(job.title),
