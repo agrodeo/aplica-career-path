@@ -27,7 +27,7 @@ test("CVs are uploaded only to mapped resume fields", () => {
   assert.deepEqual(prepareAnswers({ fields: [field] }, profile, job), []);
 });
 test("past employment is not described as current", () => {
-  const experienced = { ...profile, experience: [{ title: "Engineer", company: "Previous", isCurrent: false }] };
+  const experienced = { ...profile, experience: [{ id: "previous", title: "Engineer", company: "Previous", isCurrent: false, startDate: null, endDate: null, description: "", achievements: [] }] };
   assert.match(generatedInterest(experienced, job), /Trabajé como Engineer en Previous/);
   assert.doesNotMatch(generatedInterest(experienced, job), /Actualmente/);
   assert.equal(validateGeneratedAnswer(generatedInterest(experienced, job), experienced, job).valid, true);

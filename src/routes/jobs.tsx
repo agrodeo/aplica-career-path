@@ -581,7 +581,7 @@ function QuestionEditor({
   questions: MissingQuestion[];
   onSaved: () => Promise<void>;
 }) {
-  const saveAnswers = useServerFn(saveVerifiedApplicationAnswers);
+  const saveAnswers = saveVerifiedApplicationAnswers;
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [validationError, setValidationError] = useState<string | null>(null);
 
