@@ -63,3 +63,5 @@ main().catch((error) => {
   logger.error({ err: error instanceof Error ? error.message : String(error) }, "worker crashed");
   process.exitCode = 1;
 });
+
+// latam inspection priority trigger
