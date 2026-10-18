@@ -98,7 +98,7 @@ jobs:
       RUN_TARGET: inspections
       INSPECTION_PROVIDER: ${{ matrix.provider }}
       INSPECTION_BATCH_SIZE: ${{ matrix.batch }}
-      INSPECTION_MAX_BATCHES: "5"
+      INSPECTION_MAX_BATCHES: "20"
       INSPECTION_RUN_BUDGET_MS: "720000"
       INSPECTION_CONCURRENCY: ${{ matrix.concurrency }}
       WORKER_ID: github-actions-${{ github.run_id }}-${{ matrix.shard }}
