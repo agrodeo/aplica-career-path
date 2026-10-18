@@ -1,4 +1,5 @@
 import {
+  normalizeCountryCode,
   decodeEntities,
   inferEmploymentType,
   inferRemoteType,
@@ -213,7 +214,7 @@ async function fetchCustomBoard(
       title,
       description: plain.slice(0, 30_000),
       location,
-      country,
+      country: normalizeCountryCode(country, location),
       remoteType: inferRemoteType(title, location, plain),
       employmentType: inferEmploymentType(title, plain),
       seniority: inferSeniority(title),
