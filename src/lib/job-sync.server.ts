@@ -5,6 +5,16 @@ import {
 } from "@/lib/job-sources/registry";
 import type { AtsProvider } from "@/lib/job-sources/types";
 
+const LATAM_COUNTRY_CODES = new Set([
+  "ar","bo","br","cl","co","cr","do","ec","gt","hn","mx","ni","pa","pe","pr","py","sv","uy","ve",
+]);
+
+function isLatamJob(country: string | null, location: string | null) {
+  if (country && LATAM_COUNTRY_CODES.has(country.toLowerCase())) return true;
+  const text = (location ?? "").toLowerCase();
+  return /\blatam\b|latin america|south america/.test(text);
+}
+
 export type JobSourceSyncInput = {
   provider: AtsProvider;
   identifier: string;
@@ -97,6 +107,9 @@ export async function syncJobSource(input: JobSourceSyncInput) {
 
   const uniqueJobs = Array.from(
     new Map(discovery.jobs.map((job) => [job.externalId, job])).values(),
+  );
+  const latamPriority = uniqueJobs.some((job) =>
+    isLatamJob(job.country, job.location),
   );
 
   const rows = uniqueJobs.map((job) => ({
@@ -247,9 +260,9 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     }
   }
 
-  const { error: scannedAtError } = await supabaseAdmin
-    .from("companies")
-    .update({ last_scanned_at: now })
+  const { error: scannedAtError } = await (supabaseAdmin
+    .from("companies") as any)
+    .update({ last_scanned_at: now, latam_priority: latamPriority })
     .eq("id", companyId);
   if (scannedAtError) throw new Error(scannedAtError.message);
 
