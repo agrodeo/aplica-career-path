@@ -1,34 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getJobSourceProvider, supportedAtsProviders } from "@/lib/job-sources/registry";
 import type { AtsProvider } from "@/lib/job-sources/types";
-
-const LATAM_COUNTRY_CODES = new Set([
-  "ar",
-  "bo",
-  "br",
-  "cl",
-  "co",
-  "cr",
-  "do",
-  "ec",
-  "gt",
-  "hn",
-  "mx",
-  "ni",
-  "pa",
-  "pe",
-  "pr",
-  "py",
-  "sv",
-  "uy",
-  "ve",
-]);
-
-function isLatamJob(country: string | null, location: string | null) {
-  if (country && LATAM_COUNTRY_CODES.has(country.toLowerCase())) return true;
-  const text = (location ?? "").toLowerCase();
-  return /\blatam\b|latin america|south america/.test(text);
-}
+import { isLatamJob, selectInspectionCandidates, type InspectionCandidate } from "@/lib/job-sources/discovery-policy";
 
 export type JobSourceSyncInput = {
   provider: AtsProvider;
@@ -195,7 +168,7 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     }
   }
 
-  const currentJobs: Array<{
+  const currentJobs: Array<InspectionCandidate & {
     id: string;
     external_job_id: string;
     application_url: string | null;
@@ -206,8 +179,9 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabaseAdmin
       .from("jobs")
-      .select("id, external_job_id, application_url, last_verified_at")
+      .select("id, external_job_id, application_url, last_verified_at, country, location, remote_type, published_at")
       .eq("source_id", source.id)
+      .order("id")
       .range(from, from + pageSize - 1);
 
     if (error) throw new Error(error.message);
@@ -236,30 +210,19 @@ export async function syncJobSource(input: JobSourceSyncInput) {
   }
 
   const inspectionCandidates = autoApplySupported
-    ? currentJobs
-        .filter((job) => {
-          if (!job.application_url) return false;
-          if (!job.last_verified_at) return true;
-          return Date.now() - new Date(job.last_verified_at).getTime() > 24 * 60 * 60 * 1000;
-        })
-        .slice(0, 1000)
+    ? selectInspectionCandidates(currentJobs, discoveredIds)
     : [];
+
+  if (autoApplySupported) {
+    const { error } = await (supabaseAdmin.rpc as any)("refresh_source_inspection_priorities", { _source_id: source.id });
+    if (error) throw new Error(error.message);
+  }
 
   let inspectionsQueued = 0;
 
   if (input.requestedBy && inspectionCandidates.length) {
-    const staleInspectionIds = inspectionCandidates.map((job) => job.id);
-    for (let index = 0; index < staleInspectionIds.length; index += 100) {
-      const { error } = await supabaseAdmin
-        .from("jobs")
-        .update({
-          auto_apply_eligible: false,
-          ineligibility_reason: "REVERIFYING_FORM",
-        })
-        .in("id", staleInspectionIds.slice(index, index + 100));
-      if (error) throw new Error(error.message);
-    }
-
+    // Preserve the last verified result until a new inspection actually reports.
+    // Submission still performs its own live validation before sending anything.
     const urls = [...new Set(inspectionCandidates
       .map((job) => job.application_url)
       .filter((url): url is string => Boolean(url)))];

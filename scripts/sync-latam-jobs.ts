@@ -37,7 +37,10 @@ async function main() {
     .eq("active", true)
     .in("ats_type", providers)
     .not("ats_identifier", "is", null)
-    .or("latam_priority.eq.true,last_scanned_at.is.null")
+    // Unscanned worldwide boards have their own inventory lane. Mixing them
+    // here let null scan dates crowd actual LATAM employers out of the limit.
+    .eq("latam_priority", true)
+    .or(`last_scanned_at.is.null,last_scanned_at.lt.${new Date(cutoff).toISOString()}`)
     .order("last_scanned_at", { ascending: true, nullsFirst: true })
     .limit(companyLimit);
 

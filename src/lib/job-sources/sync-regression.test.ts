@@ -41,6 +41,7 @@ function fixture(mode: "existing" | "lookup-error" | "insert-race" | "pending-er
     if (url.pathname === "/rest/v1/companies" && method === "POST")
       return Response.json({ message: "Duplicate board", code: "23505" }, { status: 409 });
     if (url.pathname === "/rest/v1/job_sources") return Response.json({ id: "source-1" });
+    if (url.pathname === "/rest/v1/rpc/refresh_source_inspection_priorities") return new Response(null, { status: 204 });
     if (url.pathname === "/rest/v1/jobs" && method === "GET") return Response.json(mode === "pending-error" ? [{
       id: "job-1", external_job_id: "0", application_url: "https://jobs.smartrecruiters.com/Hospital/0", last_verified_at: null,
     }] : []);
@@ -63,6 +64,7 @@ describe("inventory registry and description regressions", () => {
     const calls = fixture("pending-error");
     await expect(syncJobSource({ ...input, requestedBy: "00000000-0000-0000-0000-000000000001" })).rejects.toThrow("Inspection queue unavailable");
     expect(calls.some(call => call.path.endsWith("adapter_inspections") && call.method === "POST")).toBe(false);
+    expect(calls.some(call => call.path.endsWith("jobs") && call.method === "PATCH" && call.body?.auto_apply_eligible === false)).toBe(false);
   }, 15000);
   test("chooses one active company and keeps unenriched jobs out of description-writing batches", async () => {
     const calls = fixture("existing");
