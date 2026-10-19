@@ -242,18 +242,14 @@ export async function syncJobSource(input: JobSourceSyncInput) {
     const toInspect = urls.filter((url) => !pendingUrls.has(url));
 
     for (let index = 0; index < toInspect.length; index += 100) {
-      const { error } = await supabaseAdmin.from("adapter_inspections").insert(
-        toInspect.slice(index, index + 100).map((url) => ({
-          requested_by: input.requestedBy!,
-          url,
-          mode: "inspect",
-          status: "queued",
-          adapter: provider.submissionAdapter,
-          ats_type: provider.type,
-        })),
-      );
+      const { data: inserted, error } = await (supabaseAdmin.rpc as any)("enqueue_job_inspections", {
+        _requested_by: input.requestedBy!,
+        _urls: toInspect.slice(index, index + 100),
+        _adapter: provider.submissionAdapter,
+        _ats_type: provider.type,
+      });
       if (error) throw new Error(error.message);
-      inspectionsQueued += Math.min(100, toInspect.length - index);
+      inspectionsQueued += Number(inserted ?? 0);
     }
   }
 

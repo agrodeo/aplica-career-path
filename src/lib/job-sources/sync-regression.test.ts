@@ -6,7 +6,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function fixture(mode: "existing" | "lookup-error" | "insert-race" | "pending-error") {
+function fixture(mode: "existing" | "lookup-error" | "insert-race" | "pending-error" | "enqueue") {
   process.env["SUPABASE_URL"] = "https://fixture.supabase.co";
   process.env["SUPABASE_SERVICE_ROLE_KEY"] = "sb_secret_offline_test_only_not_a_credential";
   const calls: { path: string; method: string; query: URLSearchParams; body: any }[] = [];
@@ -42,11 +42,12 @@ function fixture(mode: "existing" | "lookup-error" | "insert-race" | "pending-er
       return Response.json({ message: "Duplicate board", code: "23505" }, { status: 409 });
     if (url.pathname === "/rest/v1/job_sources") return Response.json({ id: "source-1" });
     if (url.pathname === "/rest/v1/rpc/refresh_source_inspection_priorities") return new Response(null, { status: 204 });
-    if (url.pathname === "/rest/v1/jobs" && method === "GET") return Response.json(mode === "pending-error" ? [{
+    if (url.pathname === "/rest/v1/rpc/enqueue_job_inspections") return Response.json(1);
+    if (url.pathname === "/rest/v1/jobs" && method === "GET") return Response.json(mode === "pending-error" || mode === "enqueue" ? [{
       id: "job-1", external_job_id: "0", application_url: "https://jobs.smartrecruiters.com/Hospital/0", last_verified_at: null,
     }] : []);
     if (url.pathname === "/rest/v1/adapter_inspections" && method === "GET")
-      return Response.json({ message: "Inspection queue unavailable", code: "PGRST002" }, { status: 503 });
+      return mode === "enqueue" ? Response.json([]) : Response.json({ message: "Inspection queue unavailable", code: "PGRST002" }, { status: 503 });
     if (method === "PATCH" || method === "POST") return new Response(null, { status: 204 });
     throw new Error(`Unexpected fixture request: ${method} ${url.pathname}`);
   }) as typeof fetch;
@@ -60,6 +61,13 @@ const input = {
 };
 
 describe("inventory registry and description regressions", () => {
+  test("queues through the conflict-safe RPC and counts only inserted inspections", async () => {
+    const calls = fixture("enqueue");
+    const result = await syncJobSource({ ...input, requestedBy: "00000000-0000-0000-0000-000000000001" });
+    expect(result.inspectionsQueued).toBe(1);
+    expect(calls.find(call => call.path.endsWith("rpc/enqueue_job_inspections"))?.body._urls).toEqual(["https://jobs.smartrecruiters.com/Hospital/0"]);
+    expect(calls.some(call => call.path.endsWith("adapter_inspections") && call.method === "POST")).toBe(false);
+  });
   test("an unavailable inspection lookup cannot create duplicate pending inspections", async () => {
     const calls = fixture("pending-error");
     await expect(syncJobSource({ ...input, requestedBy: "00000000-0000-0000-0000-000000000001" })).rejects.toThrow("Inspection queue unavailable");
