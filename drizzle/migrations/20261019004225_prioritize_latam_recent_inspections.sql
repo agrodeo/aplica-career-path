@@ -27,7 +27,6 @@ BEGIN
     INTO NEW.priority FROM public.jobs j WHERE j.application_url=NEW.url AND j.is_active;
   RETURN NEW;
 END; $$;
-DROP TRIGGER IF EXISTS inspection_priority_on_insert ON public.adapter_inspections;
 CREATE TRIGGER inspection_priority_on_insert BEFORE INSERT OR UPDATE OF url
   ON public.adapter_inspections FOR EACH ROW EXECUTE FUNCTION public.set_inspection_priority();
 
