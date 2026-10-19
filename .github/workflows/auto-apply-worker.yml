@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "worker/**"
+      - "drizzle/migrations/**"
       - ".github/workflows/auto-apply-worker.yml"
 
 jobs:
