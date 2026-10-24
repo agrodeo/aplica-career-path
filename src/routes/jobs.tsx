@@ -54,16 +54,17 @@ export const Route = createFileRoute("/jobs")({
 
 function JobsPage() {
   const navigate = useNavigate();
+  const { user } = Route.useRouteContext();
 
   const jobsQuery = useQuery({
-    queryKey: ["auto-apply-jobs"],
+    queryKey: ["auto-apply-jobs", user.id],
     queryFn: async () => {
       await refreshJobMatches();
       return listAutoApplyJobs();
     },
   });
   const overviewQuery = useQuery({
-    queryKey: ["auto-apply-overview"],
+    queryKey: ["auto-apply-overview", user.id],
     queryFn: () => getAutoApplyOverview(),
   });
 
@@ -279,6 +280,7 @@ function JobsPage() {
             {actionError}
           </p>
         )}
+        {overviewQuery.error && <p role="alert" className="mt-5 text-sm text-destructive">No pudimos verificar tu plan: {overviewQuery.error.message}</p>}
         {jobsQuery.error && (
           <p className="mt-5 rounded-lg border border-destructive/20 p-4 text-sm text-destructive">
             No pudimos cargar tus trabajos: {jobsQuery.error.message}

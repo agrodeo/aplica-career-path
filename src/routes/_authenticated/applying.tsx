@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { PageShell, SiteHeader } from "@/components/aplica";
 import { supabase } from "@/integrations/supabase/client";
 import { getBatchProgress } from "@/lib/auto-apply.supabase";
+import { applicationAction, applicationStatusLabel } from "@/lib/auto-apply/application-status";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/applying")({
@@ -21,35 +22,21 @@ export const Route = createFileRoute("/_authenticated/applying")({
   component: ApplyingPage,
 });
 
-const statusLabel: Record<string, string> = {
-  queued: "En cola",
-  preparing: "Preparando",
-  resume_generating: "Generando CV",
-  ready: "Listo para enviar",
-  submitting: "Enviando",
-  submitted_unverified: "Enviado, verificando",
-  verified: "Enviada",
-  failed_retryable: "Reintentando",
-  failed_permanent: "No se pudo enviar",
-  expired: "Vacante expirada",
-  duplicate: "Ya aplicaste",
-  unsupported: "No soportado",
-};
-
 function ApplyingPage() {
   const { batch } = Route.useSearch();
-  const { data, refetch } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: ["batch-progress", batch],
     queryFn: () => getBatchProgress({ data: { batchId: batch } }),
     enabled: Boolean(batch),
+    refetchInterval: 10000,
   });
 
   useEffect(() => {
     if (!batch) return;
     const channel = supabase
       .channel(`batch-${batch}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "application_attempts" }, () => void refetch())
-      .on("postgres_changes", { event: "*", schema: "public", table: "application_batches" }, () => void refetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "application_attempts", filter: `batch_id=eq.${batch}` }, () => void refetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "application_batches", filter: `id=eq.${batch}` }, () => void refetch())
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -68,6 +55,10 @@ function ApplyingPage() {
     <div className="min-h-screen">
       <SiteHeader />
       <PageShell>
+        {data === undefined && batch && !error && <p role="status">Cargando la tanda…</p>}
+        {error && <p role="alert">No pudimos cargar la tanda: {error.message}</p>}
+        {data && !data.batch && <p role="alert">No encontramos esta tanda en tu cuenta.</p>}
+        {!batch && <p className="mb-5">Elegí una tanda desde <Link to="/applications" className="underline">tus postulaciones</Link>.</p>}
         <h1 className="text-3xl font-medium tracking-normal md:text-[40px]">Aplicando por vos</h1>
         <p className="mt-3 text-sm text-muted-foreground">
           {data?.batch?.total_selected ?? 0} trabajos seleccionados · una postulación se marca como enviada sólo cuando se verifica el envío.
@@ -80,19 +71,21 @@ function ApplyingPage() {
           <Stat label="Sin enviar" value={counts.failed} />
         </div>
 
+        <Link to="/applications" className="mt-6 inline-block text-sm underline">Ver todas mis postulaciones</Link>
         <div className="mt-8 border-t border-border">
           {attempts.map((attempt) => (
             <div key={attempt.id} className="grid gap-2 border-b border-border py-4 md:grid-cols-[1fr_180px] md:items-center">
               <div>
                 <p className="font-medium">{attempt.title}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{attempt.company}</p>
+                {applicationAction(attempt.errorCode, attempt.status) && <p className="mt-2 text-sm text-muted-foreground">{applicationAction(attempt.errorCode, attempt.status)}</p>}
               </div>
               <span className={cn("text-sm", attempt.status === "verified" ? "text-primary" : attempt.status.startsWith("failed") ? "text-caution" : "text-muted-foreground")}>
-                {statusLabel[attempt.status] ?? attempt.status}
+                {applicationStatusLabel(attempt.status)}
               </span>
             </div>
           ))}
-          {!attempts.length && <p className="py-16 text-center text-sm text-muted-foreground">Todavía no hay postulaciones en esta tanda.</p>}
+          {!attempts.length && data?.batch && <p className="py-16 text-center text-sm text-muted-foreground">Todavía no hay postulaciones en esta tanda.</p>}
         </div>
       </PageShell>
     </div>
