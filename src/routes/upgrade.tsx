@@ -1,10 +1,42 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Check } from "lucide-react";
-import { useState } from "react";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/aplica";
-import { useAplica } from "@/lib/aplica-store";
-import { cn } from "@/lib/utils";
-export const Route = createFileRoute("/upgrade")({ head: () => ({ meta: [{ title: "Elegí tu plan — aplica" }, { name: "description", content: "Planes semanales claros para dejar de aplicar trabajo por trabajo." }, { property: "og:title", content: "Elegí tu plan — aplica" }, { property: "og:description", content: "Aplica adapta tu CV y mantiene tus postulaciones organizadas." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }), component: Upgrade });
-const plans = [{ name: "Starter", price: "6.99", applications: 25, features: ["Búsqueda automática de trabajos", "Adaptación de CV", "Autocompletado de aplicaciones", "Seguimiento de postulaciones"] }, { name: "Pro", price: "11.99", applications: 100, preferred: true, features: ["Todo en Starter", "100 aplicaciones semanales", "CV personalizado para cada trabajo", "Respuestas personalizadas", "Notificaciones por WhatsApp"] }, { name: "Max", price: "17.99", applications: 250, features: ["Todo en Pro", "250 aplicaciones semanales", "Búsqueda prioritaria", "Más ubicaciones y roles simultáneos"] }];
-function Upgrade() { const navigate = useNavigate(); const { choosePlan, jobs } = useAplica(); const [failed, setFailed] = useState(false); const ready = jobs.filter((j) => j.match >= 80).length; const pick = () => { setFailed(false); choosePlan(); navigate({ to: "/jobs" }); }; return <main className="min-h-screen bg-surface"><header className="mx-auto flex max-w-[1120px] items-center justify-between px-5 py-5"><Wordmark compact/><button onClick={() => navigate({ to: "/jobs" })} className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4"/>Volver</button></header><section className="mx-auto max-w-[1060px] px-5 pb-16 pt-10 text-center"><h1 className="text-3xl font-medium tracking-normal md:text-[44px]">Dejá de aplicar trabajo por trabajo.</h1><p className="mx-auto mt-4 max-w-xl leading-7 text-muted-foreground">Aplica adapta tu CV, completa las postulaciones y mantiene todo organizado por vos.</p><p className="mt-6 text-sm font-medium text-primary">Encontramos {ready} trabajos listos para aplicar con tu perfil.</p>{failed && <div className="mx-auto mt-6 max-w-lg rounded-lg border border-destructive/20 bg-background p-4 text-sm text-destructive">No pudimos procesar el pago. No se realizó ningún cargo. Probá otra vez.</div>}<div className="mt-10 grid gap-4 text-left md:grid-cols-3">{plans.map((plan) => <article key={plan.name} className={cn("relative rounded-xl border bg-background p-6", plan.preferred ? "border-primary ring-1 ring-primary" : "border-border")}>{plan.preferred && <span className="absolute -top-3 left-5 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Más elegido</span>}<h2 className="text-xl font-medium">{plan.name}</h2><p className="mt-5"><span className="text-3xl font-medium">USD {plan.price}</span><span className="text-sm text-muted-foreground"> / semana</span></p><p className="mt-2 text-sm font-medium">{plan.applications} aplicaciones por semana</p><ul className="my-7 space-y-3">{plan.features.map((f) => <li key={f} className="flex gap-2 text-sm text-muted-foreground"><Check className="h-4 w-4 shrink-0 text-success"/>{f}</li>)}</ul><Button className="w-full" variant={plan.preferred ? "default" : "outline"} onClick={pick}>{plan.preferred ? "Empezar con Pro" : `Elegir ${plan.name}`}</Button></article>)}</div><p className="mt-8 text-sm">Renovación semanal. Cancelá cuando quieras.</p><p className="mt-3 text-xs text-muted-foreground">Nunca agregamos experiencia, estudios ni habilidades que no hayas declarado.</p><button onClick={() => setFailed(true)} className="mt-6 text-xs text-muted-foreground underline">Simular error de pago</button></section></main>; }
+import { supabase } from "@/integrations/supabase/client";
+import { getAutoApplyOverview, listAvailablePlans } from "@/lib/auto-apply.supabase";
+export const Route = createFileRoute("/upgrade")({
+  ssr: false,
+  beforeLoad: async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw redirect({ to: "/login" });
+    return { user: data.user };
+  },
+  head: () => ({ meta: [{ title: "Planes — aplica" }] }), component: Upgrade,
+});
+function Upgrade() {
+  const { user } = Route.useRouteContext();
+  const plans = useQuery({ queryKey: ["plans"], queryFn: listAvailablePlans });
+  const overview = useQuery({ queryKey: ["auto-apply-overview", user.id], queryFn: getAutoApplyOverview });
+  return <main className="min-h-screen bg-surface">
+    <header className="mx-auto flex max-w-[1120px] items-center justify-between px-5 py-5"><Wordmark compact /><Button asChild variant="ghost"><Link to="/jobs"><ArrowLeft />Volver</Link></Button></header>
+    <section className="mx-auto max-w-[1060px] px-5 pb-16 pt-10 text-center">
+      <h1 className="text-3xl font-medium md:text-[44px]">Planes de Aplica</h1>
+      <p className="mx-auto mt-4 max-w-xl leading-7 text-muted-foreground">Adaptación de CV, postulaciones automáticas y seguimiento de envíos confirmados.</p>
+      <div className="mx-auto mt-6 max-w-xl rounded-lg border border-border bg-background p-5 text-sm" role="status">
+        {overview.data?.subscriptionStatus === "active" ? `Tu plan ${overview.data.planName ?? ""} está activo.` : "Aplica está en beta. La contratación y los cobros todavía no están habilitados."}
+      </div>
+      {plans.isPending && <p className="mt-8" role="status">Cargando planes…</p>}
+      {plans.error && <p className="mt-8" role="alert">No pudimos cargar los planes: {plans.error.message}</p>}
+      <div className="mt-10 grid gap-4 text-left md:grid-cols-3">{plans.data?.map((plan) => <article key={plan.code} className="rounded-xl border border-border bg-background p-6">
+        <h2 className="text-xl font-medium">{plan.name}</h2>
+        <p className="mt-5 text-2xl font-medium">{new Intl.NumberFormat("es-AR", { style: "currency", currency: plan.price_currency }).format(Number(plan.price_amount))}<span className="text-sm font-normal text-muted-foreground"> / {periodLabel(plan.billing_period)}</span></p>
+        <p className="mt-3 text-sm">{plan.weekly_application_limit == null ? "Sin límite semanal de postulaciones" : `${plan.weekly_application_limit} postulaciones por semana`}</p>
+        <Button className="mt-6 w-full" variant="outline" disabled>Contratación próximamente</Button>
+      </article>)}</div>
+      {plans.data?.length === 0 && <p className="mt-8 text-sm text-muted-foreground">Todavía no hay planes disponibles.</p>}
+      <p className="mt-8 text-xs text-muted-foreground">La beta no activa una suscripción ni realiza un cargo desde esta pantalla.</p>
+    </section>
+  </main>;
+}
+function periodLabel(period: string) { return ({ weekly: "semana", monthly: "mes", yearly: "año", annual: "año" } as Record<string, string>)[period] ?? period; }

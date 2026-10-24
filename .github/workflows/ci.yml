@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/**"
+      - "scripts/**"
       - "worker/**"
       - "drizzle/**"
       - "package.json"
@@ -23,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun test src/lib/job-sources/
+      - run: bun test src/lib/job-sources/ src/lib/auto-apply/ scripts/beta-health.test.ts
       - run: bun run build
         env:
           VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co

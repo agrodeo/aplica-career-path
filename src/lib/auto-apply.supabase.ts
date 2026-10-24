@@ -1,127 +1,7 @@
+import type { Database } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
-const TITLE_NOISE = new Set([
-  "senior","sr","junior","jr","lead","principal","staff","head","associate","intern","internship",
-  "remote","latam","global","the","and","of","de","del","la","el","y",
-]);
-
-function normalizeText(value: string) {
-  return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9+#.]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function words(value: string, removeNoise = false) {
-  return new Set(normalizeText(value).split(" ").filter((word) => word.length > 1 && (!removeNoise || !TITLE_NOISE.has(word))));
-}
-
-function similarity(a: string, b: string) {
-  const left = words(a, true);
-  const right = words(b, true);
-  if (!left.size || !right.size) return 0;
-  const intersection = [...left].filter((word) => right.has(word)).length;
-  const precision = intersection / left.size;
-  const recall = intersection / right.size;
-  const f1 = precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : 0;
-  const na = normalizeText(a);
-  const nb = normalizeText(b);
-  return Math.min(100, Math.max(Math.round(f1 * 85), na.includes(nb) || nb.includes(na) ? 92 : 0));
-}
-
-function includesLoose(haystack: string | null | undefined, needle: string | null | undefined) {
-  if (!haystack || !needle) return false;
-  const a = normalizeText(haystack);
-  const b = normalizeText(needle);
-  return a.includes(b) || b.includes(a);
-}
-
-function normalizeMode(value: string | null) {
-  const mode = (value ?? "").toLowerCase();
-  if (/remote|remoto/.test(mode)) return "remote";
-  if (/hybrid|hibr|híbr/.test(mode)) return "hybrid";
-  if (/onsite|on-site|presencial|office/.test(mode)) return "onsite";
-  return "unknown";
-}
-
-
-const LATAM_COUNTRY_CODES = new Set([
-  "ar","bo","br","cl","co","cr","do","ec","gt","hn","mx","ni","pa","pe","pr","py","sv","uy","ve",
-]);
-
-const LOCATION_ALIASES: Record<string, string[]> = {
-  argentina: ["ar", "argentina", "buenos aires"],
-  ar: ["ar", "argentina", "buenos aires"],
-  brazil: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
-  brasil: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
-  br: ["br", "brazil", "brasil", "sao paulo", "rio de janeiro"],
-  mexico: ["mx", "mexico", "mexico city", "ciudad de mexico"],
-  mx: ["mx", "mexico", "mexico city", "ciudad de mexico"],
-  colombia: ["co", "colombia", "bogota", "medellin"],
-  co: ["co", "colombia", "bogota", "medellin"],
-  chile: ["cl", "chile"],
-  cl: ["cl", "chile"],
-  peru: ["pe", "peru", "lima"],
-  pe: ["pe", "peru", "lima"],
-  uruguay: ["uy", "uruguay", "montevideo"],
-  uy: ["uy", "uruguay", "montevideo"],
-  ecuador: ["ec", "ecuador", "quito", "guayaquil"],
-  ec: ["ec", "ecuador", "quito", "guayaquil"],
-  paraguay: ["py", "paraguay", "asuncion"],
-  py: ["py", "paraguay", "asuncion"],
-  bolivia: ["bo", "bolivia"],
-  bo: ["bo", "bolivia"],
-  "costa rica": ["cr", "costa rica"],
-  cr: ["cr", "costa rica"],
-  panama: ["pa", "panama"],
-  pa: ["pa", "panama"],
-};
-
-function geoText(location: string | null | undefined, country: string | null | undefined) {
-  return normalizeText(`${location ?? ""} ${country ?? ""}`);
-}
-
-function isLatamGeo(location: string | null | undefined, country: string | null | undefined) {
-  const code = normalizeText(country ?? "");
-  if (LATAM_COUNTRY_CODES.has(code)) return true;
-  const text = geoText(location, country);
-  return /\blatam\b|latin america|south america|argentina|brazil|brasil|mexico|colombia|chile|peru|uruguay|ecuador|paraguay|bolivia|costa rica|panama|guatemala|honduras|el salvador|nicaragua|dominican republic|puerto rico|buenos aires|sao paulo|bogota|medellin|montevideo|lima|quito|guayaquil|asuncion/.test(text);
-}
-
-function hasExplicitGeoRestriction(location: string | null | undefined, country: string | null | undefined) {
-  if (country?.trim()) return true;
-  const text = normalizeText(location ?? "");
-  if (!text) return false;
-  return !/^(remote|remoto|anywhere|worldwide|global|work from home)$/.test(text);
-}
-
-function locationMatchesTarget(
-  location: string | null | undefined,
-  country: string | null | undefined,
-  target: string,
-) {
-  if (includesLoose(location, target) || includesLoose(country, target)) return true;
-
-  const normalizedTarget = normalizeText(target);
-  if (/^(latam|latin america|south america)$/.test(normalizedTarget)) {
-    return isLatamGeo(location, country);
-  }
-
-  const aliases = LOCATION_ALIASES[normalizedTarget] ?? [];
-  const text = geoText(location, country);
-  if (aliases.some((alias) => {
-    const normalizedAlias = normalizeText(alias);
-    return text === normalizedAlias || text.includes(` ${normalizedAlias} `) || text.startsWith(`${normalizedAlias} `) || text.endsWith(` ${normalizedAlias}`);
-  })) {
-    return true;
-  }
-
-  // A role explicitly open to LATAM/South America is compatible with any
-  // individual LATAM-country preference.
-  if (aliases.length && /\blatam\b|latin america|south america/.test(text)) {
-    return true;
-  }
-
-  return false;
-}
+import { checkMatchConstraints, includesLoose, similarity } from "./auto-apply/candidate-matching";
 
 async function currentUserId() {
   const { data, error } = await supabase.auth.getUser();
@@ -170,7 +50,7 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
   for (const response of profileResults) if (response.error) throw new Error(response.error.message);
   const [{ data: profile }, { data: experiences }, { data: answers }] = profileResults;
 
-  const schemas: Array<Record<string, any>> = [];
+  const schemas: Array<Pick<Database["public"]["Tables"]["application_schemas"]["Row"], "id" | "job_id" | "fields" | "valid">> = [];
   for (let offset = 0; offset < schemaIds.length; offset += 200) {
     const ids = schemaIds.slice(offset, offset + 200);
     const { data, error } = await supabase
@@ -282,6 +162,10 @@ export async function refreshJobMatches() {
     supabase.from("job_preferences").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
+  for (const response of [profile, experiences, skills, preferences]) {
+    if (response.error) throw new Error(response.error.message);
+  }
+
   // Only match jobs that passed structural Auto Apply inspection. Page through
   // the inventory instead of silently truncating at PostgREST's first 1,000 rows.
   const jobs: Array<{
@@ -293,13 +177,15 @@ export async function refreshJobMatches() {
     remote_type: string | null;
     employment_type: string | null;
     seniority: string | null;
+    company_id: string | null;
+    companies: { name: string } | null;
   }> = [];
   const PAGE_SIZE = 1000;
   const MAX_MATCH_INVENTORY = 10000;
   for (let offset = 0; offset < MAX_MATCH_INVENTORY; offset += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("jobs")
-      .select("id,title,description,location,country,remote_type,employment_type,seniority")
+      .select("id,title,description,location,country,remote_type,employment_type,seniority,company_id,companies(name)")
       .eq("is_active", true)
       .eq("auto_apply_eligible", true)
       .order("discovered_at", { ascending: false })
@@ -315,25 +201,16 @@ export async function refreshJobMatches() {
   const experienceTitles = [profile.data?.current_title ?? "", ...(experiences.data ?? []).map((x) => x.title)].filter(Boolean);
   const roleCandidates = [...targetRoles, ...experienceTitles];
   const userSkills = (skills.data ?? []).map((x) => x.name).filter(Boolean);
-  const targetLocations = pref?.target_locations ?? [];
 
   const rows = jobs.map((job) => {
     const roleScore = roleCandidates.length ? Math.max(...roleCandidates.map((role) => similarity(role, job.title))) : 50;
     const text = `${job.title} ${job.description ?? ""}`;
     const matchedSkills = userSkills.filter((skill) => includesLoose(text, skill));
     const skillsScore = userSkills.length ? Math.min(100, Math.round((matchedSkills.length / Math.min(userSkills.length, 8)) * 100)) : 55;
-    const mode = normalizeMode(job.remote_type);
-    const modeAllowed = mode === "remote" ? pref?.remote_allowed !== false : mode === "hybrid" ? pref?.hybrid_allowed !== false : mode === "onsite" ? pref?.onsite_allowed === true : true;
-    const targetLocationMatched = !targetLocations.length || targetLocations.some((location) =>
-      locationMatchesTarget(job.location, job.country, location),
-    );
-    const locationMatched =
-      targetLocationMatched ||
-      (mode === "remote" &&
-        targetLocations.length > 0 &&
-        !hasExplicitGeoRestriction(job.location, job.country));
-    const locationScore = locationMatched ? 100 : 30;
-    const hardRequirementsMet = modeAllowed && (roleCandidates.length === 0 || roleScore >= 30) && (locationMatched || pref?.willing_to_relocate === true);
+    const checks = checkMatchConstraints(job, pref ?? {}, [profile.data?.country ?? profile.data?.city ?? ""].filter(Boolean));
+    const locationScore = checks.locationRequirementMet ? 100 : 30;
+    const roleRelevant = roleCandidates.length > 0 && roleScore >= 30;
+    const hardRequirementsMet = roleRelevant && Object.values(checks).every(Boolean);
     const matchScore = Math.round(Math.max(0, Math.min(100, roleScore * 0.55 + skillsScore * 0.25 + locationScore * 0.2)));
     return {
       user_id: userId,
@@ -351,7 +228,7 @@ export async function refreshJobMatches() {
         targetRole: targetRoles[0] ?? profile.data?.current_title ?? null,
         mode: job.remote_type,
         location: job.location,
-        hardRequirementChecks: { roleRelevant: roleScore >= 30, modeAllowed, locationRequirementMet: locationMatched },
+        hardRequirementChecks: { roleRelevant, ...checks },
         note: "El match compara perfil y vacante; no es una probabilidad de contratación.",
       },
       created_at: new Date().toISOString(),
@@ -376,7 +253,7 @@ export async function listAutoApplyJobs() {
   const minimum = Number(preferences?.minimum_match_score ?? 70);
   const unavailable = new Set([...(verifiedAttempts ?? []).map((x) => x.job_id), ...(queuedApplications ?? []).map((x) => x.job_id)]);
 
-  const matches: Array<Record<string, any>> = [];
+  const matches: Array<Database["public"]["Tables"]["job_matches"]["Row"]> = [];
   const PAGE_SIZE = 1000;
   const MAX_VISIBLE_MATCHES = 5000;
   for (let offset = 0; offset < MAX_VISIBLE_MATCHES; offset += PAGE_SIZE) {
@@ -397,7 +274,9 @@ export async function listAutoApplyJobs() {
   const filteredMatches = matches.filter((match) => !unavailable.has(String(match.job_id)));
   const matchByJob = new Map(filteredMatches.map((match) => [String(match.job_id), match]));
   const jobIds = [...matchByJob.keys()];
-  const jobs: Array<Record<string, any>> = [];
+  const jobs: Array<Pick<Database["public"]["Tables"]["jobs"]["Row"],
+    "id" | "title" | "location" | "remote_type" | "employment_type" | "seniority" | "salary_min" | "salary_max" | "salary_currency" | "published_at" | "discovered_at" | "application_url" | "auto_apply_eligible" | "auto_apply_adapter" | "application_schema_id"
+  > & { companies: { name: string; logo_url: string | null; last_scanned_at: string | null } | null }> = [];
 
   for (let offset = 0; offset < jobIds.length; offset += 300) {
     const ids = jobIds.slice(offset, offset + 300);
@@ -471,6 +350,7 @@ export async function getAutoApplyOverview() {
     supabase.from("subscriptions").select("plan_code,status,plans(weekly_application_limit,name)").eq("user_id",userId).maybeSingle(),
     supabase.from("auto_apply_consents").select("authorized,revoked_at").eq("user_id",userId).maybeSingle(),
   ]);
+  for (const response of [ready, attempts, credits, subscription, consent]) if (response.error) throw new Error(response.error.message);
   const statuses=attempts.data ?? [];
   return {
     readyCount:ready.count ?? 0,verified:statuses.filter((s)=>s.status==="verified").length,
@@ -494,11 +374,13 @@ export async function startAutoApplyBatch({ data }: { data: { jobIds: string[] }
 
 export async function getBatchProgress({ data }: { data: { batchId: string } }) {
   const userId = await currentUserId();
-  const [{ data: batch }, { data: attempts }] = await Promise.all([
-    supabase.from("application_batches").select("*").eq("id",data.batchId).eq("user_id",userId).maybeSingle(),
-    supabase.from("application_attempts").select("id,status,error_message,submitted_at,verified_at,jobs(title,companies(name))").eq("batch_id",data.batchId).eq("user_id",userId).order("queued_at",{ascending:true}),
+  const responses = await Promise.all([
+    supabase.from("application_batches").select("*").eq("id", data.batchId).eq("user_id", userId).maybeSingle(),
+    supabase.from("application_attempts").select("id,status,error_code,error_message,submitted_at,verified_at,jobs(title,companies(name))").eq("batch_id", data.batchId).eq("user_id", userId).order("queued_at", { ascending: true }),
   ]);
-  return { batch, attempts:(attempts ?? []).map((a)=>({id:a.id,status:a.status,title:a.jobs?.title ?? "",company:a.jobs?.companies?.name ?? "",errorMessage:a.error_message})) };
+  for (const response of responses) if (response.error) throw new Error(response.error.message);
+  const [{ data: batch }, { data: attempts }] = responses;
+  return { batch, attempts: (attempts ?? []).map((a) => ({ id: a.id, status: a.status, title: a.jobs?.title ?? "", company: a.jobs?.companies?.name ?? "", errorCode: a.error_code, errorMessage: a.error_message })) };
 }
 
 export async function listAvailablePlans() {
@@ -508,7 +390,31 @@ export async function listAvailablePlans() {
 }
 
 export async function listMyApplications() {
-  const userId=await currentUserId();
-  const {data}=await supabase.from("application_attempts").select("id,status,queued_at,submitted_at,verified_at,adapter,submission_reference,jobs(title,location,companies(name))").eq("user_id",userId).order("queued_at",{ascending:false}).limit(200);
-  return (data ?? []).map((a)=>({id:a.id,status:a.status,title:a.jobs?.title ?? "",company:a.jobs?.companies?.name ?? "",adapter:a.adapter,submittedAt:a.submitted_at,verifiedAt:a.verified_at,reference:a.submission_reference}));
+  const userId = await currentUserId();
+  const { data, error } = await supabase.from("application_attempts")
+    .select("id,job_id,status,queued_at,submitted_at,verified_at,error_code,error_message,resume_variant_id,adapter,submission_reference,jobs(title,location,application_url,companies(name))")
+    .eq("user_id", userId).order("queued_at", { ascending: false }).limit(200);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((a) => ({
+    id: a.id, jobId: a.job_id, status: a.status, title: a.jobs?.title ?? "Vacante no disponible",
+    company: a.jobs?.companies?.name ?? "", adapter: a.adapter, queuedAt: a.queued_at,
+    submittedAt: a.submitted_at, verifiedAt: a.verified_at, reference: a.submission_reference,
+    errorCode: a.error_code, errorMessage: a.error_message, resumeVariantId: a.resume_variant_id,
+    applicationUrl: a.jobs?.application_url ?? null,
+  }));
+}
+
+export async function getApplicationResume(attemptId: string) {
+  const userId = await currentUserId();
+  const { data: attempt, error } = await supabase.from("application_attempts")
+    .select("resume_variant_id").eq("id", attemptId).eq("user_id", userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!attempt?.resume_variant_id) throw new Error("Esta postulación todavía no tiene un CV disponible.");
+  const { data: resume, error: resumeError } = await supabase.from("resume_variants")
+    .select("pdf_path").eq("id", attempt.resume_variant_id).eq("user_id", userId).maybeSingle();
+  if (resumeError) throw new Error(resumeError.message);
+  if (!resume?.pdf_path) throw new Error("El archivo del CV todavía no está disponible.");
+  const { data: signed, error: signedError } = await supabase.storage.from("resumes").createSignedUrl(resume.pdf_path, 60);
+  if (signedError) throw new Error(signedError.message);
+  return signed.signedUrl;
 }

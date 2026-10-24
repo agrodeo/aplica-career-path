@@ -15,7 +15,6 @@ interface AplicaState {
   toggleJob: (id: string) => void;
   toggleSaved: (id: string) => void;
   selectEligible: (selected: boolean) => void;
-  choosePlan: () => void;
 }
 
 const AplicaContext = createContext<AplicaState | undefined>(undefined);
@@ -25,7 +24,7 @@ export function AplicaProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [subscribed, setSubscribed] = useState(false);
+  const subscribed = false;
   const [name, setName] = useState("");
   const [searchPreferences, setSearchPreferences] = useState({ role: "", location: "", mode: "Remoto" });
 
@@ -36,7 +35,7 @@ export function AplicaProvider({ children }: { children: ReactNode }) {
       const saved = JSON.parse(raw) as Partial<{ onboardingStep: number; onboardingComplete: boolean; subscribed: boolean; name: string; searchPreferences: { role: string; location: string; mode: string }; selectedIds: string[]; savedIds: string[] }>;
       if (saved.onboardingStep) setOnboardingStep(saved.onboardingStep);
       if (typeof saved.onboardingComplete === "boolean") setOnboardingComplete(saved.onboardingComplete);
-      if (typeof saved.subscribed === "boolean") setSubscribed(saved.subscribed);
+
       if (saved.name) setName(saved.name);
       if (saved.searchPreferences) setSearchPreferences(saved.searchPreferences);
       setJobs((current) => current.map((job) => ({ ...job, selected: saved.selectedIds?.includes(job.id) ?? job.selected, saved: saved.savedIds?.includes(job.id) ?? job.saved })));
@@ -53,7 +52,6 @@ export function AplicaProvider({ children }: { children: ReactNode }) {
     toggleJob: (id) => setJobs((current) => current.map((job) => job.id === id ? { ...job, selected: !job.selected } : job)),
     toggleSaved: (id) => setJobs((current) => current.map((job) => job.id === id ? { ...job, saved: !job.saved } : job)),
     selectEligible: (selected) => setJobs((current) => current.map((job) => ({ ...job, selected: job.match >= 80 ? selected : false }))),
-    choosePlan: () => setSubscribed(true),
   }), [jobs, onboardingStep, onboardingComplete, subscribed, name, searchPreferences]);
 
   return <AplicaContext.Provider value={value}>{children}</AplicaContext.Provider>;

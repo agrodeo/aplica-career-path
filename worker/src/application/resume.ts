@@ -85,7 +85,7 @@ export async function getOrCreateResume(job: JobRecord, profile: MasterProfile):
   return { resumeVariantId: saved.id, pdfPath, localPath, structuredResume: structured };
 }
 
-function buildStructuredResume(job: JobRecord, profile: MasterProfile): StructuredResume {
+export function buildStructuredResume(job: JobRecord, profile: MasterProfile): StructuredResume {
   const jobText = `${job.title} ${job.description}`.toLowerCase();
   const relevantSkills = profile.skills.filter((s) => jobText.includes(s.name.toLowerCase()));
   const skills = (relevantSkills.length ? relevantSkills : profile.skills.slice(0, 8)).map((s) => s.name);
@@ -114,9 +114,10 @@ function buildStructuredResume(job: JobRecord, profile: MasterProfile): Structur
   };
 }
 
-function validateAgainstProfile(resume: StructuredResume, profile: MasterProfile): { passed: boolean; issues: string[] } {
+export function validateAgainstProfile(resume: StructuredResume, profile: MasterProfile): { passed: boolean; issues: string[] } {
   const issues: string[] = [];
-  const sourceText = [profile.identity.professionalSummary, ...profile.experience.flatMap((e) => [e.description, ...e.achievements])].join(" ").toLowerCase();
+  const normalized = (value: string) => value.trim().replace(/\s+/g, " ");
+  if (normalized(resume.professionalSummary) !== normalized(profile.identity.professionalSummary || profile.identity.currentTitle)) issues.push("unsupported summary");
 
   for (const exp of resume.experience) {
     const source = profile.experience.find((e) => e.id === exp.experienceId);
@@ -126,15 +127,19 @@ function validateAgainstProfile(resume: StructuredResume, profile: MasterProfile
     }
     if (source.company !== exp.company || source.title !== exp.title) issues.push(`altered employer/title for ${exp.company}`);
     if ((source.startDate ?? null) !== exp.startDate || (source.endDate ?? null) !== exp.endDate) issues.push(`altered dates for ${exp.company}`);
+    const sourceBullets = [...source.achievements, ...splitSentences(source.description)].map(normalized);
     for (const bullet of exp.bullets) {
-      if (!sourceText.includes(bullet.toLowerCase().slice(0, 40))) issues.push(`unsupported bullet: ${bullet.slice(0, 40)}`);
+      if (!sourceBullets.includes(normalized(bullet))) issues.push(`unsupported bullet: ${bullet.slice(0, 40)}`);
     }
   }
   for (const skill of resume.skills) {
     if (!profile.skills.some((s) => s.name === skill)) issues.push(`unknown skill ${skill}`);
   }
   for (const edu of resume.education) {
-    if (!profile.education.some((e) => e.id === edu.educationId)) issues.push(`unknown education ${edu.institution}`);
+    if (!profile.education.some((e) => e.id === edu.educationId && e.institution === edu.institution && e.degree === edu.degree && e.field === edu.field)) issues.push(`unknown education ${edu.institution}`);
+  }
+  for (const language of resume.languages) {
+    if (!profile.languages.some((l) => l.language === language.language && l.level === language.level)) issues.push(`unknown language ${language.language}`);
   }
   return { passed: issues.length === 0, issues };
 }
