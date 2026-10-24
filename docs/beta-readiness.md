@@ -1,8 +1,16 @@
 # Aplica beta readiness — 24 October 2026
 
-The production project is `ctdpjiyxcoytshegnpbc`. Source: `agrodeo/aplica-career-path`.
+The new production deployment uses `ctdpjiyxcoytshegnpbc`. Source: `agrodeo/aplica-career-path`.
 
-## Verified in production
+## Deployment and domain gate
+
+The new build is deployed at `https://agrodeo.github.io/aplica-career-path/`. A live bundle check confirms it uses `ctdpjiyxcoytshegnpbc`.
+
+The custom domain `https://aplica.lat` still serves the older build and its bundle uses `hqejjuvugvskhisfttqb`. Its nameservers are `dns1.registrar-servers.com` and `dns2.registrar-servers.com`; its A record is `185.158.133.1`. Connecting the custom domain to the new deployment and verifying auth redirects is a launch gate. Do not change DNS without access to the domain account and a completed routing plan.
+
+The zero-profile finding below applies to the new database only. It does not establish that the older deployment has no users. Check whether existing accounts need migration before replacing the old site.
+
+## Verified in the new production project
 
 - The Auto Apply workflow has successful scheduled executions on 24 October; LATAM inventory sync also completes.
 - Production contains zero career profiles, subscriptions and application attempts at the time of this audit. No real employer submission has been verified.
@@ -47,6 +55,8 @@ The repository-wide `tsc --noEmit` also reports existing strict-type issues in t
 5. Observe at least three days of worker and health reports. Recheck matching with the candidates, review every failed attempt, and increase volume only after the first submissions are verified.
 
 ## Remaining launch gates
+
+- Connect `aplica.lat` to the new deployment, verify signup/login redirects, and assess existing accounts in the old backend before switching traffic.
 
 - At least one real candidate-to-employer verified submission, then the supervised cohort.
 - Payment provider, server-side checkout/webhooks and verified subscription activation/cancellation. The catalog alone is not billing.
