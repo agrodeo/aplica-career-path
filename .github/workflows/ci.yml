@@ -25,13 +25,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun test src/lib/job-sources/ src/lib/auto-apply/ scripts/beta-health.test.ts
-      - run: bun run build
+      - run: bun run build:pages
         env:
           VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture_for_browser_tests
       - run: npm ci --prefix worker
       - run: npx --prefix worker playwright install --with-deps chromium
       - run: node scripts/verify-browser-flow.mjs
+        env:
+          TEST_STATIC_PAGES: "true"
 
   worker-typecheck:
     runs-on: ubuntu-latest
