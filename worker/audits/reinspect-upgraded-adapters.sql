@@ -13,7 +13,7 @@ WITH actor AS (
     LEFT JOIN public.application_schemas s ON s.id=j.application_schema_id
     WHERE j.is_active AND j.ats_type=p.ats_type AND j.application_url IS NOT NULL
       AND s.schema_version IS DISTINCT FROM p.version
-      AND coalesce(j.ineligibility_reason,'') !~* 'captcha|login|automation_blocked'
+      AND coalesce(j.ineligibility_reason,'') !~* 'login|automation_blocked|requiere iniciar ses'
       AND NOT EXISTS (SELECT 1 FROM public.adapter_inspections i
         WHERE i.url=j.application_url AND i.status IN ('queued','running'))
     ORDER BY j.auto_apply_eligible, public.job_inspection_priority(j.country,j.location,j.remote_type,j.published_at) DESC,j.discovered_at DESC

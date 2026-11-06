@@ -8,6 +8,7 @@ export const workablePublicAdapter = createPublicFormAdapter({
   formSelector: "form[action*='apply'], form",
   cookieDeclineSelectors: ["button:text-is('Decline all')"],
   submitSelectors: ["button[type='submit']", "input[type='submit']"],
+  activateNames: ["Apply for this job", "Apply"],
   activateSelectors: [
     "a[href*='/apply/']",
     "button:has-text('Apply')",

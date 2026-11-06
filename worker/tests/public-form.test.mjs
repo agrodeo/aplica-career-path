@@ -390,3 +390,12 @@ test('a challenge triggered by the employer submit handler never verifies an app
   assert.equal((await adapter.verify(result)).verified,false);
  });
 });
+
+test('application entry menus resolve accessible names across buttons, links and input controls',async()=>{
+ const page=await browser.newPage();
+ const staged=createPublicFormAdapter({id:'entry-fixture',version:'test',atsType:'fixture',hostPatterns:[/example\.com/],formSelector:'form',submitSelectors:['button[type=submit]'],activateNames:['Apply','Apply Manually']});
+ const form=JSON.stringify(application).replace(/'/g,'&#39;');
+ const menu=`<input type="button" value="Apply Manually" onclick='document.querySelector("main").innerHTML=${form}'>`;
+ await page.route('https://example.com/**',route=>route.fulfill({contentType:'text/html',body:`<button id="entry"><span>Apply</span></button><main></main><script>document.getElementById('entry').onclick=()=>{document.querySelector('main').innerHTML=${JSON.stringify(menu)}};</script>`}));
+ try{const schema=await staged.inspect('https://example.com/job',page);assert.equal(schema.valid,true);assert.equal(schema.supportsFileUpload,true);}finally{await page.close();}
+});

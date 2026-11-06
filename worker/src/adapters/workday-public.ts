@@ -7,6 +7,7 @@ export const workdayPublicAdapter = createPublicFormAdapter({
   hostPatterns: [/^[a-z0-9-]+\.wd\d+\.myworkdayjobs\.com$/i],
   formSelector: "form",
   submitSelectors: ["button[type='submit']", "input[type='submit']"],
+  activateNames: ["Apply", "Apply Manually"],
   cookieDeclineSelectors: ["button:text-is('Decline')"],
   activateSelectors: [
     "button:has-text('Apply')",

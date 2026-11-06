@@ -44,7 +44,9 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       throw new ApplicationError("PROFILE_INCOMPLETE", `Required consent has not been confirmed: ${field.label}`);
     }
     if (value !== null) {
-      answers.push({ field, value, source: field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey) ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
+      const explicit = !field.canonicalKey || SENSITIVE_KEYS.includes(field.canonicalKey) ||
+        (["select", "radio", "combobox"].includes(field.type) && storedAnswer(profile, field.answerKey) !== null);
+      answers.push({ field, value, source: explicit ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
       continue;
     }
     if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Required question without a matching verified answer: ${field.label}`);

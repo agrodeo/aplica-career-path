@@ -26,6 +26,7 @@ export interface PublicFormAdapterOptions {
   submitSelectors: string[];
   /** Exact provider controls rendered outside the form's DOM subtree. */
   externalSubmitNames?: string[];
+  activateNames?: string[];
   activateSelectors?: string[];
   cookieDeclineSelectors?: string[];
 }
@@ -83,16 +84,23 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       let form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
       let formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
 
-      if (!formExists && options.activateSelectors?.length) {
-        for (const selector of options.activateSelectors) {
-          const trigger = page.locator(selector).first();
-          if ((await trigger.count()) === 0 || !(await trigger.isVisible().catch(() => false))) continue;
-          await trigger.click().catch(() => undefined);
+      if (!formExists) {
+        const triggers = [
+          ...(options.activateNames ?? []).map(name => page.getByRole('button', {name, exact:true}).or(page.getByRole('link', {name, exact:true}))),
+          ...(options.activateSelectors ?? []).map(selector => page.locator(selector)),
+        ];
+        for (const candidates of triggers) {
+          let trigger: Locator | null = null;
+          for (let index = 0; index < await candidates.count(); index++) {
+            if (await candidates.nth(index).isVisible().catch(() => false)) { trigger = candidates.nth(index); break; }
+          }
+          if (!trigger) continue;
+          await trigger.click({timeout:5000}).catch(() => undefined);
           await waitForApplicationControls(page, options.formSelector);
           selectedFormSelector = await markBestApplicationForm(page, options.formSelector);
           form = selectedFormSelector ? page.locator(selectedFormSelector).first() : page.locator(options.formSelector).first();
           formExists = Boolean(selectedFormSelector) && (await form.count()) > 0;
-          if (formExists) break;
+          if (formExists || await page.locator('input[type="password"]:visible').count() > 0) break;
         }
       }
 
