@@ -232,6 +232,20 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       // Re-check right before submitting: a CAPTCHA can appear after interaction.
       if (await detectCaptcha(page)) throw new ApplicationError("CAPTCHA_PRESENT", "A CAPTCHA appeared before submission.");
 
+      // Filling a field does not mean the browser accepted it (email, numeric
+      // ranges and required upload widgets can still be invalid). Check without
+      // reportValidity(), which would expose personal values in UI messages.
+      const invalidFields = await page.locator('[data-aplica-application-form="true"]').evaluateAll((forms) => {
+        const controls = forms.flatMap(form => Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input,textarea,select")));
+        return controls.filter((el): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+          (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) && el.willValidate && !el.validity.valid)
+          .map(el => el.getAttribute("data-aplica-field") ?? "unmapped");
+      });
+      if (invalidFields.length) {
+        const labels = invalidFields.map(id => schema.fields.find(field => field.selector === `[data-aplica-field="${id}"]`)?.label ?? "Unmapped required field");
+        throw new ApplicationError("PROFILE_INCOMPLETE", `The application has invalid fields: ${[...new Set(labels)].join(", ")}`);
+      }
+
       if (context.dryRun) {
         return { submitted: false, dryRun: true, page, adapter: options.id, adapterVersion: options.version, responseUrl: page.url(), pageText: null };
       }

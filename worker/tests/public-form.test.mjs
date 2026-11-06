@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 import { createPublicFormAdapter } from "../dist/adapters/public-form.js";
 import { prepareAnswers } from "../dist/application/answers.js";
 import { canonicalKeyFor } from "../dist/adapters/field-map.js";
+import { leverPublicAdapter } from "../dist/adapters/lever-public.js";
 import { profile, job } from "./fixtures.mjs";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -33,6 +34,22 @@ const resume = '<div><label>Resume *</label><div><input type="file" style="displ
 const submit = '<button type="submit">Submit application</button>';
 const application = `<form>${identity}${resume}${submit}</form>`;
 
+test("Lever listings follow the application link before inspecting the form", async () => {
+  const page = await browser.newPage();
+  await page.route("https://jobs.lever.co/fixture/**", route => route.fulfill({
+    contentType: "text/html",
+    body: route.request().url().endsWith("/apply")
+      ? `<form class="application-form">${identity}${resume}${submit}</form>`
+      : '<h1>Engineer</h1><a href="/fixture/123/apply">Apply for this job</a>',
+  }));
+  try {
+    const schema = await leverPublicAdapter.inspect("https://jobs.lever.co/fixture/123", page);
+    assert.equal(page.url(), "https://jobs.lever.co/fixture/123/apply");
+    assert.equal(schema.valid, true);
+    assert.equal(schema.supportsFileUpload, true);
+  } finally { await page.close(); }
+});
+
 test("declines optional cookies before opening a Workable-style application overlay", async () => {
   await inspect(`<div role="dialog" aria-label="Cookie Consent" style="position:fixed;inset:0;z-index:99;background:white"><button onclick="document.body.dataset.cookies='accepted'">Accept all</button><button onclick="document.body.dataset.cookies='declined';this.parentElement.remove()">Decline all</button></div><button data-open-application onclick='document.querySelector("main").innerHTML = ${JSON.stringify(application)}'>Apply for this job</button><main></main>`, async (schema, page) => {
     assert.equal(await page.locator("body").getAttribute("data-cookies"), "declined");
@@ -54,10 +71,28 @@ test("Workable ARIA radio questions keep separate answer keys and select hidden 
       { canonicalKey: consent.answerKey, answerType: "boolean", booleanValue: true, userConfirmed: true },
     ] };
     const answers = prepareAnswers(schema, verified, job).filter(answer => ["radio", "checkbox"].includes(answer.field.type));
+    await page.locator('input[type="email"]').fill(profile.identity.email);
     await adapter.submit({ page, schema, profile: verified, job, answers, resumePath: "unused", dryRun: true });
     assert.equal(await page.locator('input[name="history"][value="false"]').isChecked(), true);
     assert.equal(await page.locator('input[name="schedule"][value="true"]').isChecked(), true);
     assert.equal(await page.locator('input[type="checkbox"]').isChecked(), true);
+  });
+});
+
+test("dry runs reject browser-invalid values and never click submit", async () => {
+  await inspect(`<form onsubmit="event.preventDefault();document.body.dataset.sent='true'"><label>Email<input type="email" required></label>${resume}${submit}</form>`, async (schema, page) => {
+    const invalidProfile = { ...profile, identity: { ...profile.identity, email: "invalid-email" } };
+    const answers = prepareAnswers(schema, invalidProfile, job).filter(answer => answer.field.type !== "file");
+    await assert.rejects(adapter.submit({ page, schema, profile: invalidProfile, job, answers, resumePath: "unused", dryRun: true }), error => error.code === "PROFILE_INCOMPLETE" && /Email/.test(error.message));
+    assert.equal(await page.locator("body").getAttribute("data-sent"), null);
+  });
+});
+
+test("live submission rejects a missing required upload before the submit click", async () => {
+  await inspect(`<form onsubmit="event.preventDefault();document.body.dataset.sent='true'">${identity}<label>Resume<input type="file" required></label>${submit}</form>`, async (schema, page) => {
+    const answers = prepareAnswers(schema, profile, job).filter(answer => answer.field.type !== "file");
+    await assert.rejects(adapter.submit({ page, schema, profile, job, answers, resumePath: "unused", dryRun: false }), error => error.code === "PROFILE_INCOMPLETE" && /Resume/.test(error.message));
+    assert.equal(await page.locator("body").getAttribute("data-sent"), null);
   });
 });
 
