@@ -78,7 +78,8 @@ test("external final controls must be unique before the adapter can submit", asy
 
 test("native fieldset multi-choice questions do not require every option", async () => {
   await inspect(`<form>${identity}${resume}<fieldset><legend>How did you hear about us? *</legend><label>Website<input type="checkbox" required></label><label>LinkedIn<input type="checkbox" required></label></fieldset>${submit}</form>`, async schema => {
-    assert.deepEqual(schema.unknownRequiredFields, ["How did you hear about us? *"]);
+    assert.deepEqual(schema.unknownRequiredFields, []);
+    assert.equal(schema.fields.find(field => field.type === "checkbox_group").options.length, 2);
     assert.equal(schema.fields.filter(field => field.type === "checkbox").length, 0);
     assert.equal((await adapter.canSubmit(schema, profile)).eligible, false);
   });
@@ -148,7 +149,8 @@ test("live submission rejects a missing required upload before the submit click"
 
 test("required multi-choice checkbox groups cannot be mistaken for independent consent boxes", async () => {
   await inspect(`<form>${identity}${resume}<span id="skills-label">Which skills do you have?</span><div role="group" aria-labelledby="skills-label"><label>Sales<input type="checkbox" required></label><label>Support<input type="checkbox" required></label></div>${submit}</form>`, async schema => {
-    assert.deepEqual(schema.unknownRequiredFields, ["Which skills do you have?"]);
+    assert.deepEqual(schema.unknownRequiredFields, []);
+    assert.equal(schema.fields.find(field => field.type === "checkbox_group").label, "Which skills do you have?");
     assert.equal((await adapter.canSubmit(schema, profile)).eligible, false);
   });
 });
@@ -335,4 +337,70 @@ test("preexisting confirmation text never verifies a rejected application", asyn
     assert.equal((await adapter.verify(result)).verified, false);
     assert.equal((await adapter.verify({ ...result, dryRun: true, pageText: "Application received NEW" })).verified, false);
   });
+});
+
+test("confirmed multiple choices clear unselected options and submit a controlled form", async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'aplica-choice-'));
+  const resumePath = join(directory, 'resume.pdf');
+  await writeFile(resumePath, '%PDF-1.4 fixture');
+  try {
+    await inspect(`<form novalidate onsubmit="event.preventDefault();if(!website.checked && referral.checked && agreement.checked)document.body.innerHTML='<h1>Application received</h1><p>Confirmation ID: CHOICES123</p>'">${identity}<label>Resume<input type="file" required></label><fieldset><legend>How did you hear about us? *</legend><input style="display:none" id="website" type="checkbox" value="website" required checked><label for="website">Website</label><input style="display:none" id="referral" type="checkbox" value="referral" required><label for="referral">Referral</label></fieldset><label>Agree to terms *<input type="checkbox" id="agreement" required></label>${submit}</form>`, async (schema, page) => {
+      const group = schema.fields.find(field => field.type === 'checkbox_group');
+      const consent = schema.fields.find(field => field.type === 'checkbox');
+      assert.equal(schema.unknownRequiredFields.length, 0);
+      assert.match(group.answerKey, /^custom:/);
+      assert.equal((await adapter.canSubmit(schema, profile)).failureCode, 'PROFILE_INCOMPLETE');
+      const answered = {...profile, verifiedApplicationAnswers:[{canonicalKey:group.answerKey,answerType:'text',textValue:'["referral"]',userConfirmed:true},{canonicalKey:consent.answerKey,answerType:'boolean',booleanValue:true,userConfirmed:true}]};
+      assert.equal((await adapter.canSubmit(schema, answered)).eligible, true);
+      const result = await adapter.submit({page,schema,profile:answered,job,answers:prepareAnswers(schema,answered,job),resumePath,dryRun:false});
+      assert.equal((await adapter.verify(result)).verificationValue, 'CHOICES123');
+    });
+  } finally { await rm(directory,{recursive:true,force:true}); }
+});
+
+test("native required checkboxes remain invalid when the form requires each option", async () => {
+  await inspect(`<form>${identity}${resume}<fieldset><legend>Required approvals *</legend><label>First approval<input type="checkbox" required value="first"></label><label>Second approval<input type="checkbox" required value="second"></label></fieldset>${submit}</form>`, async (schema,page) => {
+    const group=schema.fields.find(field=>field.type==='checkbox_group');
+    const answered={...profile,verifiedApplicationAnswers:[{canonicalKey:group.answerKey,answerType:'text',textValue:'["First approval"]',userConfirmed:true}]};
+    const answers=prepareAnswers(schema,answered,job).filter(answer=>answer.field.type!=='file');
+    await assert.rejects(adapter.submit({page,schema,profile:answered,job,answers,resumePath:'unused',dryRun:true}),{code:'PROFILE_INCOMPLETE'});
+  });
+});
+
+test("dynamic location widgets wait for suggestions and select only the matching city and country", async () => {
+  await inspect(`<form>${identity}${resume}<label>Location (City) *<input id="location" role="combobox" aria-controls="locations" onclick="locations.hidden=false" oninput="setTimeout(()=>{locations.innerHTML='<div role=option onclick=selectLocation(this)>Buenos Aires, Buenos Aires, Argentina</div><div role=option>Buenos Aires, Mexico</div>'},200)"></label><input type="hidden" id="locationCode"><div id="locations" role="listbox" hidden></div>${submit}</form><script>function selectLocation(option){document.getElementById('location').value=option.textContent;document.getElementById('locationCode').value='AR-BUE';locations.hidden=true;}</script>`, async (schema,page) => {
+    const answers=prepareAnswers(schema,profile,job).filter(answer=>answer.field.type!=='file');
+    await adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:true});
+    assert.equal(await page.locator('#locationCode').inputValue(), 'AR-BUE');
+  });
+});
+
+test('a challenge appearing after filling stops the final submit click',async()=>{
+ await inspect(`${application}<script>document.querySelector('input[type=email]').oninput=()=>{const el=document.createElement('div');el.dataset.sitekey='fixture';document.body.append(el)};</script>`,async(schema,page)=>{
+  const answers=prepareAnswers(schema,profile,job).filter(answer=>answer.field.type!=='file');
+  await assert.rejects(adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:false}),{code:'CAPTCHA_PRESENT'});
+ });
+});
+
+test('a challenge triggered by the employer submit handler never verifies an application',async()=>{
+ await inspect(`<form onsubmit="event.preventDefault();document.body.innerHTML='<h1>Human verification required</h1><div data-sitekey=fixture></div>'">${identity}${resume}${submit}</form>`,async(schema,page)=>{
+  const answers=prepareAnswers(schema,profile,job).filter(answer=>answer.field.type!=='file');
+  const result=await adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:false});
+  assert.equal(result.blockingReason,'CAPTCHA_PRESENT');
+  assert.equal((await adapter.verify(result)).verified,false);
+ });
+});
+
+test('application entry menus resolve accessible names across buttons, links and input controls',async()=>{
+ const page=await browser.newPage();
+ const staged=createPublicFormAdapter({id:'entry-fixture',version:'test',atsType:'fixture',hostPatterns:[/example\.com/],formSelector:'form',submitSelectors:['button[type=submit]'],activateNames:['Apply','Apply Manually']});
+ const form=JSON.stringify(application).replace(/'/g,'&#39;');
+ const menu=`<input type="button" value="Apply Manually" onclick='document.querySelector("main").innerHTML=${form}'>`;
+ await page.route('https://example.com/**',route=>route.fulfill({contentType:'text/html',body:`<button id="entry"><span>Apply</span></button><main></main><script>document.getElementById('entry').onclick=()=>{document.querySelector('main').innerHTML=${JSON.stringify(menu)}};</script>`}));
+ try{const schema=await staged.inspect('https://example.com/job',page);assert.equal(schema.valid,true);assert.equal(schema.supportsFileUpload,true);}finally{await page.close();}
+});
+
+test('an account gateway is identified without treating a posting navigation label as a login wall',async()=>{
+ await inspect('<main><h1>Create Account/Sign In</h1><p>Create your account to continue.</p></main>',async schema=>{assert.equal(schema.loginRequired,true);assert.equal(schema.valid,false);});
+ await inspect(`${application}<nav>Create Account/Sign In</nav>`,async schema=>{assert.equal(schema.loginRequired,false);assert.equal(schema.valid,true);});
 });

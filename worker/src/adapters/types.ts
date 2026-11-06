@@ -39,7 +39,7 @@ export const SENSITIVE_KEYS: string[] = [
   "criminal_history",
 ];
 
-export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "combobox" | "radio" | "checkbox" | "file" | "unknown";
+export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "combobox" | "radio" | "checkbox" | "checkbox_group" | "file" | "unknown";
 
 export interface InspectedField {
   selector: string;
@@ -64,7 +64,9 @@ export interface ApplicationSchema {
   unknownRequiredFields: string[];
   supportsFileUpload: boolean;
   supportsAutoSubmit: boolean;
+  /** A challenge requiring interaction, not merely an installed background check. */
   captchaDetected: boolean;
+  captchaPresent?: boolean;
   loginRequired: boolean;
   submitSelector: string | null;
   valid: boolean;
@@ -126,7 +128,7 @@ export interface EligibilityResult {
 
 export interface PreparedAnswer {
   field: InspectedField;
-  value: string | boolean;
+  value: string | boolean | string[];
   source: "profile" | "verified_answer" | "generated" | "decline";
 }
 
@@ -150,6 +152,7 @@ export interface SubmissionResult {
   pageText: string | null;
   priorPageText?: string;
   priorUrl?: string;
+  blockingReason?: FailureCode;
 }
 
 export interface VerificationResult {

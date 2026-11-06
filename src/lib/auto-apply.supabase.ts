@@ -1,6 +1,7 @@
 import type { Database } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 
+import { multipleChoiceValues } from "./auto-apply/choice-answers";
 import { checkMatchConstraints, includesLoose, similarity } from "./auto-apply/candidate-matching";
 
 async function currentUserId() {
@@ -74,6 +75,7 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
   };
   const matchesOption = (field: StoredField, key: string) => {
     if (!field.options?.length) return true;
+    if (field.type === "combobox" && key === "location" && profile?.city && profile?.country) return true;
     const saved = answerByKey.get(key);
     const value = saved
       ? saved.answer_type === "boolean" ? saved.boolean_value : saved.answer_type === "numeric" ? saved.numeric_value : saved.text_value
@@ -120,12 +122,15 @@ async function applicationReadiness(userId: string, jobs: Array<{ id: string; ap
     const fields = Array.isArray(schema.fields) ? schema.fields as StoredField[] : [];
     for (const field of fields) {
       if (!field.required) continue;
-      if (field.demographic && hasDeclineOption(field.options)) continue;
+      if (field.demographic && field.type !== "checkbox_group" && hasDeclineOption(field.options)) continue;
       const canonicalKey = field.canonicalKey ?? null;
       const answerKey = (field.answerKey ?? canonicalKey ?? "").trim();
       if (!answerKey) continue;
 
-      if (field.type === "checkbox") {
+      if (field.type === "checkbox_group") {
+        const saved = answerByKey.get(answerKey);
+        if (saved?.answer_type === "text" && multipleChoiceValues(saved.text_value, field.options ?? [], true)) continue;
+      } else if (field.type === "checkbox") {
         const saved = answerByKey.get(answerKey);
         if (saved?.answer_type === "boolean" && saved.boolean_value === true) continue;
       } else if (((canonicalKey && covered(canonicalKey)) || confirmed.has(answerKey)) && matchesOption(field, answerKey)) {

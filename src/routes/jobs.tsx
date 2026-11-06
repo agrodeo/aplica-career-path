@@ -25,6 +25,7 @@ import {
 } from "@/lib/auto-apply.supabase";
 import { saveVerifiedApplicationAnswers } from "@/lib/application-answers.supabase";
 import { cn } from "@/lib/utils";
+import { multipleChoiceValues } from "@/lib/auto-apply/choice-answers";
 
 export const Route = createFileRoute("/jobs")({
   ssr: false,
@@ -591,6 +592,11 @@ function QuestionEditor({
     mutationFn: async () => {
       const answers = questions.map((question) => {
         const value = values[question.answerKey];
+        if (question.fieldType === "checkbox_group") {
+          const choices = multipleChoiceValues(value, question.options, true);
+          if (!choices) throw new Error(`Seleccioná al menos una opción para: ${question.label}`);
+          return { answerKey: question.answerKey, answerType: "text" as const, textValue: JSON.stringify(choices) };
+        }
         if (question.answerType === "boolean") {
           if (typeof value !== "boolean") {
             throw new Error(`Respondé: ${question.label}`);
@@ -690,6 +696,18 @@ function QuestionInput({
       option.value &&
       !/^(select|choose|please select|seleccion)/i.test(option.label),
   );
+
+  if (question.fieldType === "checkbox_group") {
+    const selected = multipleChoiceValues(value, cleanOptions) ?? [];
+    return <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">{question.label}</legend>
+      <p className="text-xs text-muted-foreground">Seleccioná todas las opciones que correspondan.</p>
+      {cleanOptions.map(option => <label key={option.value} className="flex items-center gap-3 text-sm">
+        <Checkbox checked={selected.includes(option.value)} onCheckedChange={checked => onChange(JSON.stringify(checked === true ? [...selected, option.value] : selected.filter(item => item !== option.value)))} />
+        <span>{option.label}</span>
+      </label>)}
+    </fieldset>;
+  }
 
   return (
     <label className="block">

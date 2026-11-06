@@ -1,3 +1,4 @@
+import { resolveMultipleChoices } from "./multiple-choice.js";
 import { findDeclineOption } from "../adapters/field-map.js";
 import { SENSITIVE_KEYS, type ApplicationSchema, type InspectedField, type JobRecord, type MasterProfile, type PreparedAnswer } from "../adapters/types.js";
 import { ApplicationError } from "../utils/errors.js";
@@ -19,6 +20,13 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       continue;
     }
 
+    if (field.type === "checkbox_group") {
+      const choices = resolveMultipleChoices(storedAnswer(profile, field.answerKey), field.options ?? [], field.required);
+      if (choices !== null) answers.push({ field, value: choices, source: "verified_answer" });
+      else if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Choose the applicable options for: ${field.label}`);
+      continue;
+    }
+
     if (field.demographic) {
       const decline = field.options ? findDeclineOption(field.options) : null;
       const stored = storedAnswer(profile, field.answerKey);
@@ -36,7 +44,9 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       throw new ApplicationError("PROFILE_INCOMPLETE", `Required consent has not been confirmed: ${field.label}`);
     }
     if (value !== null) {
-      answers.push({ field, value, source: field.canonicalKey && SENSITIVE_KEYS.includes(field.canonicalKey) ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
+      const explicit = !field.canonicalKey || SENSITIVE_KEYS.includes(field.canonicalKey) ||
+        (["select", "radio", "combobox"].includes(field.type) && storedAnswer(profile, field.answerKey) !== null);
+      answers.push({ field, value, source: explicit ? "verified_answer" : value === generatedInterest(profile, job) ? "generated" : "profile" });
       continue;
     }
     if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Required question without a matching verified answer: ${field.label}`);
@@ -149,6 +159,9 @@ function normalizeForField(
       option.label.trim().toLowerCase() === normalized,
   );
   if (exact) return exact.value;
+  // Search-backed locations can populate only after typing a city. The browser
+  // adapter checks the returned city and country before committing an option.
+  if (field.type === "combobox" && field.canonicalKey === "location") return value;
 
   if (field.canonicalKey === "location" || field.canonicalKey === "country") {
     const components = [profile.identity.city, profile.identity.country]

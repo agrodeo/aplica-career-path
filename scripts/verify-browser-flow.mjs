@@ -30,17 +30,18 @@ try {
  // Complete a controlled application flow without sending applicant data to an employer.
  const fixtureJob = { id:'00000000-0000-0000-0000-000000000021', title:'Nurse', description:'Nursing role.', location:'Argentina', country:'ar', remote_type:'onsite', employment_type:'full-time', seniority:null, company_id:'company', is_active:true, auto_apply_eligible:true, application_schema_id:'schema', application_url:'https://example.com/apply', auto_apply_adapter:'greenhouse_public', discovered_at:new Date().toISOString(), published_at:null, companies:{name:'Beta Fixture',logo_url:null,last_scanned_at:new Date().toISOString()} };
  const prefs = { target_roles:['Nurse'], target_locations:['Argentina'], remote_allowed:false, hybrid_allowed:false, onsite_allowed:true, employment_types:['full_time'], seniority_levels:[], minimum_match_score:70 };
- let attemptStatus='queued', enqueued=false, failHistory=false, activePlan=true, sentJobIds=null, writtenMatches=null;
+ let choiceAnswers=[], attemptStatus='queued', enqueued=false, failHistory=false, activePlan=true, sentJobIds=null, writtenMatches=null;
  const application = () => ({id:'attempt-fixture',job_id:fixtureJob.id,status:attemptStatus,queued_at:new Date().toISOString(),verified_at:attemptStatus==='verified'?new Date().toISOString():null,adapter:'greenhouse_public',error_code:null,resume_variant_id:null,submission_reference:attemptStatus==='verified'?'CONFIRMED-FIXTURE':null,jobs:{title:fixtureJob.title,companies:{name:'Beta Fixture'},application_url:fixtureJob.application_url}});
  await page.route('https://ctdpjiyxcoytshegnpbc.supabase.co/rest/v1/**', async route => {
    const req=route.request(),url=new URL(req.url()),table=url.pathname.split('/').pop(); let body=[]; let status=200;
    if(table==='profiles') body={first_name:'Ana',last_name:'Perez',email:user.email,current_title:'Nurse',country:'Argentina'};
    else if(table==='experiences') body=[{title:'Nurse',company:'Fixture',achievements:[]}];
    else if(table==='skills') body=[{name:'Nursing'}];
+   else if(table==='application_answers') { if(req.method()==='POST'){choiceAnswers=req.postDataJSON();body=null;}else body=choiceAnswers; }
    else if(table==='job_preferences') body=prefs;
    else if(table==='jobs') body=[fixtureJob];
    else if(table==='job_matches') { if(req.method()==='POST'){writtenMatches=req.postDataJSON();body=null;}else body=writtenMatches??[]; }
-   else if(table==='application_schemas') body=[{id:'schema',job_id:fixtureJob.id,valid:true,fields:[{canonicalKey:'email',answerKey:'email',type:'email',required:true}]}];
+   else if(table==='application_schemas') body=[{id:'schema',job_id:fixtureJob.id,valid:true,fields:[{canonicalKey:'email',answerKey:'email',type:'email',required:true},{canonicalKey:null,answerKey:'custom:source-fixture',label:'How did you hear about us?',type:'checkbox_group',required:true,options:[{label:'Website',value:'website'},{label:'Referral',value:'referral'}]}]}];
    else if(table==='subscriptions') body=activePlan?{plan_code:'beta',status:'active',plans:{name:'Beta',weekly_application_limit:25}}:null;
    else if(table==='auto_apply_consents') body={authorized:true,revoked_at:null};
    else if(table==='plans') body=[{code:'starter',name:'Starter real',price_amount:6.99,price_currency:'USD',billing_period:'weekly',weekly_application_limit:25,sort_order:0}];
@@ -53,6 +54,16 @@ try {
    await route.fulfill({json:{status:'queued',batchId:'batch-fixture',results:{queued:1}}});
  });
  await page.goto(origin+'/jobs');
+ await page.getByRole('button',{name:'Responder 1 pregunta',exact:true}).click();
+ await page.getByRole('button',{name:'Guardar respuestas',exact:true}).click();
+ await page.getByText('Seleccioná al menos una opción para: How did you hear about us?',{exact:true}).waitFor();
+ assert.equal(choiceAnswers.length,0);
+ await page.getByRole('checkbox',{name:'Website',exact:true}).check();
+ await page.getByRole('checkbox',{name:'Referral',exact:true}).check();
+ await page.getByRole('button',{name:'Guardar respuestas',exact:true}).click();
+ await page.getByText('Lista para Auto Apply',{exact:true}).waitFor();
+ assert.equal(choiceAnswers[0].user_confirmed,true);
+ assert.deepEqual(JSON.parse(choiceAnswers[0].text_value),['website','referral']);
  await page.getByRole('button',{name:'Aplicar a 1',exact:true}).click();
  await page.waitForURL('**/applying?batch=batch-fixture');
  await page.getByText('En cola',{exact:true}).last().waitFor();
