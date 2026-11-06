@@ -39,7 +39,7 @@ export const SENSITIVE_KEYS: string[] = [
   "criminal_history",
 ];
 
-export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "combobox" | "radio" | "checkbox" | "file" | "unknown";
+export type FieldType = "text" | "email" | "tel" | "textarea" | "select" | "combobox" | "radio" | "checkbox" | "checkbox_group" | "file" | "unknown";
 
 export interface InspectedField {
   selector: string;
@@ -126,7 +126,7 @@ export interface EligibilityResult {
 
 export interface PreparedAnswer {
   field: InspectedField;
-  value: string | boolean;
+  value: string | boolean | string[];
   source: "profile" | "verified_answer" | "generated" | "decline";
 }
 

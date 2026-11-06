@@ -1,4 +1,5 @@
 import type { Page, Locator } from "playwright";
+import { matchComboboxOption } from "./combobox-options.js";
 import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { prepareAnswers } from "../application/answers.js";
 import { type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
@@ -230,6 +231,16 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
             case "checkbox":
               await setNativeChoice(locator, answer.value === true);
               break;
+            case "checkbox_group": {
+              if (!Array.isArray(answer.value)) throw new ApplicationError("PROFILE_INCOMPLETE", "A multiple-choice answer must be a list.");
+              const controls = page.locator(answer.field.selector);
+              for (let index = 0; index < await controls.count(); index++) {
+                const control = controls.nth(index);
+                const value = await control.getAttribute("data-aplica-option");
+                await setNativeChoice(control, value !== null && answer.value.includes(value));
+              }
+              break;
+            }
             case "radio":
               await page.locator(answer.field.selector).evaluateAll((elements, value) => {
                 for (const el of elements) el.toggleAttribute("data-aplica-radio-choice", (el as HTMLInputElement).value === value);
@@ -254,8 +265,17 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       // reportValidity(), which would expose personal values in UI messages.
       const invalidFields = await page.locator('[data-aplica-application-form="true"]').evaluateAll((forms) => {
         const controls = forms.flatMap(form => Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input,textarea,select")));
-        return controls.filter((el): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
-          (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) && el.willValidate && !el.validity.valid)
+        return controls.filter((el): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => {
+          if (!(el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) || !el.willValidate || el.validity.valid) return false;
+          // Some React forms use required on every option and implement an
+          // at-least-one group rule with noValidate. Preserve native validation
+          // everywhere else, including independent consent checkboxes.
+          if (el instanceof HTMLInputElement && el.type === "checkbox" && el.hasAttribute("data-aplica-checkbox-group") && (!el.form || el.form.noValidate) && el.validity.valueMissing && !el.validity.customError) {
+            const groupId = el.getAttribute("data-aplica-field");
+            if (controls.some(other => other instanceof HTMLInputElement && other.type === "checkbox" && other.checked && other.getAttribute("data-aplica-field") === groupId)) return false;
+          }
+          return true;
+        })
           .map(el => el.getAttribute("data-aplica-field") ?? "unmapped");
       });
       if (invalidFields.length) {
@@ -375,13 +395,23 @@ async function markBestApplicationForm(page: Page, selector: string): Promise<st
 
 async function setNativeChoice(control: Locator, checked: boolean) {
   if (await control.isChecked() === checked) return;
-  if (await control.getAttribute("aria-hidden") !== "true" && await control.isVisible()) await control.setChecked(checked);
-  else {
+  {
     // Workable renders a visible label around a hidden native radio/checkbox.
     // Use its ordinary click behavior, then verify the real input state.
-    const label = control.locator("xpath=ancestor::label[1]");
-    if (await label.count() !== 1) throw new ApplicationError("FORM_CHANGED", "No visible label for the choice control.");
-    await label.click();
+    const matches = await control.evaluate(element => {
+      document.querySelectorAll('[data-aplica-active-label]').forEach(label => label.removeAttribute('data-aplica-active-label'));
+      const input = element as HTMLInputElement;
+      const labels = Array.from(input.labels ?? []);
+      const wrapper = input.closest('.ashby-application-form-input-checkbox-group-option');
+      if (!labels.length && wrapper?.querySelectorAll('input').length === 1) labels.push(wrapper as HTMLLabelElement);
+      const visible = labels.filter(label => label.getClientRects().length > 0 && getComputedStyle(label).visibility !== 'hidden');
+      if (visible.length === 1) visible[0]!.setAttribute('data-aplica-active-label', 'true');
+      return visible.length;
+    });
+    const label = control.page().locator('[data-aplica-active-label]');
+    if (matches === 1) await label.click();
+    else if (await control.getAttribute("aria-hidden") !== "true" && await control.isVisible()) await control.setChecked(checked);
+    else throw new ApplicationError("FORM_CHANGED", "No unique visible label for the choice control.");
   }
   if (await control.isChecked() !== checked) throw new ApplicationError("FORM_CHANGED", "The choice control did not retain the selected answer.");
 }
@@ -400,7 +430,11 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
     const seenRadioNames = new Set<string>();
     const seenCheckboxGroups = new Set<Element>();
 
-    for (const el of controls) el.removeAttribute("data-aplica-field");
+    for (const el of controls) {
+      el.removeAttribute("data-aplica-field");
+      el.removeAttribute("data-aplica-checkbox-group");
+      el.removeAttribute("data-aplica-option");
+    }
 
     return controls
       .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
@@ -422,15 +456,14 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         const labelledText = (node: Element | null) => (node?.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map(labelId => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
         const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('fieldset, [role="group"][aria-labelledby]') : null;
-        const groupCheckboxes = Array.from(candidateCheckboxGroup?.querySelectorAll('input[type="checkbox"]') ?? []);
+        const groupCheckboxes = Array.from(candidateCheckboxGroup?.querySelectorAll<HTMLInputElement>('input[type="checkbox"]') ?? []).filter(input => !input.disabled && input.closest('fieldset, [role="group"][aria-labelledby]') === candidateCheckboxGroup);
         const groupRequired = candidateCheckboxGroup?.getAttribute("aria-required") === "true" || /\*/.test(candidateCheckboxGroup?.querySelector("legend")?.textContent ?? "") || groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true");
-        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupRequired ? candidateCheckboxGroup : null;
-        if (unsupportedCheckboxGroup) {
-          if (seenCheckboxGroups.has(unsupportedCheckboxGroup)) return null;
-          seenCheckboxGroups.add(unsupportedCheckboxGroup);
-          // A required multi-choice group is not a set of independent consent
-          // boxes. Do not require every option or pretend one boolean answers it.
-          inputType = "unknown";
+        const checkboxGroup = groupCheckboxes.length > 1 ? candidateCheckboxGroup : null;
+        const checkboxLabel = labelledText(checkboxGroup) || checkboxGroup?.querySelector("legend")?.textContent?.trim() || "";
+        if (checkboxGroup) {
+          if (seenCheckboxGroups.has(checkboxGroup)) return null;
+          seenCheckboxGroups.add(checkboxGroup);
+          inputType = checkboxLabel ? "checkbox_group" : "unknown";
         }
 
         if (inputType === "radio") {
@@ -439,7 +472,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup) || unsupportedCheckboxGroup.querySelector("legend")?.textContent?.trim() || "Required multiple-choice question";
+        if (checkboxGroup) label = checkboxLabel || "Unlabelled multiple-choice question";
         if (inputType === "radio") {
           const group = el.closest('fieldset,[role="radiogroup"]');
           label = group?.querySelector("legend")?.textContent?.trim() || labelledText(group) || group?.getAttribute("aria-label") || "";
@@ -479,10 +512,19 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = el.closest("div,fieldset")?.querySelector("label,legend")?.textContent?.trim() ?? "";
         if (!label) label = el.getAttribute("placeholder") || name || id || el.getAttribute("data-testid") || "";
 
-        const required = Boolean(unsupportedCheckboxGroup) || el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || uploadGroup?.getAttribute("aria-required") === "true" || /\*/.test(label);
+        const required = (checkboxGroup ? groupRequired : el.hasAttribute("required") || el.getAttribute("aria-required") === "true") || uploadGroup?.getAttribute("aria-required") === "true" || /\*/.test(label);
 
         const options =
-          el instanceof HTMLSelectElement
+          checkboxGroup
+            ? groupCheckboxes.map(input => {
+                const optionLabel = (input.getAttribute("aria-label") || input.labels?.[0]?.textContent || input.closest('.ashby-application-form-input-checkbox-group-option')?.textContent || "").replace(/\s+/g, " ").trim();
+                // Persist the option's meaning, not an opaque ID that an
+                // employer could later reuse for a different answer.
+                const value = optionLabel;
+                input.setAttribute("data-aplica-option", value);
+                return { label: optionLabel, value };
+              })
+            : el instanceof HTMLSelectElement
             ? Array.from(el.options).map((option) => ({ label: option.textContent?.trim() ?? "", value: option.value }))
             : inputType === "radio" && name
               ? Array.from(form.querySelectorAll(`input[type="radio"][name="${CSS.escape(name)}"]`)).map((radio) => {
@@ -494,6 +536,13 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
               : undefined;
 
         const fieldId = String(index);
+        if (checkboxGroup) {
+          if (!options?.length || options.some(option => !option.label || !option.value) || new Set(options.map(option => option.value)).size !== options.length) inputType = "unknown";
+          for (const input of groupCheckboxes) {
+            input.setAttribute("data-aplica-field", fieldId);
+            input.setAttribute("data-aplica-checkbox-group", "true");
+          }
+        }
         el.setAttribute("data-aplica-field", fieldId);
         if (inputType === "radio" && name) {
           for (const radio of controls) {
@@ -512,11 +561,11 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
     return {
       selector: field.selector,
       label: field.label,
-      answerKey: answerKeyFor(field.label, applicationUrl),
+      answerKey: answerKeyFor(field.label, applicationUrl, !["checkbox_group", "checkbox"].includes(type)),
       type,
       required: field.required,
       ...(field.options ? { options: field.options } : {}),
-      canonicalKey: canonicalKeyFor(field.label),
+      canonicalKey: ["checkbox_group", "checkbox"].includes(type) ? null : canonicalKeyFor(field.label),
       demographic: isDemographicQuestion(field.label),
     } satisfies InspectedField;
   });
@@ -559,17 +608,25 @@ async function selectComboboxOption(page: Page, field: InspectedField, value: st
   const label = field.options?.find((option) => option.value === value)?.label ?? value;
   await control.click();
   const editable = await control.evaluate((el) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement).isContentEditable);
-  if (editable) await control.fill(label);
+  if (editable) await control.fill(field.canonicalKey === "location" ? label.split(",")[0]!.trim() : label);
   const list = await comboboxList(page, field.selector);
   if (!list) throw new ApplicationError("FORM_CHANGED", `No unique option list for ${field.label}`);
-  const option = list.getByRole("option", { name: label, exact: true });
-  await option.first().waitFor({ state: "visible", timeout: 5000 });
+  let selected: { label: string; value: string } | null = null;
+  for (let attempt = 0; attempt < 25 && !selected; attempt++) {
+    const options = await list.getByRole("option").evaluateAll(elements => elements
+      .filter(element => element.getAttribute("aria-disabled") !== "true")
+      .map(element => ({ label: element.textContent?.trim() ?? "", value: element.textContent?.trim() ?? "" })));
+    selected = matchComboboxOption(options, label, field.canonicalKey);
+    if (!selected) await page.waitForTimeout(200);
+  }
+  if (!selected) throw new ApplicationError("PROFILE_INCOMPLETE", `No unambiguous matching option for ${field.label}`);
+  const option = list.getByRole("option", { name: selected.label, exact: true });
   if (await option.count() !== 1) throw new ApplicationError("FORM_CHANGED", `Ambiguous option for ${field.label}`);
   await option.click();
 }
 
 function normalizeType(type: string): FieldType {
-  if (["text", "email", "tel", "textarea", "select", "combobox", "radio", "checkbox", "file"].includes(type)) return type as FieldType;
+  if (["text", "email", "tel", "textarea", "select", "combobox", "radio", "checkbox", "checkbox_group", "file"].includes(type)) return type as FieldType;
   if (type === "url" || type === "search") return "text";
   if (type === "number") return "text";
   return "unknown";

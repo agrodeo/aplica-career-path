@@ -2,18 +2,19 @@ import type { CanonicalKey } from "./types.js";
 
 /** Label patterns mapped to canonical keys. Order matters: first match wins. */
 const PATTERNS: { key: CanonicalKey; patterns: RegExp[] }[] = [
-  { key: "first_name", patterns: [/^first\s*name/i, /given\s*name/i, /^nombre/i] },
-  { key: "last_name", patterns: [/^last\s*name/i, /family\s*name/i, /surname/i, /^apellido/i] },
+  { key: "full_name", patterns: [/nombre\s+completo/i, /^nombre\s+y\s+apellidos?$/i, /^nome(?:\s+completo)?$/i] },
+  { key: "first_name", patterns: [/^first\s*name/i, /given\s*name/i, /^nombre/i, /^primeiro\s+nome/i] },
+  { key: "last_name", patterns: [/^last\s*name/i, /family\s*name/i, /surname/i, /^apellido/i, /^sobrenome/i] },
   { key: "full_name", patterns: [/^full\s*name/i, /^name$/i, /nombre\s*completo/i] },
   { key: "email", patterns: [/e-?mail/i, /correo/i] },
-  { key: "phone", patterns: [/phone/i, /mobile/i, /tel[eé]fono/i] },
+  { key: "phone", patterns: [/phone/i, /mobile/i, /tel[eé]fono/i, /telefone|celular/i] },
   { key: "country", patterns: [/^country\b/i, /^pa[ií]s\b/i] },
-  { key: "location", patterns: [/^(?:current\s+)?location\b/i, /^(?:current\s+)?city\b/i, /^where are you based\b/i, /^ciudad\b/i, /^ubicaci[oó]n\b/i, /^localiza[cç][aã]o\b/i] },
+  { key: "location", patterns: [/^(?:current\s+)?location\b/i, /^(?:current\s+)?city\b/i, /^where are you based\b/i, /^ciudad\b/i, /^ubicaci[oó]n\b/i, /^localiza[cç][aã]o\b/i, /^cidade\b/i] },
   { key: "linkedin", patterns: [/linkedin/i] },
   { key: "portfolio", patterns: [/portfolio/i, /github/i, /portafolio/i] },
   { key: "website", patterns: [/website/i, /personal site/i, /sitio web/i] },
-  { key: "resume", patterns: [/resume/i, /^cv\b/i, /curriculum/i, /curr[ií]culum/i] },
-  { key: "cover_letter", patterns: [/cover\s*letter/i, /carta de presentaci[oó]n/i] },
+  { key: "resume", patterns: [/resume/i, /^cv\b/i, /curriculum/i, /curr[ií]culum/i, /curr[ií]culo/i] },
+  { key: "cover_letter", patterns: [/cover\s*letter/i, /carta de presentaci[oó]n/i, /carta de apresenta[cç][aã]o/i] },
   { key: "current_company", patterns: [/^current\s*(company|employer)\s*[:?]?$/i, /^empresa actual\s*[:?]?$/i] },
   { key: "current_title", patterns: [/current\s*(title|role|position)/i, /puesto actual/i] },
   { key: "work_authorization", patterns: [/legally authorized/i, /work authorization/i, /authorized to work/i, /right to work/i] },
@@ -64,9 +65,9 @@ export function findDeclineOption(options: { label: string; value: string }[]) {
  * Unknown employer questions still need a stable identity so Aplica can ask the
  * user once and reuse only that explicitly confirmed answer for this form.
  */
-export function answerKeyFor(label: string, scope = ""): string {
+export function answerKeyFor(label: string, scope = "", useCanonical = true): string {
   const canonical = canonicalKeyFor(label);
-  if (canonical) return canonical;
+  if (useCanonical && canonical) return canonical;
 
   const normalized = label
     .toLowerCase()

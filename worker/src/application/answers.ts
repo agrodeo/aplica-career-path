@@ -1,3 +1,4 @@
+import { resolveMultipleChoices } from "./multiple-choice.js";
 import { findDeclineOption } from "../adapters/field-map.js";
 import { SENSITIVE_KEYS, type ApplicationSchema, type InspectedField, type JobRecord, type MasterProfile, type PreparedAnswer } from "../adapters/types.js";
 import { ApplicationError } from "../utils/errors.js";
@@ -16,6 +17,13 @@ export function prepareAnswers(schema: ApplicationSchema, profile: MasterProfile
       if (field.canonicalKey === "resume") {
         answers.push({ field, value: "@resume", source: "profile" });
       }
+      continue;
+    }
+
+    if (field.type === "checkbox_group") {
+      const choices = resolveMultipleChoices(storedAnswer(profile, field.answerKey), field.options ?? [], field.required);
+      if (choices !== null) answers.push({ field, value: choices, source: "verified_answer" });
+      else if (field.required) throw new ApplicationError("PROFILE_INCOMPLETE", `Choose the applicable options for: ${field.label}`);
       continue;
     }
 
@@ -149,6 +157,9 @@ function normalizeForField(
       option.label.trim().toLowerCase() === normalized,
   );
   if (exact) return exact.value;
+  // Search-backed locations can populate only after typing a city. The browser
+  // adapter checks the returned city and country before committing an option.
+  if (field.type === "combobox" && field.canonicalKey === "location") return value;
 
   if (field.canonicalKey === "location" || field.canonicalKey === "country") {
     const components = [profile.identity.city, profile.identity.country]

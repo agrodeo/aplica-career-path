@@ -33,3 +33,13 @@ test("past employment is not described as current", () => {
   assert.equal(validateGeneratedAnswer(generatedInterest(experienced, job), experienced, job).valid, true);
   assert.equal(validateGeneratedAnswer("Me interesa. Trabajé en InventedCompany ganando 999999.", experienced, job).valid, false);
 });
+
+test("multiple-choice questions use only confirmed option lists, never profile skills", () => {
+  const field = { ...country, type: "checkbox_group", canonicalKey: null, answerKey: "custom:skills", options: [{label:"Sales",value:"sales"},{label:"Support",value:"support"}] };
+  const confirmed = textValue => ({...profile,verifiedApplicationAnswers:[{canonicalKey:field.answerKey,answerType:"text",textValue,userConfirmed:true}]});
+  assert.throws(() => prepareAnswers({fields:[field]}, {...profile,skills:[{name:'Sales'}]}, job), {code:'PROFILE_INCOMPLETE'});
+  for(const value of ['[]','["invented"]','["sales","sales"]','true','sales']) assert.throws(() => prepareAnswers({fields:[field]}, confirmed(value), job), {code:'PROFILE_INCOMPLETE'});
+  assert.deepEqual(prepareAnswers({fields:[field]}, confirmed('["sales","support"]'), job)[0].value, ['sales','support']);
+  assert.equal(prepareAnswers({fields:[field]}, confirmed('["sales"]'), job)[0].source, 'verified_answer');
+  assert.throws(() => prepareAnswers({fields:[field]}, {...confirmed('["sales"]'),verifiedApplicationAnswers:[{...confirmed('["sales"]').verifiedApplicationAnswers[0],userConfirmed:false}]}, job), {code:'PROFILE_INCOMPLETE'});
+});
