@@ -24,6 +24,8 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.63.0-jammy
     steps:
       - uses: actions/checkout@v4
+      - name: Install Bun archive dependency
+        run: apt-get update && apt-get install -y unzip
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun test src/lib/job-sources/ src/lib/auto-apply/ scripts/beta-health.test.ts
