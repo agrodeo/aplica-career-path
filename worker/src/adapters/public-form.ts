@@ -391,6 +391,8 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
 
     return controls
       .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      // Ashby's optional resume parser is separate from the actual CV field.
+      .filter((el) => !el.closest(".ashby-application-form-autofill-pane"))
       // Country/telephone widgets mount hidden search comboboxes for their
       // dropdowns. Those are implementation controls, not candidate questions.
       // Keep hidden native uploads and choices, which have visible wrappers.
@@ -406,9 +408,10 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         let inputType = el.getAttribute("role") === "combobox" ? "combobox" : el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : tag === "select" ? "select" : "unknown";
         const labelledText = (node: Element | null) => (node?.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map(labelId => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
-        const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('[role="group"][aria-labelledby]') : null;
+        const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('fieldset, [role="group"][aria-labelledby]') : null;
         const groupCheckboxes = Array.from(candidateCheckboxGroup?.querySelectorAll('input[type="checkbox"]') ?? []);
-        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true") ? candidateCheckboxGroup : null;
+        const groupRequired = candidateCheckboxGroup?.getAttribute("aria-required") === "true" || /\*/.test(candidateCheckboxGroup?.querySelector("legend")?.textContent ?? "") || groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true");
+        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupRequired ? candidateCheckboxGroup : null;
         if (unsupportedCheckboxGroup) {
           if (seenCheckboxGroups.has(unsupportedCheckboxGroup)) return null;
           seenCheckboxGroups.add(unsupportedCheckboxGroup);
@@ -423,7 +426,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup);
+        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup) || unsupportedCheckboxGroup.querySelector("legend")?.textContent?.trim() || "Required multiple-choice question";
         if (inputType === "radio") {
           const group = el.closest('fieldset,[role="radiogroup"]');
           label = group?.querySelector("legend")?.textContent?.trim() || labelledText(group) || group?.getAttribute("aria-label") || "";
@@ -436,6 +439,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
         if (!label) label = el.getAttribute("aria-label") ?? "";
+        if (!label) label = el.closest(".ashby-application-form-field-entry")?.querySelector("label")?.textContent?.trim() ?? "";
         const candidateUploadGroup = inputType === "file" ? el.closest('[role="group"][aria-labelledby], fieldset') : null;
         const uploadGroup = candidateUploadGroup?.querySelectorAll('input[type="file"]').length === 1 ? candidateUploadGroup : null;
         if (uploadGroup) {

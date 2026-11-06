@@ -5,6 +5,7 @@ import { createPublicFormAdapter } from "../dist/adapters/public-form.js";
 import { prepareAnswers } from "../dist/application/answers.js";
 import { canonicalKeyFor } from "../dist/adapters/field-map.js";
 import { leverPublicAdapter } from "../dist/adapters/lever-public.js";
+import { ashbyPublicAdapter } from "../dist/adapters/ashby-public.js";
 import { profile, job } from "./fixtures.mjs";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -43,6 +44,28 @@ test("hidden telephone country-search comboboxes are not application questions",
 
 test("an employer's explicit not-found page is expired even with HTTP 200", async () => {
   await assert.rejects(inspect('<h1>Page not found.</h1>', async () => assert.fail('must not inspect an expired page')), error => error.code === "JOB_EXPIRED");
+});
+
+test("Ashby div application containers exclude the auxiliary resume parser", async () => {
+  const page = await browser.newPage();
+  await page.route("https://jobs.ashbyhq.com/fixture/**", route => route.fulfill({contentType: "text/html", body:
+    `<div id="form"><div class="ashby-application-form-autofill-pane">Autofill from resume<input type="file"></div><div class="ashby-application-form-field-entry"><label>Email *</label><div><input type="email" required></div></div><div class="ashby-application-form-field-entry"><label>Resume *</label><div><input type="file" required></div></div><button type="button">Submit Application</button></div>`
+  }));
+  try {
+    const schema = await ashbyPublicAdapter.inspect("https://jobs.ashbyhq.com/fixture/application", page);
+    assert.equal(schema.valid, true);
+    assert.equal(schema.supportsFileUpload, true);
+    assert.equal(schema.fields.filter(field => field.type === "file").length, 1);
+    assert.equal(schema.fields.find(field => field.type === "email").canonicalKey, "email");
+  } finally { await page.close(); }
+});
+
+test("native fieldset multi-choice questions do not require every option", async () => {
+  await inspect(`<form>${identity}${resume}<fieldset><legend>How did you hear about us? *</legend><label>Website<input type="checkbox" required></label><label>LinkedIn<input type="checkbox" required></label></fieldset>${submit}</form>`, async schema => {
+    assert.deepEqual(schema.unknownRequiredFields, ["How did you hear about us? *"]);
+    assert.equal(schema.fields.filter(field => field.type === "checkbox").length, 0);
+    assert.equal((await adapter.canSubmit(schema, profile)).eligible, false);
+  });
 });
 
 test("Lever listings follow the application link before inspecting the form", async () => {
