@@ -23,6 +23,8 @@ export interface PublicFormAdapterOptions {
   hostPatterns: RegExp[];
   formSelector: string;
   submitSelectors: string[];
+  /** Exact provider controls rendered outside the form's DOM subtree. */
+  externalSubmitNames?: string[];
   activateSelectors?: string[];
   cookieDeclineSelectors?: string[];
 }
@@ -58,6 +60,10 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           throw new ApplicationError("JOB_EXPIRED", "The application page no longer exists.");
         }
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
+      }
+      if ((/\.workable\.com$/i.test(new URL(page.url()).hostname) && /^\/oops\/?$/.test(new URL(page.url()).pathname)) ||
+        await page.locator("h1").filter({ hasText: /^(?:page|job|position) not found[.!]?$/i }).count()) {
+        throw new ApplicationError("JOB_EXPIRED", "The employer reports that the application page no longer exists.");
       }
 
       // ATS clients hydrate after DOMContentLoaded. Wait for application controls,
@@ -101,10 +107,11 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
       const captchaDetected = await detectCaptcha(page);
-      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
+      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText)) || await page.locator('input[type="password"]:visible').count() > 0;
       const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector, url) : [];
 
       let submitSelector: string | null = null;
+      await page.locator('[data-aplica-submit]').evaluateAll(elements => elements.forEach(element => element.removeAttribute('data-aplica-submit')));
       for (const selector of options.submitSelectors) {
         if (!selectedFormSelector) break;
         const buttons = page.locator(selectedFormSelector).locator(selector);
@@ -119,6 +126,16 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           break;
         }
         if (submitSelector) break;
+      }
+      if (!submitSelector && formExists) {
+        for (const name of options.externalSubmitNames ?? []) {
+          const button = page.getByRole("button", { name, exact: true });
+          // Never guess between multiple application or newsletter controls.
+          if (await button.count() !== 1 || !await button.isVisible()) continue;
+          await button.evaluate(element => element.setAttribute('data-aplica-submit', 'true'));
+          submitSelector = '[data-aplica-submit="true"]';
+          break;
+        }
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);
@@ -231,6 +248,20 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       // Re-check right before submitting: a CAPTCHA can appear after interaction.
       if (await detectCaptcha(page)) throw new ApplicationError("CAPTCHA_PRESENT", "A CAPTCHA appeared before submission.");
+
+      // Filling a field does not mean the browser accepted it (email, numeric
+      // ranges and required upload widgets can still be invalid). Check without
+      // reportValidity(), which would expose personal values in UI messages.
+      const invalidFields = await page.locator('[data-aplica-application-form="true"]').evaluateAll((forms) => {
+        const controls = forms.flatMap(form => Array.from(form instanceof HTMLFormElement ? form.elements : form.querySelectorAll("input,textarea,select")));
+        return controls.filter((el): el is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement =>
+          (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) && el.willValidate && !el.validity.valid)
+          .map(el => el.getAttribute("data-aplica-field") ?? "unmapped");
+      });
+      if (invalidFields.length) {
+        const labels = invalidFields.map(id => schema.fields.find(field => field.selector === `[data-aplica-field="${id}"]`)?.label ?? "Unmapped required field");
+        throw new ApplicationError("PROFILE_INCOMPLETE", `The application has invalid fields: ${[...new Set(labels)].join(", ")}`);
+      }
 
       if (context.dryRun) {
         return { submitted: false, dryRun: true, page, adapter: options.id, adapterVersion: options.version, responseUrl: page.url(), pageText: null };
@@ -373,6 +404,13 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
 
     return controls
       .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      // Ashby's optional resume parser is separate from the actual CV field.
+      .filter((el) => !el.closest(".ashby-application-form-autofill-pane"))
+      // Country/telephone widgets mount hidden search comboboxes for their
+      // dropdowns. Those are implementation controls, not candidate questions.
+      // Keep hidden native uploads and choices, which have visible wrappers.
+      .filter((el) => (el instanceof HTMLInputElement && ["file", "radio", "checkbox"].includes(el.type)) ||
+        (el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden"))
       // React Select adds an invisible required-input proxy. Its visible ARIA
       // combobox owns the answer; filling the proxy would invent a second field.
       .filter((el) => !(el.matches('input[aria-hidden="true"][tabindex="-1"]') && el.parentElement?.querySelector('[role="combobox"]')))
@@ -383,9 +421,10 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         let inputType = el.getAttribute("role") === "combobox" ? "combobox" : el instanceof HTMLInputElement ? el.type : tag === "textarea" ? "textarea" : tag === "select" ? "select" : "unknown";
         const labelledText = (node: Element | null) => (node?.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map(labelId => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
-        const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('[role="group"][aria-labelledby]') : null;
+        const candidateCheckboxGroup = inputType === "checkbox" ? el.closest('fieldset, [role="group"][aria-labelledby]') : null;
         const groupCheckboxes = Array.from(candidateCheckboxGroup?.querySelectorAll('input[type="checkbox"]') ?? []);
-        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true") ? candidateCheckboxGroup : null;
+        const groupRequired = candidateCheckboxGroup?.getAttribute("aria-required") === "true" || /\*/.test(candidateCheckboxGroup?.querySelector("legend")?.textContent ?? "") || groupCheckboxes.some(input => input.hasAttribute("required") || input.getAttribute("aria-required") === "true");
+        const unsupportedCheckboxGroup = groupCheckboxes.length > 1 && groupRequired ? candidateCheckboxGroup : null;
         if (unsupportedCheckboxGroup) {
           if (seenCheckboxGroups.has(unsupportedCheckboxGroup)) return null;
           seenCheckboxGroups.add(unsupportedCheckboxGroup);
@@ -400,7 +439,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         }
 
         let label = "";
-        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup);
+        if (unsupportedCheckboxGroup) label = labelledText(unsupportedCheckboxGroup) || unsupportedCheckboxGroup.querySelector("legend")?.textContent?.trim() || "Required multiple-choice question";
         if (inputType === "radio") {
           const group = el.closest('fieldset,[role="radiogroup"]');
           label = group?.querySelector("legend")?.textContent?.trim() || labelledText(group) || group?.getAttribute("aria-label") || "";
@@ -413,6 +452,7 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
         if (!label) label = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/)
           .map((labelId) => document.getElementById(labelId)?.textContent?.trim() ?? "").join(" ").trim();
         if (!label) label = el.getAttribute("aria-label") ?? "";
+        if (!label) label = el.closest(".ashby-application-form-field-entry")?.querySelector("label")?.textContent?.trim() ?? "";
         const candidateUploadGroup = inputType === "file" ? el.closest('[role="group"][aria-labelledby], fieldset') : null;
         const uploadGroup = candidateUploadGroup?.querySelectorAll('input[type="file"]').length === 1 ? candidateUploadGroup : null;
         if (uploadGroup) {

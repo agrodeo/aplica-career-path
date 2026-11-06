@@ -1,15 +1,16 @@
 import { createPublicFormAdapter } from "./public-form.js";
 
 /**
- * Second family, intentionally NOT enabled in the registry yet: the milestone is
- * one adapter working end to end first. Kept here so enabling it later is a
- * one-line change once Greenhouse public forms are proven.
+ * Lever listings and application forms use separate URLs. Open the explicit
+ * application link before inspecting fields on a listing page.
  */
 export const leverPublicAdapter = createPublicFormAdapter({
   id: "lever_public_form",
-  version: "0.2.0",
+  version: "0.3.0",
   atsType: "lever",
   hostPatterns: [/^jobs\.lever\.co$/i, /^jobs\.eu\.lever\.co$/i],
-  formSelector: "form.application-form, form[action*='apply']",
+  formSelector: "form#application-form, form.application-form, form[action*='apply']",
   submitSelectors: ["button[type='submit']", "input[type='submit']"],
+  externalSubmitNames: ["Submit application"],
+  activateSelectors: ["a[href$='/apply']", "a[href*='/apply?']"],
 });

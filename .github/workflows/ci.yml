@@ -30,13 +30,13 @@ jobs:
           VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture_for_browser_tests
       - run: npm ci --prefix worker
-      - run: npx --prefix worker playwright install --with-deps chromium
-      - run: node scripts/verify-browser-flow.mjs
-        env:
-          TEST_STATIC_PAGES: "true"
+      - name: Verify the built site in the production browser image
+        run: docker run --rm -v "$PWD:/work" -w /work -e TEST_STATIC_PAGES=true mcr.microsoft.com/playwright:v1.63.0-jammy node scripts/verify-browser-flow.mjs
 
   worker-typecheck:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
     defaults:
       run:
         working-directory: worker
@@ -49,5 +49,31 @@ jobs:
           cache-dependency-path: worker/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npx playwright install --with-deps chromium
       - run: npm test
+
+  public-form-audit:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Inspect public employer forms without submitting applications
+        run: node scripts/audit-public-forms.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-form-audit
+          path: worker/.artifacts/public-form-audit.json
+          if-no-files-found: warn
+          retention-days: 14
