@@ -361,7 +361,7 @@ test("confirmed multiple choices clear unselected options and submit a controlle
 test("native required checkboxes remain invalid when the form requires each option", async () => {
   await inspect(`<form>${identity}${resume}<fieldset><legend>Required approvals *</legend><label>First approval<input type="checkbox" required value="first"></label><label>Second approval<input type="checkbox" required value="second"></label></fieldset>${submit}</form>`, async (schema,page) => {
     const group=schema.fields.find(field=>field.type==='checkbox_group');
-    const answered={...profile,verifiedApplicationAnswers:[{canonicalKey:group.answerKey,answerType:'text',textValue:'["first"]',userConfirmed:true}]};
+    const answered={...profile,verifiedApplicationAnswers:[{canonicalKey:group.answerKey,answerType:'text',textValue:'["First approval"]',userConfirmed:true}]};
     const answers=prepareAnswers(schema,answered,job).filter(answer=>answer.field.type!=='file');
     await assert.rejects(adapter.submit({page,schema,profile:answered,job,answers,resumePath:'unused',dryRun:true}),{code:'PROFILE_INCOMPLETE'});
   });
@@ -373,4 +373,20 @@ test("dynamic location widgets wait for suggestions and select only the matching
     await adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:true});
     assert.equal(await page.locator('#locationCode').inputValue(), 'AR-BUE');
   });
+});
+
+test('a challenge appearing after filling stops the final submit click',async()=>{
+ await inspect(`${application}<script>document.querySelector('input[type=email]').oninput=()=>{const el=document.createElement('div');el.dataset.sitekey='fixture';document.body.append(el)};</script>`,async(schema,page)=>{
+  const answers=prepareAnswers(schema,profile,job).filter(answer=>answer.field.type!=='file');
+  await assert.rejects(adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:false}),{code:'CAPTCHA_PRESENT'});
+ });
+});
+
+test('a challenge triggered by the employer submit handler never verifies an application',async()=>{
+ await inspect(`<form onsubmit="event.preventDefault();document.body.innerHTML='<h1>Human verification required</h1><div data-sitekey=fixture></div>'">${identity}${resume}${submit}</form>`,async(schema,page)=>{
+  const answers=prepareAnswers(schema,profile,job).filter(answer=>answer.field.type!=='file');
+  const result=await adapter.submit({page,schema,profile,job,answers,resumePath:'unused',dryRun:false});
+  assert.equal(result.blockingReason,'CAPTCHA_PRESENT');
+  assert.equal((await adapter.verify(result)).verified,false);
+ });
 });

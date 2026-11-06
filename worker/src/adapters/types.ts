@@ -64,7 +64,9 @@ export interface ApplicationSchema {
   unknownRequiredFields: string[];
   supportsFileUpload: boolean;
   supportsAutoSubmit: boolean;
+  /** A challenge requiring interaction, not merely an installed background check. */
   captchaDetected: boolean;
+  captchaPresent?: boolean;
   loginRequired: boolean;
   submitSelector: string | null;
   valid: boolean;
@@ -150,6 +152,7 @@ export interface SubmissionResult {
   pageText: string | null;
   priorPageText?: string;
   priorUrl?: string;
+  blockingReason?: FailureCode;
 }
 
 export interface VerificationResult {

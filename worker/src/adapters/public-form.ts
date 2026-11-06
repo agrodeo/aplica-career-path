@@ -1,11 +1,11 @@
 import type { Page, Locator } from "playwright";
+import { inspectCaptchaState } from "./captcha.js";
 import { matchComboboxOption } from "./combobox-options.js";
 import { answerKeyFor, canonicalKeyFor, findDeclineOption, isDemographicQuestion } from "./field-map.js";
 import { prepareAnswers } from "../application/answers.js";
 import { type ApplicationAdapter, type ApplicationSchema, type EligibilityResult, type FieldType, type InspectedField, type MasterProfile, type SubmissionContext, type SubmissionResult, type VerificationResult } from "./types.js";
 import { ApplicationError } from "../utils/errors.js";
 
-const CAPTCHA_SIGNALS = ["iframe[src*='recaptcha']", "iframe[src*='hcaptcha']", ".g-recaptcha", "[data-sitekey]", "iframe[title*='challenge']", "#cf-challenge-running"];
 const LOGIN_SIGNALS = [/sign in to (apply|continue)/i, /log in to (apply|continue)/i, /create an account to apply/i, /iniciar sesi[oó]n para postular/i];
 const SUCCESS_PATTERNS = [
   /thank you for applying/i,
@@ -34,7 +34,7 @@ export interface PublicFormAdapterOptions {
  * Public application form automation. It reads the form the employer publishes,
  * fills only fields it understands from verified data, and submits it the same
  * way a person would. It never bypasses CAPTCHA, login, MFA or anti-bot controls:
- * when one is present the job becomes unsupported.
+ * a visible interactive challenge or login stops automatic submission.
  */
 export function createPublicFormAdapter(options: PublicFormAdapterOptions): ApplicationAdapter {
   return {
@@ -107,7 +107,6 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
-      const captchaDetected = await detectCaptcha(page);
       const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText)) || await page.locator('input[type="password"]:visible').count() > 0;
       const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector, url) : [];
 
@@ -150,6 +149,8 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         )
         .map((field) => field.label);
       const supportsFileUpload = fields.some((f) => f.type === "file" && f.canonicalKey === "resume");
+      const captcha = await inspectCaptchaState(page);
+      const captchaDetected = captcha.blocking;
 
       return {
         url,
@@ -162,6 +163,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         supportsFileUpload,
         supportsAutoSubmit: Boolean(submitSelector) && !captchaDetected && !loginRequired,
         captchaDetected,
+        captchaPresent: captcha.present,
         loginRequired,
         submitSelector,
         valid: formExists && Boolean(submitSelector) && !captchaDetected && !loginRequired,
@@ -258,7 +260,7 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       // Re-check right before submitting: a CAPTCHA can appear after interaction.
-      if (await detectCaptcha(page)) throw new ApplicationError("CAPTCHA_PRESENT", "A CAPTCHA appeared before submission.");
+      if ((await inspectCaptchaState(page)).blocking) throw new ApplicationError("CAPTCHA_PRESENT", "A CAPTCHA appeared before submission.");
 
       // Filling a field does not mean the browser accepted it (email, numeric
       // ranges and required upload widgets can still be invalid). Check without
@@ -292,6 +294,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       const priorUrl = page.url();
       await page.locator(schema.submitSelector).first().click();
       await page.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => undefined);
+      if ((await inspectCaptchaState(page)).blocking) {
+        return { submitted: true, dryRun: false, page, adapter: options.id, adapterVersion: options.version, responseUrl: page.url(), pageText: await page.locator("body").innerText(), priorPageText, priorUrl, blockingReason: "CAPTCHA_PRESENT" };
+      }
       // SPAs can acknowledge submission after the first network-idle interval.
       await page.waitForFunction(({ patterns, before, url }) => {
         const text = document.body.innerText;
@@ -320,13 +325,6 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       return { verified: false, verificationType: "none", verificationValue: null, screenshot: await result.page.screenshot({ fullPage: true }).catch(() => null) };
     },
   };
-}
-
-async function detectCaptcha(page: Page) {
-  for (const selector of CAPTCHA_SIGNALS) {
-    if ((await page.locator(selector).count()) > 0) return true;
-  }
-  return false;
 }
 
 async function waitForApplicationControls(page: Page, selector: string): Promise<void> {

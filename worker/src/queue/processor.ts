@@ -66,7 +66,7 @@ export async function processApplication(item: QueueItem): Promise<void> {
       if (!verification.verified) {
         // Submitted but unverified: reported as such, never as "Enviada", no credit.
         await reportSubmission(item.id, { verified: false, verificationSignal: null });
-        throw new ApplicationError("VERIFICATION_FAILED", "The submission could not be independently verified.");
+        throw new ApplicationError("VERIFICATION_FAILED", submission.blockingReason === "CAPTCHA_PRESENT" ? "The employer requested a CAPTCHA after the submit click; receipt is unconfirmed. Check manually before applying again." : "The submission could not be independently verified.");
       }
 
       const evidencePath = verification.screenshot ? await storeEvidence(item.user_id, item.attempt_id, verification.screenshot) : null;

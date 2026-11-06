@@ -17,7 +17,7 @@ function checkpoint(completed = false) {
   return writes;
 }
 await checkpoint();
-const safeUrl = url => { try { const u = new URL(url); return u.origin + u.pathname; } catch { return ''; } };
+const safeUrl = url => { try { const u = new URL(url); return u.origin === 'null' ? u.protocol : u.origin + u.pathname; } catch { return ''; } };
 const browser = await chromium.launch({ headless: true, executablePath: process.env.TEST_CHROMIUM_PATH, args: ['--no-sandbox'] });
 async function inspectSample({provider, url}) {
   const context = await browser.newContext();
@@ -40,7 +40,7 @@ async function inspectSample({provider, url}) {
       ...(!schema.submitSelector ? ['NO_FINAL_SUBMIT'] : []),
       ...(schema.unknownRequiredFields.length ? ['UNSUPPORTED_REQUIRED_FIELDS'] : []),
     ];
-    result = { provider, url, adapter: adapter.id, adapterVersion: adapter.version, inspectable: schema.valid && !blockers.length, blockers, fields: schema.fields.slice(0, 100).map(({ label, type, required, canonicalKey, options }) => ({ label, type, required, canonicalKey, optionsCount: options?.length ?? 0 })), submitted: false };
+    result = { provider, url, adapter: adapter.id, adapterVersion: adapter.version, inspectable: schema.valid && !blockers.length, captchaPresent: schema.captchaPresent ?? schema.captchaDetected, blockers, fields: schema.fields.slice(0, 100).map(({ label, type, required, canonicalKey, options }) => ({ label, type, required, canonicalKey, optionsCount: options?.length ?? 0 })), submitted: false };
   } catch (error) {
     result = { provider, url, inspectable: false, blockers: [error.code ?? 'NETWORK_ERROR'], error: String(error.message).slice(0, 500), submitted: false };
   } finally {
