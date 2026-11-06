@@ -34,6 +34,17 @@ const resume = '<div><label>Resume *</label><div><input type="file" style="displ
 const submit = '<button type="submit">Submit application</button>';
 const application = `<form>${identity}${resume}${submit}</form>`;
 
+test("hidden telephone country-search comboboxes are not application questions", async () => {
+  await inspect(`<form>${identity}${resume}<div hidden><input type="search" role="combobox" aria-label="Search" aria-controls="countries"></div>${submit}</form>`, async schema => {
+    assert.equal(schema.valid, true);
+    assert.equal(schema.fields.some(field => field.label === "Search"), false);
+  });
+});
+
+test("an employer's explicit not-found page is expired even with HTTP 200", async () => {
+  await assert.rejects(inspect('<h1>Page not found.</h1>', async () => assert.fail('must not inspect an expired page')), error => error.code === "JOB_EXPIRED");
+});
+
 test("Lever listings follow the application link before inspecting the form", async () => {
   const page = await browser.newPage();
   await page.route("https://jobs.lever.co/fixture/**", route => route.fulfill({

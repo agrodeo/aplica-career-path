@@ -42,6 +42,11 @@ try {
         landingUrl: page.url(),
         pageSummary: (await page.locator('body').innerText({ timeout: 2000 }).catch(() => '')).slice(0, 700),
         buttons: await page.getByRole('button').allTextContents().catch(() => []),
+        controls: await page.locator('input:not([type="hidden"]),textarea,select').evaluateAll(elements => elements.slice(0, 10).map(el => ({
+          tag: el.tagName, type: el.getAttribute('type'), label: el.getAttribute('aria-label'),
+          ancestors: [el.parentElement, el.parentElement?.parentElement, el.parentElement?.parentElement?.parentElement].filter(Boolean).map(parent => ({tag: parent.tagName, id: parent.id, class: parent.className})),
+        }))).catch(() => []),
+        forms: await page.locator('form').count().catch(() => 0),
         failedRequests,
       });
       await context.close();

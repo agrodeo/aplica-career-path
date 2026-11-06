@@ -59,6 +59,10 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         }
         throw new ApplicationError("NETWORK_ERROR", `Could not load the application page (${response?.status() ?? "no response"}).`);
       }
+      if ((/\.workable\.com$/i.test(new URL(page.url()).hostname) && /^\/oops\/?$/.test(new URL(page.url()).pathname)) ||
+        await page.locator("h1").filter({ hasText: /^(?:page|job|position) not found[.!]?$/i }).count()) {
+        throw new ApplicationError("JOB_EXPIRED", "The employer reports that the application page no longer exists.");
+      }
 
       // ATS clients hydrate after DOMContentLoaded. Wait for application controls,
       // rather than treating the initial HTML shell as the finished form.
@@ -387,6 +391,11 @@ async function readFields(page: Page, formSelector: string, applicationUrl: stri
 
     return controls
       .filter((el) => !el.matches(':disabled, [aria-disabled="true"]') && !(el instanceof HTMLInputElement && ["hidden", "submit", "button"].includes(el.type)))
+      // Country/telephone widgets mount hidden search comboboxes for their
+      // dropdowns. Those are implementation controls, not candidate questions.
+      // Keep hidden native uploads and choices, which have visible wrappers.
+      .filter((el) => (el instanceof HTMLInputElement && ["file", "radio", "checkbox"].includes(el.type)) ||
+        (el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden"))
       // React Select adds an invisible required-input proxy. Its visible ARIA
       // combobox owns the answer; filling the proxy would invent a second field.
       .filter((el) => !(el.matches('input[aria-hidden="true"][tabindex="-1"]') && el.parentElement?.querySelector('[role="combobox"]')))
