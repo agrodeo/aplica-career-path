@@ -11,6 +11,6 @@ export const workdayPublicAdapter = createPublicFormAdapter({
   activateSelectors: [
     "button:has-text('Apply')",
     "a:has-text('Apply')",
-    "button:text-is('Apply Manually')",
+    "button:has-text('Apply Manually'), [role='button']:has-text('Apply Manually')",
   ],
 });

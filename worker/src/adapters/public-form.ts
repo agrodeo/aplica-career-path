@@ -24,7 +24,7 @@ export interface PublicFormAdapterOptions {
   formSelector: string;
   submitSelectors: string[];
   /** Exact provider controls rendered outside the form's DOM subtree. */
-  externalSubmitSelectors?: string[];
+  externalSubmitNames?: string[];
   activateSelectors?: string[];
   cookieDeclineSelectors?: string[];
 }
@@ -128,8 +128,8 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
         if (submitSelector) break;
       }
       if (!submitSelector && formExists) {
-        for (const selector of options.externalSubmitSelectors ?? []) {
-          const button = page.locator(selector);
+        for (const name of options.externalSubmitNames ?? []) {
+          const button = page.getByRole("button", { name, exact: true });
           // Never guess between multiple application or newsletter controls.
           if (await button.count() !== 1 || !await button.isVisible()) continue;
           await button.evaluate(element => element.setAttribute('data-aplica-submit', 'true'));

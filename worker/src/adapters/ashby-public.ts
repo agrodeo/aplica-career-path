@@ -7,7 +7,7 @@ export const ashbyPublicAdapter = createPublicFormAdapter({
   hostPatterns: [/^jobs\.ashbyhq\.com$/i],
   formSelector: "form, [data-testid*='application'] form, div#form",
   submitSelectors: ["button[type='submit']", "input[type='submit']", "button:text-is('Submit Application')"],
-  externalSubmitSelectors: ["button:text-is('Submit Application')"],
+  externalSubmitNames: ["Submit Application"],
   activateSelectors: [
     "a[href*='application']",
     "button:has-text('Apply')",

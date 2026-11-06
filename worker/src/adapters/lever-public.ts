@@ -11,6 +11,6 @@ export const leverPublicAdapter = createPublicFormAdapter({
   hostPatterns: [/^jobs\.lever\.co$/i, /^jobs\.eu\.lever\.co$/i],
   formSelector: "form#application-form, form.application-form, form[action*='apply']",
   submitSelectors: ["button[type='submit']", "input[type='submit']"],
-  externalSubmitSelectors: ["button:text-is('Submit application')"],
+  externalSubmitNames: ["Submit application"],
   activateSelectors: ["a[href$='/apply']", "a[href*='/apply?']"],
 });

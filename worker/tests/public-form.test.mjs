@@ -49,7 +49,7 @@ test("an employer's explicit not-found page is expired even with HTTP 200", asyn
 test("Ashby div application containers exclude the auxiliary resume parser", async () => {
   const page = await browser.newPage();
   await page.route("https://jobs.ashbyhq.com/fixture/**", route => route.fulfill({contentType: "text/html", body:
-    `<div id="form"><div class="ashby-application-form-autofill-pane">Autofill from resume<input type="file"></div><div class="ashby-application-form-field-entry"><label>Email *</label><div><input type="email" required></div></div><div class="ashby-application-form-field-entry"><label>Resume *</label><div><input type="file" required></div></div></div><button type="button">Submit Application</button>`
+    `<div id="form"><div class="ashby-application-form-autofill-pane">Autofill from resume<input type="file"></div><div class="ashby-application-form-field-entry"><label>Email *</label><div><input type="email" required></div></div><div class="ashby-application-form-field-entry"><label>Resume *</label><div><input type="file" required></div></div></div><a role="button" tabindex="0"><span>Submit Application</span></a>`
   }));
   try {
     const schema = await ashbyPublicAdapter.inspect("https://jobs.ashbyhq.com/fixture/application", page);

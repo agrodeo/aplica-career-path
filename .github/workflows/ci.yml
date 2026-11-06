@@ -20,6 +20,8 @@ permissions:
 jobs:
   app-build:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -30,7 +32,6 @@ jobs:
           VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture_for_browser_tests
       - run: npm ci --prefix worker
-      - run: npx --prefix worker playwright install --with-deps chromium
       - run: node scripts/verify-browser-flow.mjs
         env:
           TEST_STATIC_PAGES: "true"
