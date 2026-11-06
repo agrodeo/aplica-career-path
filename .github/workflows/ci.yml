@@ -37,6 +37,8 @@ jobs:
 
   worker-typecheck:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
     defaults:
       run:
         working-directory: worker
@@ -49,11 +51,12 @@ jobs:
           cache-dependency-path: worker/package-lock.json
       - run: npm ci
       - run: npm run typecheck
-      - run: npx playwright install --with-deps chromium
       - run: npm test
 
   public-form-audit:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
     timeout-minutes: 12
     defaults:
       run:
@@ -67,7 +70,6 @@ jobs:
           cache-dependency-path: worker/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
       - name: Inspect public employer forms without submitting applications
         run: node scripts/audit-public-forms.mjs
       - uses: actions/upload-artifact@v4

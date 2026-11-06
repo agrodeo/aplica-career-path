@@ -14,6 +14,12 @@ try {
     const context = await browser.newContext();
     await context.addInitScript(() => document.addEventListener('submit', event => event.preventDefault(), true));
     const page = await context.newPage();
+    const failedRequests = [];
+    page.on('requestfailed', request => {
+      if (failedRequests.length < 5 && ['document', 'script', 'xhr', 'fetch'].includes(request.resourceType())) {
+        failedRequests.push({ host: new URL(request.url()).hostname, type: request.resourceType(), error: request.failure()?.errorText });
+      }
+    });
     const started = Date.now();
     try {
       const adapter = resolveAdapter(url);
@@ -28,8 +34,18 @@ try {
       ];
       results.push({ provider, url, adapter: adapter.id, adapterVersion: adapter.version, inspectable: schema.valid && !blockers.length, blockers, fields: schema.fields.map(({ label, type, required, canonicalKey }) => ({ label, type, required, canonicalKey })), elapsedMs: Date.now() - started, submitted: false });
     } catch (error) {
-      results.push({ provider, url, inspectable: false, blockers: [error.code ?? 'NETWORK_ERROR'], elapsedMs: Date.now() - started, submitted: false });
-    } finally { await context.close(); }
+      results.push({ provider, url, inspectable: false, blockers: [error.code ?? 'NETWORK_ERROR'], error: String(error.message).slice(0, 500), elapsedMs: Date.now() - started, submitted: false });
+    } finally {
+      // Fresh contexts contain only public listings, never candidate data.
+      Object.assign(results.at(-1), {
+        title: await page.title().catch(() => ''),
+        landingUrl: page.url(),
+        pageSummary: (await page.locator('body').innerText({ timeout: 2000 }).catch(() => '')).slice(0, 700),
+        buttons: await page.getByRole('button').allTextContents().catch(() => []),
+        failedRequests,
+      });
+      await context.close();
+    }
     console.log(JSON.stringify(results.at(-1)));
   }
 } finally { await browser.close(); }
