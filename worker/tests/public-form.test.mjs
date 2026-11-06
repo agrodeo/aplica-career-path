@@ -49,7 +49,7 @@ test("an employer's explicit not-found page is expired even with HTTP 200", asyn
 test("Ashby div application containers exclude the auxiliary resume parser", async () => {
   const page = await browser.newPage();
   await page.route("https://jobs.ashbyhq.com/fixture/**", route => route.fulfill({contentType: "text/html", body:
-    `<div id="form"><div class="ashby-application-form-autofill-pane">Autofill from resume<input type="file"></div><div class="ashby-application-form-field-entry"><label>Email *</label><div><input type="email" required></div></div><div class="ashby-application-form-field-entry"><label>Resume *</label><div><input type="file" required></div></div><button type="button">Submit Application</button></div>`
+    `<div id="form"><div class="ashby-application-form-autofill-pane">Autofill from resume<input type="file"></div><div class="ashby-application-form-field-entry"><label>Email *</label><div><input type="email" required></div></div><div class="ashby-application-form-field-entry"><label>Resume *</label><div><input type="file" required></div></div></div><button type="button">Submit Application</button>`
   }));
   try {
     const schema = await ashbyPublicAdapter.inspect("https://jobs.ashbyhq.com/fixture/application", page);
@@ -57,6 +57,22 @@ test("Ashby div application containers exclude the auxiliary resume parser", asy
     assert.equal(schema.supportsFileUpload, true);
     assert.equal(schema.fields.filter(field => field.type === "file").length, 1);
     assert.equal(schema.fields.find(field => field.type === "email").canonicalKey, "email");
+  } finally { await page.close(); }
+});
+
+test("visible password inputs are a login requirement even without a sign-in sentence", async () => {
+  await inspect(`<form><label>Email<input type="email"></label><label>Password<input type="password"></label>${submit}</form>`, async schema => {
+    assert.equal(schema.loginRequired, true);
+    assert.equal(schema.valid, false);
+  });
+});
+
+test("external final controls must be unique before the adapter can submit", async () => {
+  const page = await browser.newPage();
+  await page.route("https://jobs.ashbyhq.com/fixture/**", route => route.fulfill({contentType: "text/html", body: `<div id="form">${identity}${resume}</div><button>Submit Application</button><button>Submit Application</button>`}));
+  try {
+    const schema = await ashbyPublicAdapter.inspect("https://jobs.ashbyhq.com/fixture/application", page);
+    assert.equal(schema.supportsAutoSubmit, false);
   } finally { await page.close(); }
 });
 

@@ -23,6 +23,8 @@ export interface PublicFormAdapterOptions {
   hostPatterns: RegExp[];
   formSelector: string;
   submitSelectors: string[];
+  /** Exact provider controls rendered outside the form's DOM subtree. */
+  externalSubmitSelectors?: string[];
   activateSelectors?: string[];
   cookieDeclineSelectors?: string[];
 }
@@ -105,10 +107,11 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
 
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
       const captchaDetected = await detectCaptcha(page);
-      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText));
+      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText)) || await page.locator('input[type="password"]:visible').count() > 0;
       const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector, url) : [];
 
       let submitSelector: string | null = null;
+      await page.locator('[data-aplica-submit]').evaluateAll(elements => elements.forEach(element => element.removeAttribute('data-aplica-submit')));
       for (const selector of options.submitSelectors) {
         if (!selectedFormSelector) break;
         const buttons = page.locator(selectedFormSelector).locator(selector);
@@ -123,6 +126,16 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
           break;
         }
         if (submitSelector) break;
+      }
+      if (!submitSelector && formExists) {
+        for (const selector of options.externalSubmitSelectors ?? []) {
+          const button = page.locator(selector);
+          // Never guess between multiple application or newsletter controls.
+          if (await button.count() !== 1 || !await button.isVisible()) continue;
+          await button.evaluate(element => element.setAttribute('data-aplica-submit', 'true'));
+          submitSelector = '[data-aplica-submit="true"]';
+          break;
+        }
       }
 
       const requiredFields = fields.filter((f) => f.required).map((f) => f.label);

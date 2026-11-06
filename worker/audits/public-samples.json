@@ -1,9 +1,38 @@
 [
-  {"provider":"greenhouse","url":"https://job-boards.greenhouse.io/twilio/jobs/7781659"},
-  {"provider":"greenhouse","url":"https://job-boards.greenhouse.io/alphasense/jobs/8902160002"},
-  {"provider":"lever","url":"https://jobs.lever.co/jobgether/bd0efc53-dfa9-4349-a7d7-d30983c1fb66/apply"},
-  {"provider":"ashby","url":"https://jobs.ashbyhq.com/outpost-red/f7fc3072-a3f7-420e-a2c5-da14ed42ec8d/application"},
-  {"provider":"workable","url":"https://apply.workable.com/j/2FE0754045"},
-  {"provider":"smartrecruiters","url":"https://jobs.smartrecruiters.com/Dominos/744000156993670"},
-  {"provider":"workday","url":"https://hitachi.wd1.myworkdayjobs.com/hitachi/job/Zhongshan-Guangdong-China/Field-service-engineer_R0143319"}
+  {
+    "provider": "greenhouse",
+    "url": "https://job-boards.greenhouse.io/twilio/jobs/7781659"
+  },
+  {
+    "provider": "greenhouse",
+    "url": "https://job-boards.greenhouse.io/alphasense/jobs/8902160002"
+  },
+  {
+    "provider": "lever",
+    "url": "https://jobs.lever.co/jobgether/bd0efc53-dfa9-4349-a7d7-d30983c1fb66/apply"
+  },
+  {
+    "provider": "ashby",
+    "url": "https://jobs.ashbyhq.com/outpost-red/f7fc3072-a3f7-420e-a2c5-da14ed42ec8d/application"
+  },
+  {
+    "provider": "workable",
+    "url": "https://apply.workable.com/j/2FE0754045"
+  },
+  {
+    "provider": "smartrecruiters",
+    "url": "https://jobs.smartrecruiters.com/Dominos/744000156993670"
+  },
+  {
+    "provider": "workday",
+    "url": "https://hitachi.wd1.myworkdayjobs.com/hitachi/job/Zhongshan-Guangdong-China/Field-service-engineer_R0143319"
+  },
+  {
+    "provider": "workable",
+    "url": "https://apply.workable.com/j/524D1AD596"
+  },
+  {
+    "provider": "workable",
+    "url": "https://apply.workable.com/j/8D6EAC056A"
+  }
 ]
