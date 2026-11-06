@@ -399,3 +399,8 @@ test('application entry menus resolve accessible names across buttons, links and
  await page.route('https://example.com/**',route=>route.fulfill({contentType:'text/html',body:`<button id="entry"><span>Apply</span></button><main></main><script>document.getElementById('entry').onclick=()=>{document.querySelector('main').innerHTML=${JSON.stringify(menu)}};</script>`}));
  try{const schema=await staged.inspect('https://example.com/job',page);assert.equal(schema.valid,true);assert.equal(schema.supportsFileUpload,true);}finally{await page.close();}
 });
+
+test('an account gateway is identified without treating a posting navigation label as a login wall',async()=>{
+ await inspect('<main><h1>Create Account/Sign In</h1><p>Create your account to continue.</p></main>',async schema=>{assert.equal(schema.loginRequired,true);assert.equal(schema.valid,false);});
+ await inspect(`${application}<nav>Create Account/Sign In</nav>`,async schema=>{assert.equal(schema.loginRequired,false);assert.equal(schema.valid,true);});
+});

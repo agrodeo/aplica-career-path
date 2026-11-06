@@ -115,7 +115,9 @@ export function createPublicFormAdapter(options: PublicFormAdapterOptions): Appl
       }
 
       const bodyText = (await page.locator("body").innerText().catch(() => "")) ?? "";
-      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText)) || await page.locator('input[type="password"]:visible').count() > 0;
+      const loginRequired = LOGIN_SIGNALS.some((pattern) => pattern.test(bodyText)) ||
+        (!formExists && /create account\s*\/\s*sign in/i.test(bodyText)) ||
+        await page.locator('input[type="password"]:visible').count() > 0;
       const fields = formExists && selectedFormSelector ? await readFields(page, selectedFormSelector, url) : [];
 
       let submitSelector: string | null = null;
