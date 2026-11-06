@@ -20,12 +20,8 @@ permissions:
 jobs:
   app-build:
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-jammy
     steps:
       - uses: actions/checkout@v4
-      - name: Install Bun archive dependency
-        run: apt-get update && apt-get install -y unzip
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun test src/lib/job-sources/ src/lib/auto-apply/ scripts/beta-health.test.ts
@@ -34,9 +30,8 @@ jobs:
           VITE_SUPABASE_URL: https://ctdpjiyxcoytshegnpbc.supabase.co
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_fixture_for_browser_tests
       - run: npm ci --prefix worker
-      - run: node scripts/verify-browser-flow.mjs
-        env:
-          TEST_STATIC_PAGES: "true"
+      - name: Verify the built site in the production browser image
+        run: docker run --rm -v "$PWD:/work" -w /work -e TEST_STATIC_PAGES=true mcr.microsoft.com/playwright:v1.63.0-jammy node scripts/verify-browser-flow.mjs
 
   worker-typecheck:
     runs-on: ubuntu-latest
